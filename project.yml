@@ -1,0 +1,377 @@
+name: IceMovie
+
+options:
+  bundleIdPrefix: com.wangzicheng
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 39R699SCD9
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+
+# 依赖说明：
+# AMSMB2 以源码形式放在 Vendor/AMSMB2（含 libsmb2 子模块，commit 90737c4）。
+# 不使用 SPM：当前环境的 xcodebuild 无法完成包解析（sandbox-exec 嵌套限制），
+# 因此把 libsmb2（C）与 SMBSession（Swift + 我们的封装）显式定义为两个 target。
+
+targets:
+  libsmb2:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Vendor/AMSMB2/Dependencies/libsmb2/lib
+        excludes:
+          - "CMakeLists.txt"
+          - "libsmb2.syms"
+          - "Makefile*"
+          - "ps2/**"
+    settings:
+      base:
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/lib
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - $(inherited)
+          - "_U_=__attribute__((unused))"
+          - "HAVE_CONFIG_H=1"
+        GCC_WARN_UNUSED_VARIABLE: NO
+        CLANG_WARN_DOCUMENTATION_COMMENTS: NO
+
+  IceCore:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/IceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.core
+        PRODUCT_NAME: IceCore
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+
+  SMBSession:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Vendor/AMSMB2/AMSMB2
+      - path: IceMovie/Core/SMBSession
+    dependencies:
+      - target: libsmb2
+      - target: IceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.smbsession
+        PRODUCT_NAME: SMBSession
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+
+  DemuxKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/DemuxKit
+    dependencies:
+      - target: IceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.demux
+        PRODUCT_NAME: DemuxKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lavformat
+          - -lavcodec
+          - -lavutil
+          - -lswscale
+          - -lswresample
+
+  RenderKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/RenderKit
+    dependencies:
+      - target: IceCore
+      # 播放引擎需要解封装与音频解码，视频渲染在 5.x 接入同一读流器。
+      - target: DemuxKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.render
+        PRODUCT_NAME: RenderKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+
+  SubtitleKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/SubtitleKit
+    dependencies:
+      - target: IceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.subtitle
+        PRODUCT_NAME: SubtitleKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/IceMovie/Core/CLibass
+
+  ThumbnailKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/ThumbnailKit
+    dependencies:
+      - target: IceCore
+      - target: DemuxKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.thumbnail
+        PRODUCT_NAME: ThumbnailKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+
+  MediaLibraryKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Feature/LibraryKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.librarykit
+        PRODUCT_NAME: MediaLibraryKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+
+  PersistenceKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/PersistenceKit
+    dependencies:
+      - target: IceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.persistence
+        PRODUCT_NAME: PersistenceKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+
+  IceMovieTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovieTests
+    dependencies:
+      - target: IceCore
+      - target: SubtitleKit
+      - target: MediaLibraryKit
+      - target: ThumbnailKit
+      - target: PersistenceKit
+      - target: SMBSession
+      - target: DemuxKit
+      - target: RenderKit
+      - target: libsmb2
+      - target: IceMovie
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.tests
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2
+          - $(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/include
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+          - $(SRCROOT)/IceMovie/Core/CLibass
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)
+          - $(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lavformat
+          - -lavcodec
+          - -lavutil
+          - -lswscale
+          - -lswresample
+          - -lass
+          - -lharfbuzz
+          - -lfreetype
+          - -lfribidi
+          - -liconv
+          - -lc++
+          - -framework
+          - CoreText
+          - -framework
+          - CoreGraphics
+
+  IceMovie:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    dependencies:
+      - target: IceCore
+        embed: false
+      - target: SMBSession
+        embed: false
+      - target: DemuxKit
+        embed: false
+      - target: RenderKit
+        embed: false
+      - target: SubtitleKit
+        embed: false
+      - target: ThumbnailKit
+        embed: false
+      - target: MediaLibraryKit
+        embed: false
+      - target: PersistenceKit
+        embed: false
+      # 静态框架不会传递链接依赖，libsmb2 需由 App 侧显式链接。
+      - target: libsmb2
+    sources:
+      - path: IceMovie
+        excludes:
+          - "Resources/Info.plist"
+          - "Core/SMBSession/**"
+          - "Core/IceCore/**"
+          - "Core/DemuxKit/**"
+          - "Core/RenderKit/**"
+          - "Core/SubtitleKit/**"
+          - "Core/ThumbnailKit/**"
+          - "Core/PersistenceKit/**"
+          - "Feature/LibraryKit/**"
+          - "Core/CLibass/**"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie
+        PRODUCT_NAME: IceMovie
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: IceMovie/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        # DemuxKit 是静态框架，FFmpeg 静态库需由 App 侧显式链接。
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)
+          - $(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lavformat
+          - -lavcodec
+          - -lavutil
+          - -lswscale
+          - -lswresample
+          - -lass
+          - -lharfbuzz
+          - -lfreetype
+          - -lfribidi
+          - -liconv
+          - -lc++
+          - -framework
+          - CoreText
+          - -framework
+          - CoreGraphics
+        # SMBSession 的模块依赖里含 clang 模块 SMB2，App 侧解析模块时需要能看到它。
+        SWIFT_INCLUDE_PATHS:
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+          - $(SRCROOT)/Vendor/ffmpeg/include
+          - $(SRCROOT)/IceMovie/Core/CLibass
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple
+          - $(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2
+          - $(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  IceMovieUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovieUITests
+    dependencies:
+      - target: IceMovie
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: IceMovie
+
+schemes:
+  IceMovieTests:
+    build:
+      targets:
+        IceMovieTests: test
+    test:
+      targets:
+        - IceMovieTests
+  IceMovieUITests:
+    build:
+      targets:
+        IceMovieUITests: test
+    test:
+      targets:
+        - IceMovieUITests

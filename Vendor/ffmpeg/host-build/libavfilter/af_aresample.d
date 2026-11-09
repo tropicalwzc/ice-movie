@@ -1,0 +1,16 @@
+libavfilter/af_aresample.o: \
+  /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/SDKSettings.json \
+  src/libavfilter/af_aresample.c src/libavutil/avstring.h \
+  src/libavutil/attributes.h src/libavutil/channel_layout.h \
+  src/libavutil/version.h src/libavutil/macros.h libavutil/avconfig.h \
+  src/libavutil/opt.h src/libavutil/rational.h src/libavutil/avutil.h \
+  src/libavutil/common.h src/libavutil/error.h config.h \
+  src/libavutil/intmath.h src/libavutil/internal.h src/libavutil/libm.h \
+  src/libavutil/intfloat.h src/libavutil/mathematics.h \
+  src/libavutil/log.h src/libavutil/pixfmt.h src/libavutil/dict.h \
+  src/libavutil/samplefmt.h src/libavutil/avassert.h \
+  src/libswresample/swresample.h src/libavutil/frame.h \
+  src/libavutil/buffer.h src/libswresample/version_major.h \
+  src/libavfilter/avfilter.h src/libavfilter/version_major.h \
+  src/libavfilter/audio.h src/libavfilter/filters.h \
+  src/libavfilter/formats.h

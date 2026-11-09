@@ -1,0 +1,82 @@
+install prefix            /usr/local
+source path               /Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/ffmpeg-src
+C compiler                gcc
+C library                 
+ARCH                      aarch64 (generic)
+big-endian                no
+runtime cpu detection     yes
+NEON enabled              yes
+DOTPROD enabled           yes
+I8MM enabled              yes
+debug symbols             yes
+strip symbols             yes
+optimize for size         no
+optimizations             yes
+static                    yes
+shared                    no
+postprocessing support    no
+network support           yes
+threading support         pthreads
+safe bitstream reader     yes
+texi2html enabled         no
+perl enabled              yes
+pod2man enabled           yes
+makeinfo enabled          no
+makeinfo supports HTML    no
+xmllint enabled           yes
+
+External libraries:
+appkit                  coreimage               zlib
+avfoundation            iconv
+bzlib                   securetransport
+
+External libraries providing hardware acceleration:
+audiotoolbox            videotoolbox
+
+Libraries:
+avcodec                 avformat                swscale
+avdevice                avutil
+avfilter                swresample
+
+Programs:
+ffmpeg                  ffprobe
+
+Enabled decoders:
+aac                     flac                    vorbis
+ac3                     opus
+alac                    pcm_s16le
+
+Enabled encoders:
+ac3                     flac
+alac                    opus
+
+Enabled hwaccels:
+
+Enabled parsers:
+ac3                     flac                    opus
+
+Enabled demuxers:
+ac3                     matroska                wav
+flac                    mov
+
+Enabled muxers:
+matroska
+
+Enabled protocols:
+file
+
+Enabled filters:
+aformat                 format                  trim
+anull                   hflip                   vflip
+aresample               null                    volume
+atrim                   rotate
+crop                    transpose
+
+Enabled bsfs:
+aac_adtstoasc           pgs_frame_merge         vp9_superframe
+
+Enabled indevs:
+
+Enabled outdevs:
+
+License: LGPL version 2.1 or later

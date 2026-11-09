@@ -1,0 +1,14 @@
+prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphonesimulator
+exec_prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphonesimulator
+libdir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphonesimulator/lib
+includedir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphonesimulator/include
+
+Name: FreeType 2
+URL: https://freetype.org
+Description: A free, high-quality, and portable font engine.
+Version: 26.1.20
+Requires: 
+Requires.private: 
+Libs: -L/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphonesimulator/lib -lfreetype 
+Libs.private: 
+Cflags: -I${includedir}/freetype2

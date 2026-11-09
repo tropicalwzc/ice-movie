@@ -1,0 +1,2841 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0040ACFA899BBB01E96D3936 /* SubtitleLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26899814BD689F60A24CC4E /* SubtitleLoader.swift */; };
+		0143729FECD760D9453667B7 /* aes_apple.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 5C828137108BB34C9CBAA35F /* aes_apple.h */; };
+		0229FCB518F744D1F059D43D /* PlaybackQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36288AA19E881A15D9CD2E99 /* PlaybackQueue.swift */; };
+		026572203132EC5C5CCDC463 /* PlaybackAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCFBA02E0DC880A658B1B946 /* PlaybackAudioSession.swift */; };
+		0277077E409975768DE3F0DA /* ntlmssp.c in Sources */ = {isa = PBXBuildFile; fileRef = F1C7BABF6AFE7B7A84AD15E3 /* ntlmssp.c */; };
+		03D1B4BCA176CAC51C73D1E6 /* smb2-cmd-flush.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C4C85AF8AFF38E88E8AD2FE /* smb2-cmd-flush.c */; };
+		09E211A6BD7533C90218DB45 /* SMBRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35628CB8A368A39D9C865817 /* SMBRecovery.swift */; };
+		0B1680AD71C5793AB846BF87 /* smb3-seal.c in Sources */ = {isa = PBXBuildFile; fileRef = 2B7F58B9D2F806C50FF62CE2 /* smb3-seal.c */; };
+		0DBCF374D8848362A8BB707E /* PlaybackProgressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93B07747898F31BBACA3E2C /* PlaybackProgressTests.swift */; };
+		0DFCA4B4815AA7897994DF59 /* md5.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = FFDC78B3F1B61E28368FCE29 /* md5.h */; };
+		0F144B2D9223DEE9307CF221 /* DemuxProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = E519C20165E358624778A385 /* DemuxProbe.swift */; };
+		109025521DAAB49DA1FCB924 /* RenderKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB959A89B35076954685CBF5 /* RenderKit.framework */; };
+		10AC2F6ED3337C9CC0CA5EF6 /* LibrarySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9BD0A5DA2A31B45F4EAA9DA /* LibrarySource.swift */; };
+		1399674732948DECC39B663F /* AudioDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DBA8B2F8482960892CBE65F /* AudioDecoder.swift */; };
+		15E2C630FCCD5EC89EB2DC95 /* LICENSE-NotoSansCJK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BC490BFAE8CA30DA94A8C469 /* LICENSE-NotoSansCJK.txt */; };
+		162A1C26EF6F6FB6183B0D74 /* LibraryLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43667A8A52C005FE3CC985BD /* LibraryLoader.swift */; };
+		16C0983E14455145894A7DFF /* SubtitleOverlayTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2B1B80EF9DCFB045456247 /* SubtitleOverlayTest.swift */; };
+		173F07AAF068B02D147272B3 /* PersistenceKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A905A5532979D6BE549F699 /* PersistenceKit.swift */; };
+		174A244E85AD5FB88CD07491 /* smb3-seal.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 799493648B5929AEF3956408 /* smb3-seal.h */; };
+		191AC128B08D1BEF8DD60D47 /* LibraryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39ECE539E0125D8FE8912E36 /* LibraryGridView.swift */; };
+		1995889D2A87614083003208 /* MSRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A11CA9182FAA7BC8B283116 /* MSRPC.swift */; };
+		1A948BDCFF53FB129710BBF3 /* ntlmssp.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = AC183146132E1B4709638C39 /* ntlmssp.h */; };
+		1AD740EB604B338903CC3380 /* unicode.c in Sources */ = {isa = PBXBuildFile; fileRef = B431F56C87DF8439A68F7B7D /* unicode.c */; };
+		1B5396D561C7944C3C8041E2 /* hmac-md5.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 11DEE745D7C0B85564800765 /* hmac-md5.h */; };
+		1C50676AC2CAEA756C78FCED /* LibraryCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA5564DB9C90FCA9C1DCBFF /* LibraryCell.swift */; };
+		1D9E8831E78B95425DBA91CF /* ThumbnailKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AB8A6846EA8303D2FECB83C /* ThumbnailKit.swift */; };
+		1DEC7BF66111DF6E4C02AC47 /* compat.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 6632E09B9B084A337AA3F622 /* compat.h */; };
+		1ED5DD95098E043F3AE2BF00 /* MasterClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BB1E5BC399549EAFAB8AA4 /* MasterClock.swift */; };
+		1FA80FA18D15C9E7A11FE908 /* smb2-cmd-write.c in Sources */ = {isa = PBXBuildFile; fileRef = B02021EE9F9330926FA6E924 /* smb2-cmd-write.c */; };
+		22CE9DFE31D7DB3EC8024952 /* SMBSession.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3ED235157138D2F46D9B61A /* SMBSession.framework */; };
+		23814EEE51EF43816799A7FE /* Fsctl.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB953A79A0BD059EF4359F69 /* Fsctl.swift */; };
+		238CC9E4FCA037B70C2DD63B /* smb2-cmd-oplock-break.c in Sources */ = {isa = PBXBuildFile; fileRef = 11BF4786E6C34E3199D4FBA1 /* smb2-cmd-oplock-break.c */; };
+		24ED76DB67869D64902E2ABC /* sha224-256.c in Sources */ = {isa = PBXBuildFile; fileRef = A834B305AFBA6CB7831CDA40 /* sha224-256.c */; };
+		250AFC5A07716572D575A5AF /* smb2-cmd-read.c in Sources */ = {isa = PBXBuildFile; fileRef = 2D47D7ABA141BF3B3B6BA83B /* smb2-cmd-read.c */; };
+		29B6828E646CF54660EF13C0 /* PersistenceKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 56410093F974C63FDC24D347 /* PersistenceKit.framework */; };
+		2C9407121764CEFBFD89AC53 /* SeekBurstTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6C0D79F94A5C2935356CD53 /* SeekBurstTest.swift */; };
+		2CC221EEB8258CA21CC42870 /* AudioFormatSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481DD4C9FC0DFDCED1B000C /* AudioFormatSpec.swift */; };
+		2CD0121814E1C9C81B90F670 /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E3F2903B4223885C32AC50 /* LibraryStore.swift */; };
+		30E85BD59BD000E181D6DD7E /* hmac.c in Sources */ = {isa = PBXBuildFile; fileRef = EC3058C1160C80D2334B54BD /* hmac.c */; };
+		3197D23106A008983C0E51B6 /* MediaLibraryKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 52A4205F4A967608BC0CA78F /* MediaLibraryKit.framework */; };
+		3AE56521762FA035517B1801 /* SMBHostAddress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C0FCB797E969186A3E4FF01 /* SMBHostAddress.swift */; };
+		3CC10309C906B48581A405F6 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1B5E2FBCC6B2C799929630A /* RootView.swift */; };
+		3CC321B6D4620CD548FBB3C8 /* MasterClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8662610A04358D7D86F572 /* MasterClockTests.swift */; };
+		3F5EEF3AD9B0D52A8FA0029D /* ThumbnailKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF1522221E0EE12B3F128935 /* ThumbnailKit.framework */; };
+		412502C910C80E9D081E4BAC /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC052C22FA1DAFE73E505A3 /* DiagnosticsView.swift */; };
+		42384298398FD392A5F5F02E /* LibraryNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1862B1155ABAB26324A90F6E /* LibraryNavigationTests.swift */; };
+		42D0F2D03306E19DFE7C1602 /* Directory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07715A460A94AB02CA84DCE6 /* Directory.swift */; };
+		4305922FA91DA0C26CDC79F7 /* smb2-data-file-info.c in Sources */ = {isa = PBXBuildFile; fileRef = 6ED6F13A55EC3F5CB3FBAE70 /* smb2-data-file-info.c */; };
+		445DFA058C19ECC4152C1C9A /* errors.c in Sources */ = {isa = PBXBuildFile; fileRef = 15A02D18A14499B38F067FE3 /* errors.c */; };
+		4514E6258C97F61D5BAAE5C2 /* NotoSansCJKsc-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = BC8544A9DB8AD3DDF5345F91 /* NotoSansCJKsc-Regular.otf */; };
+		47CC156CCCB714B08604C008 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DAA2EA743408613E22C90C /* CredentialStore.swift */; };
+		47EFBE3F6E6BD93FB465F325 /* PlaybackControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E96EC62DFFAE6A3866284CE /* PlaybackControlsUITests.swift */; };
+		4A3C60C0D3875976A368C626 /* ThumbnailCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B6B4E2A425B2CE5DFF87A5 /* ThumbnailCacheTests.swift */; };
+		4BE4533C6DF0091D3024B16D /* libsmb2.c in Sources */ = {isa = PBXBuildFile; fileRef = 5CB90AF90874B7CE2D67FE3D /* libsmb2.c */; };
+		4C60674585A61022277EC335 /* smb2-cmd-create.c in Sources */ = {isa = PBXBuildFile; fileRef = 33375A8A24E8D18F70A049FC /* smb2-cmd-create.c */; };
+		4DDADB4927E97C296582D68B /* liblibsmb2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0FD967742E98E308E069322 /* liblibsmb2.a */; };
+		50F9403EE9F5379442785A1C /* md4.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9F1E1F7C77766837D30C61F3 /* md4.h */; };
+		539CB9DA8C863DD9016E413C /* aes_apple.c in Sources */ = {isa = PBXBuildFile; fileRef = 15F93D0582E033BDEBA1618C /* aes_apple.c */; };
+		596E54B68619618EE7868429 /* SMBReadScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADBC59DF37A5B11F4F27AD57 /* SMBReadScheduler.swift */; };
+		5A0AC4D66AEAB2166DD37758 /* LibrarySearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7BD87D464935C3295D32C1 /* LibrarySearchResultsView.swift */; };
+		5DB954F30DBCFBCB75F10499 /* smb2-signing.c in Sources */ = {isa = PBXBuildFile; fileRef = 0DF4C6AF0400E5A54B976F9F /* smb2-signing.c */; };
+		5F09A3E2C706BB9ECE568708 /* PlayerCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C9C435B64757D74C2D5E41 /* PlayerCommands.swift */; };
+		5F32E20734C11608F8C56134 /* CredentialStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D7BA73AC9192F46890011CB /* CredentialStoreTests.swift */; };
+		6059672F635557F8169FEEA8 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD9D385034A7A819DEDE2367 /* LibraryView.swift */; };
+		6088F68FA5D88CF8FF61CFE4 /* compat.c in Sources */ = {isa = PBXBuildFile; fileRef = 0F81E958F0B9867B542DADBC /* compat.c */; };
+		615EAB0F6615F74A2CF8C219 /* PlaybackQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E29475D31AB0D1690A6FB3 /* PlaybackQueueTests.swift */; };
+		6208BE5C38B124976C09FC41 /* LibassRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96F917685EE7D554F0BB0EA5 /* LibassRendererTests.swift */; };
+		625684C1EF3624D00D8C13FB /* RenderKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BC6C0DD0921FB6055AF9462 /* RenderKit.swift */; };
+		628C41B1C21D16DB6697EE16 /* liblibsmb2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0FD967742E98E308E069322 /* liblibsmb2.a */; };
+		62F2B0EDFE00019805ACBC6F /* VideoSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A23B0557E678A555D88531 /* VideoSelfTest.swift */; };
+		669B7FA9B1162DB3989EDF4B /* SMBSessionModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC5CC4EE19F553DDA256771A /* SMBSessionModule.swift */; };
+		67F419E37674BAA8C7F8F9FD /* smb2-cmd-error.c in Sources */ = {isa = PBXBuildFile; fileRef = D4D412DD9D3EFFFA078AE348 /* smb2-cmd-error.c */; };
+		69241FAC8B2E5E0AF71B40D5 /* aes.c in Sources */ = {isa = PBXBuildFile; fileRef = 727445B3AB2B70047B30BB41 /* aes.c */; };
+		699EE334A621F3C8544DEE60 /* smb2-cmd-query-info.c in Sources */ = {isa = PBXBuildFile; fileRef = C87B75365F9A77FC47EE9996 /* smb2-cmd-query-info.c */; };
+		6B175B07DA933FA7852D2B87 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DF9933BAFEAEE67D0EF296AE /* Assets.xcassets */; };
+		6B85178FA7BF205B0C291377 /* krb5-wrapper.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = CCBECF69A9981899FEE90702 /* krb5-wrapper.h */; };
+		6BAE93B0E10DD13C8F364718 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706E3E3688143E52EE1E2695 /* Extensions.swift */; };
+		6BC856E2918015C0D9E281DA /* ByteSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D56ADCFDECD69ABE1BD9431 /* ByteSource.swift */; };
+		6BDD2D0F815AFF4F26EC1236 /* smb2-cmd-ioctl.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A54B45114CA74AF47A7E92 /* smb2-cmd-ioctl.c */; };
+		6D3DA0DE85E85E1121D04C8E /* SubtitleDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4EA9B08C5B4DC7A36060AC /* SubtitleDiscoveryTests.swift */; };
+		713E92BF68240C884EA40344 /* sha.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = C15AF3176BF69270DB77E761 /* sha.h */; };
+		77FBD2CF7D192A138E08B7E6 /* SubtitleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */; };
+		7B6367384A37FC7324B23903 /* smb2-cmd-session-setup.c in Sources */ = {isa = PBXBuildFile; fileRef = D88351A4C9F91DE7A6E1CCEF /* smb2-cmd-session-setup.c */; };
+		7BFB11F3D115DD0812C74C58 /* DemuxKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3BE9DFEF381585516CFB46E /* DemuxKit.swift */; };
+		7C6463EDD015B14A33790855 /* SubtitlePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957B9B7DEEA4C1261003CF35 /* SubtitlePreferences.swift */; };
+		7F34862C1B69346669F9C214 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A941B16C93A7C69CC61DBBB /* Log.swift */; };
+		7FBB3F1CA74C3A50E8C45BDD /* asn1-ber.c in Sources */ = {isa = PBXBuildFile; fileRef = F8B687C55BB0ED5F157F109D /* asn1-ber.c */; };
+		7FCB1A5767825D323A8AE3E2 /* dcerpc-srvsvc.c in Sources */ = {isa = PBXBuildFile; fileRef = 0CC1E3E0BD9653E4F3FFE5CC /* dcerpc-srvsvc.c */; };
+		82D0D270A6C09FEF7860323C /* SubtitleOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B80588C849D8D9DFB27C55F /* SubtitleOverlayView.swift */; };
+		82F69FA7C72336E70EF723E3 /* LibrarySidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474CE946F1BEBE59A76D0D9C /* LibrarySidebar.swift */; };
+		83E9851CF18DE3DF2A59F428 /* SampleBufferBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46BEC0D090ACE7E1F2856968 /* SampleBufferBuilder.swift */; };
+		84767DD6FF79409E8A350681 /* sync.c in Sources */ = {isa = PBXBuildFile; fileRef = BBFEC280879475E897FF7236 /* sync.c */; };
+		87F7577A2AD046554F4BD88F /* aes128ccm.c in Sources */ = {isa = PBXBuildFile; fileRef = 5B98FB6F9F105DB20AA9D587 /* aes128ccm.c */; };
+		87FB3F8866F2F0E425C9068B /* smb2-cmd-close.c in Sources */ = {isa = PBXBuildFile; fileRef = B87D56763F553292B0B0DC8F /* smb2-cmd-close.c */; };
+		880400EF9EA9F346E77BFB6A /* PlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8FD1C14E85B7149BF6FA86 /* PlaybackEngine.swift */; };
+		88C087E173C852B096AC2539 /* smb2-cmd-echo.c in Sources */ = {isa = PBXBuildFile; fileRef = BC60BF5989139083144EF51D /* smb2-cmd-echo.c */; };
+		894411C28208CBE38DA334C3 /* MediaTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596D890E8D840AABB6D3EB8A /* MediaTitle.swift */; };
+		8A8238D32F600DE437DFC2EF /* smb2-cmd-logoff.c in Sources */ = {isa = PBXBuildFile; fileRef = 79CBFEA294714776D440C1E6 /* smb2-cmd-logoff.c */; };
+		8B5E77FA3575AB9183450C42 /* aes_reference.c in Sources */ = {isa = PBXBuildFile; fileRef = 8FDEF0075AE107C4A248BF6C /* aes_reference.c */; };
+		8C49CB9740A91CAB10050C6C /* SubtitlePreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A34F48A21548F9DFD2AD6B4 /* SubtitlePreferencesTests.swift */; };
+		8CA36852F17433B8CB8C5E0B /* spnego-wrapper.c in Sources */ = {isa = PBXBuildFile; fileRef = B6FFC44C571BE6E388EFECA8 /* spnego-wrapper.c */; };
+		8CEAD3E25CA424E6F3F3C880 /* Parsers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6752AD5FF54B58655852493B /* Parsers.swift */; };
+		8D17A056BD9867FE543D4CB5 /* Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49ED363336D98D044F54B63E /* Context.swift */; };
+		8E7BD2586D3432BF436FF21A /* smb2-cmd-negotiate.c in Sources */ = {isa = PBXBuildFile; fileRef = FCC4F46777949ED43A5C14D5 /* smb2-cmd-negotiate.c */; };
+		8F67AACFA967F9386E65AD9A /* sha-private.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 12A09682AFF6D89DFB50CA41 /* sha-private.h */; };
+		8FD75440D33DF8EE465301F0 /* SubtitleSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA342CBA50C1FB3FDAFC5ACF /* SubtitleSelfTest.swift */; };
+		90828CB1A7DA041CB6A2C824 /* SMBSession.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3ED235157138D2F46D9B61A /* SMBSession.framework */; };
+		90D80B78AC9C275371A1B00F /* SMBChunkRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9084856BE30D7ADD0185F610 /* SMBChunkRing.swift */; };
+		90F8DECAB41DDB21A5989822 /* IceMovieApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A6AEC43798DFB972A8772D /* IceMovieApp.swift */; };
+		956471AD2793D72783002D0E /* smb2-data-security-descriptor.c in Sources */ = {isa = PBXBuildFile; fileRef = 5D3C9F5C1C940CF5F200671B /* smb2-data-security-descriptor.c */; };
+		9660D7B3DE0035D8F4232383 /* LibraryNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A528C44222F9937B6A42DC37 /* LibraryNavigation.swift */; };
+		9730644AFE757D4FB33AC5DB /* dcerpc-lsa.c in Sources */ = {isa = PBXBuildFile; fileRef = 0992ACAEE3B5CB33BE024B37 /* dcerpc-lsa.c */; };
+		980A6071F3B60B78C3906F6E /* smb2-cmd-set-info.c in Sources */ = {isa = PBXBuildFile; fileRef = 7AD863E411BAD152016E9D3A /* smb2-cmd-set-info.c */; };
+		9988E75ACE258C047649C640 /* smb2-data-filesystem-info.c in Sources */ = {isa = PBXBuildFile; fileRef = CE5BB53FAD5BF790A41BEEC9 /* smb2-data-filesystem-info.c */; };
+		9A969D8BE605561974A3CC3B /* smb2-cmd-tree-disconnect.c in Sources */ = {isa = PBXBuildFile; fileRef = C8707606C130002AF9C339F4 /* smb2-cmd-tree-disconnect.c */; };
+		9C9D089B6EE9F598E9B10B14 /* MediaEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9943175F3DC3E81245E2C6C3 /* MediaEntry.swift */; };
+		9E858593FCCFF97F74DEA596 /* SMBReconnectPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB5B8062C5BE41B87F470307 /* SMBReconnectPolicyTests.swift */; };
+		9E9034F9D0486D2E140AC655 /* FileMonitoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DAAFF9A5B9F91918A2428F /* FileMonitoring.swift */; };
+		A663D3ACBA404B0F1D3EB9A1 /* DemuxKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EECDD086AED4C8137BB05830 /* DemuxKit.framework */; };
+		A686D0B1DF5BB4BF04C23591 /* LibraryLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CD065F93385C16FB114B36 /* LibraryLayoutTests.swift */; };
+		A6A537D3C4C2802004BF695A /* alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 5E5AF853981F2412DC7DD530 /* alloc.c */; };
+		A76DDE45183CB4CB35132B08 /* ObjCCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E10ECD1D66965133553620 /* ObjCCompat.swift */; };
+		A96572EA760DF3D1593F8B7A /* smb2-cmd-lock.c in Sources */ = {isa = PBXBuildFile; fileRef = 18D9264FB8F27E7C679CC242 /* smb2-cmd-lock.c */; };
+		AA64CC7C7240CBBA4109C9E2 /* SubtitleDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4E6E2DE5D29D927C57BB71 /* SubtitleDocument.swift */; };
+		AB323A741DFA0D2B0F536A61 /* IceCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74BF8BD1AFC731A033495C60 /* IceCore.framework */; };
+		ACD85F0656D825E111CBDC29 /* smb2-cmd-query-directory.c in Sources */ = {isa = PBXBuildFile; fileRef = EE0470A5A19712F81A1FEBD5 /* smb2-cmd-query-directory.c */; };
+		B19271FD872276E3C54742D1 /* socket.c in Sources */ = {isa = PBXBuildFile; fileRef = 6B9724FBD21585DB564CCCD1 /* socket.c */; };
+		B2143F3DBC2DCFEDD399292C /* hmac-md5.c in Sources */ = {isa = PBXBuildFile; fileRef = 660E8930A208CFDB49899F8C /* hmac-md5.c */; };
+		B3BBB37B21CD7A19A6B859E6 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4F105A33E87D1BFD92C363 /* Stream.swift */; };
+		B444092EF10B0B0D4BC3347F /* AVIOBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D437AC8A252349B9AF73F4F3 /* AVIOBridge.swift */; };
+		B4984214B924CA97FFBF965C /* SMBReadSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72D6053970187D12C387E8C /* SMBReadSchedulerTests.swift */; };
+		B527B8A99DBEEAD04CBAF453 /* SMBHostAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7DB639C7028F2641716DC4B /* SMBHostAddressTests.swift */; };
+		B740246702542392155123E0 /* LibrarySearchIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3473E0418EF1A3C1D99045B /* LibrarySearchIndex.swift */; };
+		B8CE4666E0CDD005EAD00A97 /* SeekSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E096806D62D0789B98155E /* SeekSelfTest.swift */; };
+		B8FA0297590152DF84D26917 /* aes_reference.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 92ED44FD89D38AF111899ECA /* aes_reference.h */; };
+		B8FF6AF75282DF741CCC8A33 /* aes.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = EE7E1261F026C9649BBCE556 /* aes.h */; };
+		B9038C03DAE0760939913BB4 /* PlayerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC233A9E26729959E91BC13 /* PlayerScreen.swift */; };
+		BBB8FDD49AD66A0C764D91AB /* DemuxKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EECDD086AED4C8137BB05830 /* DemuxKit.framework */; };
+		BC7EB46E336757635EB08B44 /* PictureInPictureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125589B55BB39EB321F1B539 /* PictureInPictureCoordinator.swift */; };
+		BD08D3EF134F563320440323 /* usha.c in Sources */ = {isa = PBXBuildFile; fileRef = 57143BD5E7BA0380DA11310B /* usha.c */; };
+		BE2F9E732FC06F41268D6753 /* LibraryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF07D1B23AEE0B3B9861E69 /* LibraryLayout.swift */; };
+		C0A8B48A8F30C58EA97CE55D /* VideoSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C754117633E854C9D7278D8 /* VideoSurface.swift */; };
+		C13EB8A8B84D545DD58F609F /* md5.c in Sources */ = {isa = PBXBuildFile; fileRef = 3A225DE48AA45D92486FF3C3 /* md5.c */; };
+		C20D1B977C52068BB32E212D /* SubtitleKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DDA0872974E62E90E3E29DD /* SubtitleKit.swift */; };
+		C2BEEEFDE28A947EAFE64272 /* MediaLibraryKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 52A4205F4A967608BC0CA78F /* MediaLibraryKit.framework */; };
+		C35E220DAE9964F8EAA39B08 /* smb2-data-reparse-point.c in Sources */ = {isa = PBXBuildFile; fileRef = 6B4B4B1A3C891FF91169DCAB /* smb2-data-reparse-point.c */; };
+		C36A47C6596DB0E966C7A06B /* MediaTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FDF5054DA6F410E92A42D48 /* MediaTitleTests.swift */; };
+		C393AABE586A5ECC3C76E206 /* ConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28B4C8940F1E99790C7511F /* ConnectionView.swift */; };
+		C6A595A7E4C78093765DFB90 /* IceCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74BF8BD1AFC731A033495C60 /* IceCore.framework */; };
+		CAE186F0B172DFFB1D0E2412 /* timestamps.c in Sources */ = {isa = PBXBuildFile; fileRef = 133AE057266D3DEF6DAAC867 /* timestamps.c */; };
+		CB367F3209FBCCB517BBCD43 /* init.c in Sources */ = {isa = PBXBuildFile; fileRef = FA581B0D69FD6E72AD30A1DA /* init.c */; };
+		CC14DBDEB341A09C2D628422 /* SMBChunkRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F71DF9AD4E077E016ABBE9D /* SMBChunkRingTests.swift */; };
+		CDA905D005CD304355DAEFE4 /* SubtitleParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468012F00109073276BBB8E /* SubtitleParserTests.swift */; };
+		CDCDD553CECFE35BD39528B2 /* VideoTestSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDDC4E889111A5E48475A53 /* VideoTestSession.swift */; };
+		CE13082C33BC2C66A2D2C888 /* aes128ccm.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9188AB51D41A8CFD8C8E6BFC /* aes128ccm.h */; };
+		D0B066817023A2669C316CE9 /* smb2-share-enum.c in Sources */ = {isa = PBXBuildFile; fileRef = 49C3BB2E78CBF372FD84C0C1 /* smb2-share-enum.c */; };
+		D337B12C49E58E62D92F1E47 /* asn1-ber.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9C6FA6637506E9BF763352A2 /* asn1-ber.h */; };
+		D3B3EEFBDCB6AA68715ED2CD /* spnego-wrapper.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 2A1780EC3E651F0FF870F339 /* spnego-wrapper.h */; };
+		D3BEB4A2197899CF75B8D291 /* smb2-signing.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = FB947DA03A35CC09FFE4528A /* smb2-signing.h */; };
+		D3ECBF3E16F0AE573584F103 /* FileHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EDC55F166A5862A1CD09912 /* FileHandle.swift */; };
+		D487C806EC81F322593153B2 /* ThumbnailKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF1522221E0EE12B3F128935 /* ThumbnailKit.framework */; };
+		D5B8FC071662CB3909524626 /* PersistenceKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 56410093F974C63FDC24D347 /* PersistenceKit.framework */; };
+		D676EB738336BBFD44140B85 /* VideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3B73DA50FDD2E98CB8A6A1 /* VideoRenderer.swift */; };
+		D70A47031FA27C6CB03521BB /* HostRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCFB017F2F57DDC3A0001DF /* HostRecordStoreTests.swift */; };
+		D81DA6B2044B82CC57366E85 /* MediaReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B16ED4F99A7834F8172AF00 /* MediaReader.swift */; };
+		D909731FEAE6F36B311E4035 /* smb2-cmd-notify-change.c in Sources */ = {isa = PBXBuildFile; fileRef = 934F3DA27F0AD430C710887B /* smb2-cmd-notify-change.c */; };
+		DCE1296E29541E61F0B4EE98 /* PlaybackFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC02316E8A8421F4F7C61D45 /* PlaybackFailure.swift */; };
+		DD1A8382A1D35A3402AD2231 /* SMBFileByteSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C6BE9C82E4F4CD6D369FC2 /* SMBFileByteSource.swift */; };
+		DF46F474E5C828B2E296EA18 /* ExternalSubtitleMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF0FEAEB28A458160604F98 /* ExternalSubtitleMatchingTests.swift */; };
+		E07B5B1235AF1FE95EA08C3E /* PlaybackRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D6EC3E96D0DACA4B92BCE1 /* PlaybackRegressionTests.swift */; };
+		E13D46D79CA30CB7AE2ED423 /* NowPlayingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4598B3CD3B68F54947AFEEC3 /* NowPlayingCoordinator.swift */; };
+		E3871A377277049652C39988 /* AudioSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F536C1F04AD26DE91931CB43 /* AudioSelfTest.swift */; };
+		E5F265108E234453ECA33408 /* LibraryOrderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5384CD9F9A3686EF1B53C28B /* LibraryOrderingTests.swift */; };
+		E63E08A1365A7B673E671E5C /* DeviceSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29763954658256AED7D4FDFC /* DeviceSmokeUITests.swift */; };
+		E68D11D6F235EBA95D27B5CA /* DemuxSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E74DF668B3873D3BA808874 /* DemuxSelfTest.swift */; };
+		E924B460BD52C30E4BF339B5 /* sha1.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C6ADCCD3D9002377484C624 /* sha1.c */; };
+		EAD2E0204CDC385AD391865D /* smb2-cmd-tree-connect.c in Sources */ = {isa = PBXBuildFile; fileRef = 561D10295F5706658AC8EFE0 /* smb2-cmd-tree-connect.c */; };
+		EE22A26D6984AC449B72F9AE /* SMBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50C29E3558DACCFEF94E341 /* SMBClient.swift */; };
+		EEB4A8F7C7F059DA623318CD /* LibassSubtitleRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56021EB4DFC4ADFEB584FEC1 /* LibassSubtitleRenderer.swift */; };
+		F08433EF28D94F0A7B5E52E4 /* pdu.c in Sources */ = {isa = PBXBuildFile; fileRef = 60496F37B161CA1E04012FE4 /* pdu.c */; };
+		F486F12CAB90057675709F77 /* EmbeddedSubtitleExtractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C971F09698C16BF95C38C0 /* EmbeddedSubtitleExtractionTests.swift */; };
+		F4EBE8F54E28C7EE924F936E /* dcerpc.c in Sources */ = {isa = PBXBuildFile; fileRef = 394385820D9B3735DF023D64 /* dcerpc.c */; };
+		F571A496FF103E2369E1FF80 /* md4c.c in Sources */ = {isa = PBXBuildFile; fileRef = C9F2612F7E8CE017A81B91B7 /* md4c.c */; };
+		F687E43D0416B87A08D3A3E3 /* krb5-wrapper.c in Sources */ = {isa = PBXBuildFile; fileRef = E1AD6B7668EAB32BE501CABE /* krb5-wrapper.c */; };
+		F7E49B479915CD720FA6F2EF /* RenderKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB959A89B35076954685CBF5 /* RenderKit.framework */; };
+		FA3911B2811159596786C9A9 /* PlayerControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65AF0D4676D4DB1DE9C7A24 /* PlayerControlsView.swift */; };
+		FBD62FB63D0846C8BE7AEC94 /* AMSMB2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925B9DE316645A37C593E9D4 /* AMSMB2.swift */; };
+		FDC81B4F39B4972312E26ACC /* SubtitleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */; };
+		FF0B853971024DC01B19FE9B /* sha384-512.c in Sources */ = {isa = PBXBuildFile; fileRef = 755A189B178FF7E7CC733215 /* sha384-512.c */; };
+		FF50A58CA0A2F3CA5D47502F /* LibrarySearchIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41923F57D5B197911263F24 /* LibrarySearchIndexTests.swift */; };
+		FFC69951D5225C66616202F4 /* SubtitleTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AE426DEA88252027DE30FCC /* SubtitleTrack.swift */; };
+		FFD0CA08AA71A4759C0047B6 /* AudioOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BE8328E22D9B13F051E6B82 /* AudioOutput.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		09D5D8D3E64CFB1099467351 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 37986646DF360F97333B7143;
+			remoteInfo = DemuxKit;
+		};
+		0C39FCE4252B18EE360FE669 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		0CC7063CD1D516CC3C0C64DC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		0DDEB3E41DD6CD313A9F8234 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9079EA0F37754E129412B3C0;
+			remoteInfo = libsmb2;
+		};
+		12746BA0CC6B05A2E6240293 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 836058483A15C960FB77D6DA;
+			remoteInfo = MediaLibraryKit;
+		};
+		371EF5F3FC457069FFD26A48 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00D930E1688AF808F1D0CE8;
+			remoteInfo = RenderKit;
+		};
+		51C72B00E8A338B5B6523E81 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2AA125379AABFAC44FBE42F4;
+			remoteInfo = ThumbnailKit;
+		};
+		5FF07C620A3B47A884E8BF21 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		6435B0EA95E34A2023543110 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		6570A2F967803DEDEEFEF30D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 529DFF7552DDD46E228AB15E;
+			remoteInfo = IceMovie;
+		};
+		7858B6DF42E42123D683DD2C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 37986646DF360F97333B7143;
+			remoteInfo = DemuxKit;
+		};
+		7935ECA64012FC51603F8A36 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1D90C2D7A249B86E8F45A31;
+			remoteInfo = SMBSession;
+		};
+		7D48C0183D6CDA6552CAB5B1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD056C1465D689E71B2717CE;
+			remoteInfo = PersistenceKit;
+		};
+		8E781A5E5FE0A5EDB7EFE9FF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		91EFB8839BA7FF239BACBE11 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 37986646DF360F97333B7143;
+			remoteInfo = DemuxKit;
+		};
+		92825093CA5A34B422B3A08C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2AA125379AABFAC44FBE42F4;
+			remoteInfo = ThumbnailKit;
+		};
+		A13CA3B72FC74B6D8CDB0408 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1D90C2D7A249B86E8F45A31;
+			remoteInfo = SMBSession;
+		};
+		A58002737CC8F044966CB0CB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		AC474CBA783432BC8574308A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		B16A14DC9B634CE6546E1DE7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 836058483A15C960FB77D6DA;
+			remoteInfo = MediaLibraryKit;
+		};
+		BE2A774541849F12CEF62A43 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0EE87289CB389DE0D5F2F6D4;
+			remoteInfo = SubtitleKit;
+		};
+		C72F8C691215871FD99A78A3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD056C1465D689E71B2717CE;
+			remoteInfo = PersistenceKit;
+		};
+		D250A69F6D4059C4CC4ED9FC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 981C50F913A7D7FD19717A9F;
+			remoteInfo = IceCore;
+		};
+		D37BF81403AF4C395B75C561 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0EE87289CB389DE0D5F2F6D4;
+			remoteInfo = SubtitleKit;
+		};
+		D476659B12D56292DF7E120A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9079EA0F37754E129412B3C0;
+			remoteInfo = libsmb2;
+		};
+		D4C8A7254CFDB5FFACE147A8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00D930E1688AF808F1D0CE8;
+			remoteInfo = RenderKit;
+		};
+		E16D60060E987AA1D2CC7D39 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9079EA0F37754E129412B3C0;
+			remoteInfo = libsmb2;
+		};
+		EBD2A1DE2004761AFB7667A0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 529DFF7552DDD46E228AB15E;
+			remoteInfo = IceMovie;
+		};
+		F0F2F565792F091D9E3D55CB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E979729ACBCCE445E81C9C9C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 37986646DF360F97333B7143;
+			remoteInfo = DemuxKit;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C363EEA5641ACCD05023C3F8 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "include/$(PRODUCT_NAME)";
+			dstSubfolderSpec = 16;
+			files = (
+				B8FF6AF75282DF741CCC8A33 /* aes.h in CopyFiles */,
+				CE13082C33BC2C66A2D2C888 /* aes128ccm.h in CopyFiles */,
+				0143729FECD760D9453667B7 /* aes_apple.h in CopyFiles */,
+				B8FA0297590152DF84D26917 /* aes_reference.h in CopyFiles */,
+				D337B12C49E58E62D92F1E47 /* asn1-ber.h in CopyFiles */,
+				1DEC7BF66111DF6E4C02AC47 /* compat.h in CopyFiles */,
+				1B5396D561C7944C3C8041E2 /* hmac-md5.h in CopyFiles */,
+				6B85178FA7BF205B0C291377 /* krb5-wrapper.h in CopyFiles */,
+				50F9403EE9F5379442785A1C /* md4.h in CopyFiles */,
+				0DFCA4B4815AA7897994DF59 /* md5.h in CopyFiles */,
+				1A948BDCFF53FB129710BBF3 /* ntlmssp.h in CopyFiles */,
+				8F67AACFA967F9386E65AD9A /* sha-private.h in CopyFiles */,
+				713E92BF68240C884EA40344 /* sha.h in CopyFiles */,
+				D3BEB4A2197899CF75B8D291 /* smb2-signing.h in CopyFiles */,
+				174A244E85AD5FB88CD07491 /* smb3-seal.h in CopyFiles */,
+				D3B3EEFBDCB6AA68715ED2CD /* spnego-wrapper.h in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		07715A460A94AB02CA84DCE6 /* Directory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Directory.swift; sourceTree = "<group>"; };
+		08A23B0557E678A555D88531 /* VideoSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSelfTest.swift; sourceTree = "<group>"; };
+		092F8C30C6E8AE0A240E0B85 /* IceMovie.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IceMovie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0992ACAEE3B5CB33BE024B37 /* dcerpc-lsa.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "dcerpc-lsa.c"; sourceTree = "<group>"; };
+		0B16ED4F99A7834F8172AF00 /* MediaReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaReader.swift; sourceTree = "<group>"; };
+		0BA5564DB9C90FCA9C1DCBFF /* LibraryCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCell.swift; sourceTree = "<group>"; };
+		0CC1E3E0BD9653E4F3FFE5CC /* dcerpc-srvsvc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "dcerpc-srvsvc.c"; sourceTree = "<group>"; };
+		0D7BA73AC9192F46890011CB /* CredentialStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStoreTests.swift; sourceTree = "<group>"; };
+		0DDA0872974E62E90E3E29DD /* SubtitleKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleKit.swift; sourceTree = "<group>"; };
+		0DF4C6AF0400E5A54B976F9F /* smb2-signing.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-signing.c"; sourceTree = "<group>"; };
+		0F2B1B80EF9DCFB045456247 /* SubtitleOverlayTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlayTest.swift; sourceTree = "<group>"; };
+		0F81E958F0B9867B542DADBC /* compat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = compat.c; sourceTree = "<group>"; };
+		10B6B4E2A425B2CE5DFF87A5 /* ThumbnailCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCacheTests.swift; sourceTree = "<group>"; };
+		11BF4786E6C34E3199D4FBA1 /* smb2-cmd-oplock-break.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-oplock-break.c"; sourceTree = "<group>"; };
+		11DEE745D7C0B85564800765 /* hmac-md5.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "hmac-md5.h"; sourceTree = "<group>"; };
+		125589B55BB39EB321F1B539 /* PictureInPictureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureInPictureCoordinator.swift; sourceTree = "<group>"; };
+		12A09682AFF6D89DFB50CA41 /* sha-private.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "sha-private.h"; sourceTree = "<group>"; };
+		133AE057266D3DEF6DAAC867 /* timestamps.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = timestamps.c; sourceTree = "<group>"; };
+		15A02D18A14499B38F067FE3 /* errors.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = errors.c; sourceTree = "<group>"; };
+		15F93D0582E033BDEBA1618C /* aes_apple.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes_apple.c; sourceTree = "<group>"; };
+		1862B1155ABAB26324A90F6E /* LibraryNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryNavigationTests.swift; sourceTree = "<group>"; };
+		18D9264FB8F27E7C679CC242 /* smb2-cmd-lock.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-lock.c"; sourceTree = "<group>"; };
+		1BE8328E22D9B13F051E6B82 /* AudioOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutput.swift; sourceTree = "<group>"; };
+		1C6ADCCD3D9002377484C624 /* sha1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sha1.c; sourceTree = "<group>"; };
+		1DBA8B2F8482960892CBE65F /* AudioDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDecoder.swift; sourceTree = "<group>"; };
+		1DDDC4E889111A5E48475A53 /* VideoTestSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTestSession.swift; sourceTree = "<group>"; };
+		1E74DF668B3873D3BA808874 /* DemuxSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemuxSelfTest.swift; sourceTree = "<group>"; };
+		1EDC55F166A5862A1CD09912 /* FileHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileHandle.swift; sourceTree = "<group>"; };
+		1F71DF9AD4E077E016ABBE9D /* SMBChunkRingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBChunkRingTests.swift; sourceTree = "<group>"; };
+		23CD065F93385C16FB114B36 /* LibraryLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayoutTests.swift; sourceTree = "<group>"; };
+		2468012F00109073276BBB8E /* SubtitleParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleParserTests.swift; sourceTree = "<group>"; };
+		2481DD4C9FC0DFDCED1B000C /* AudioFormatSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFormatSpec.swift; sourceTree = "<group>"; };
+		29763954658256AED7D4FDFC /* DeviceSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSmokeUITests.swift; sourceTree = "<group>"; };
+		2A1780EC3E651F0FF870F339 /* spnego-wrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "spnego-wrapper.h"; sourceTree = "<group>"; };
+		2A941B16C93A7C69CC61DBBB /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		2B7F58B9D2F806C50FF62CE2 /* smb3-seal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb3-seal.c"; sourceTree = "<group>"; };
+		2D47D7ABA141BF3B3B6BA83B /* smb2-cmd-read.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-read.c"; sourceTree = "<group>"; };
+		2E96EC62DFFAE6A3866284CE /* PlaybackControlsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackControlsUITests.swift; sourceTree = "<group>"; };
+		33375A8A24E8D18F70A049FC /* smb2-cmd-create.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-create.c"; sourceTree = "<group>"; };
+		35628CB8A368A39D9C865817 /* SMBRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBRecovery.swift; sourceTree = "<group>"; };
+		36288AA19E881A15D9CD2E99 /* PlaybackQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackQueue.swift; sourceTree = "<group>"; };
+		394385820D9B3735DF023D64 /* dcerpc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = dcerpc.c; sourceTree = "<group>"; };
+		39ECE539E0125D8FE8912E36 /* LibraryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryGridView.swift; sourceTree = "<group>"; };
+		3A225DE48AA45D92486FF3C3 /* md5.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = md5.c; sourceTree = "<group>"; };
+		3AB8A6846EA8303D2FECB83C /* ThumbnailKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailKit.swift; sourceTree = "<group>"; };
+		3B80588C849D8D9DFB27C55F /* SubtitleOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlayView.swift; sourceTree = "<group>"; };
+		43667A8A52C005FE3CC985BD /* LibraryLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLoader.swift; sourceTree = "<group>"; };
+		44C971F09698C16BF95C38C0 /* EmbeddedSubtitleExtractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedSubtitleExtractionTests.swift; sourceTree = "<group>"; };
+		4598B3CD3B68F54947AFEEC3 /* NowPlayingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCoordinator.swift; sourceTree = "<group>"; };
+		46BEC0D090ACE7E1F2856968 /* SampleBufferBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleBufferBuilder.swift; sourceTree = "<group>"; };
+		474CE946F1BEBE59A76D0D9C /* LibrarySidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebar.swift; sourceTree = "<group>"; };
+		49C3BB2E78CBF372FD84C0C1 /* smb2-share-enum.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-share-enum.c"; sourceTree = "<group>"; };
+		49ED363336D98D044F54B63E /* Context.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Context.swift; sourceTree = "<group>"; };
+		4B4EA9B08C5B4DC7A36060AC /* SubtitleDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleDiscoveryTests.swift; sourceTree = "<group>"; };
+		4C4C85AF8AFF38E88E8AD2FE /* smb2-cmd-flush.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-flush.c"; sourceTree = "<group>"; };
+		52A4205F4A967608BC0CA78F /* MediaLibraryKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = MediaLibraryKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5384CD9F9A3686EF1B53C28B /* LibraryOrderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryOrderingTests.swift; sourceTree = "<group>"; };
+		56021EB4DFC4ADFEB584FEC1 /* LibassSubtitleRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibassSubtitleRenderer.swift; sourceTree = "<group>"; };
+		561D10295F5706658AC8EFE0 /* smb2-cmd-tree-connect.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-tree-connect.c"; sourceTree = "<group>"; };
+		56410093F974C63FDC24D347 /* PersistenceKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PersistenceKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		57143BD5E7BA0380DA11310B /* usha.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = usha.c; sourceTree = "<group>"; };
+		596D890E8D840AABB6D3EB8A /* MediaTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTitle.swift; sourceTree = "<group>"; };
+		59E096806D62D0789B98155E /* SeekSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeekSelfTest.swift; sourceTree = "<group>"; };
+		5B98FB6F9F105DB20AA9D587 /* aes128ccm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes128ccm.c; sourceTree = "<group>"; };
+		5BC233A9E26729959E91BC13 /* PlayerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerScreen.swift; sourceTree = "<group>"; };
+		5C0FCB797E969186A3E4FF01 /* SMBHostAddress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBHostAddress.swift; sourceTree = "<group>"; };
+		5C828137108BB34C9CBAA35F /* aes_apple.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aes_apple.h; sourceTree = "<group>"; };
+		5CB90AF90874B7CE2D67FE3D /* libsmb2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = libsmb2.c; sourceTree = "<group>"; };
+		5D3C9F5C1C940CF5F200671B /* smb2-data-security-descriptor.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-data-security-descriptor.c"; sourceTree = "<group>"; };
+		5D56ADCFDECD69ABE1BD9431 /* ByteSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteSource.swift; sourceTree = "<group>"; };
+		5E5AF853981F2412DC7DD530 /* alloc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = alloc.c; sourceTree = "<group>"; };
+		5FDF5054DA6F410E92A42D48 /* MediaTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTitleTests.swift; sourceTree = "<group>"; };
+		60496F37B161CA1E04012FE4 /* pdu.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pdu.c; sourceTree = "<group>"; };
+		61DAA2EA743408613E22C90C /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+		64F29146A7268F1339714F50 /* IceMovieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IceMovieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		660E8930A208CFDB49899F8C /* hmac-md5.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "hmac-md5.c"; sourceTree = "<group>"; };
+		6632E09B9B084A337AA3F622 /* compat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compat.h; sourceTree = "<group>"; };
+		6752AD5FF54B58655852493B /* Parsers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Parsers.swift; sourceTree = "<group>"; };
+		6AF07D1B23AEE0B3B9861E69 /* LibraryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayout.swift; sourceTree = "<group>"; };
+		6B4B4B1A3C891FF91169DCAB /* smb2-data-reparse-point.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-data-reparse-point.c"; sourceTree = "<group>"; };
+		6B9724FBD21585DB564CCCD1 /* socket.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = socket.c; sourceTree = "<group>"; };
+		6E8FD1C14E85B7149BF6FA86 /* PlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEngine.swift; sourceTree = "<group>"; };
+		6EC052C22FA1DAFE73E505A3 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
+		6ED6F13A55EC3F5CB3FBAE70 /* smb2-data-file-info.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-data-file-info.c"; sourceTree = "<group>"; };
+		706E3E3688143E52EE1E2695 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		727445B3AB2B70047B30BB41 /* aes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes.c; sourceTree = "<group>"; };
+		72DAAFF9A5B9F91918A2428F /* FileMonitoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileMonitoring.swift; sourceTree = "<group>"; };
+		74BF8BD1AFC731A033495C60 /* IceCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = IceCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		755A189B178FF7E7CC733215 /* sha384-512.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "sha384-512.c"; sourceTree = "<group>"; };
+		77E29475D31AB0D1690A6FB3 /* PlaybackQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackQueueTests.swift; sourceTree = "<group>"; };
+		799493648B5929AEF3956408 /* smb3-seal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "smb3-seal.h"; sourceTree = "<group>"; };
+		79CBFEA294714776D440C1E6 /* smb2-cmd-logoff.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-logoff.c"; sourceTree = "<group>"; };
+		7A11CA9182FAA7BC8B283116 /* MSRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MSRPC.swift; sourceTree = "<group>"; };
+		7AD863E411BAD152016E9D3A /* smb2-cmd-set-info.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-set-info.c"; sourceTree = "<group>"; };
+		7AE426DEA88252027DE30FCC /* SubtitleTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleTrack.swift; sourceTree = "<group>"; };
+		7BCFB017F2F57DDC3A0001DF /* HostRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostRecordStoreTests.swift; sourceTree = "<group>"; };
+		8A34F48A21548F9DFD2AD6B4 /* SubtitlePreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePreferencesTests.swift; sourceTree = "<group>"; };
+		8A905A5532979D6BE549F699 /* PersistenceKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceKit.swift; sourceTree = "<group>"; };
+		8C4E6E2DE5D29D927C57BB71 /* SubtitleDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleDocument.swift; sourceTree = "<group>"; };
+		8E4F105A33E87D1BFD92C363 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
+		8FDEF0075AE107C4A248BF6C /* aes_reference.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes_reference.c; sourceTree = "<group>"; };
+		8FF0FEAEB28A458160604F98 /* ExternalSubtitleMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalSubtitleMatchingTests.swift; sourceTree = "<group>"; };
+		9084856BE30D7ADD0185F610 /* SMBChunkRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBChunkRing.swift; sourceTree = "<group>"; };
+		9188AB51D41A8CFD8C8E6BFC /* aes128ccm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aes128ccm.h; sourceTree = "<group>"; };
+		925B9DE316645A37C593E9D4 /* AMSMB2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AMSMB2.swift; sourceTree = "<group>"; };
+		92ED44FD89D38AF111899ECA /* aes_reference.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aes_reference.h; sourceTree = "<group>"; };
+		934F3DA27F0AD430C710887B /* smb2-cmd-notify-change.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-notify-change.c"; sourceTree = "<group>"; };
+		957B9B7DEEA4C1261003CF35 /* SubtitlePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePreferences.swift; sourceTree = "<group>"; };
+		96F917685EE7D554F0BB0EA5 /* LibassRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibassRendererTests.swift; sourceTree = "<group>"; };
+		9943175F3DC3E81245E2C6C3 /* MediaEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaEntry.swift; sourceTree = "<group>"; };
+		9BC6C0DD0921FB6055AF9462 /* RenderKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderKit.swift; sourceTree = "<group>"; };
+		9C6FA6637506E9BF763352A2 /* asn1-ber.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "asn1-ber.h"; sourceTree = "<group>"; };
+		9C754117633E854C9D7278D8 /* VideoSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurface.swift; sourceTree = "<group>"; };
+		9F1E1F7C77766837D30C61F3 /* md4.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = md4.h; sourceTree = "<group>"; };
+		A3BE9DFEF381585516CFB46E /* DemuxKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemuxKit.swift; sourceTree = "<group>"; };
+		A528C44222F9937B6A42DC37 /* LibraryNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryNavigation.swift; sourceTree = "<group>"; };
+		A6E10ECD1D66965133553620 /* ObjCCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjCCompat.swift; sourceTree = "<group>"; };
+		A834B305AFBA6CB7831CDA40 /* sha224-256.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "sha224-256.c"; sourceTree = "<group>"; };
+		AC02316E8A8421F4F7C61D45 /* PlaybackFailure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackFailure.swift; sourceTree = "<group>"; };
+		AC183146132E1B4709638C39 /* ntlmssp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ntlmssp.h; sourceTree = "<group>"; };
+		AC5CC4EE19F553DDA256771A /* SMBSessionModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBSessionModule.swift; sourceTree = "<group>"; };
+		ADBC59DF37A5B11F4F27AD57 /* SMBReadScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBReadScheduler.swift; sourceTree = "<group>"; };
+		B02021EE9F9330926FA6E924 /* smb2-cmd-write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-write.c"; sourceTree = "<group>"; };
+		B28B4C8940F1E99790C7511F /* ConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionView.swift; sourceTree = "<group>"; };
+		B431F56C87DF8439A68F7B7D /* unicode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = unicode.c; sourceTree = "<group>"; };
+		B6FFC44C571BE6E388EFECA8 /* spnego-wrapper.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "spnego-wrapper.c"; sourceTree = "<group>"; };
+		B87D56763F553292B0B0DC8F /* smb2-cmd-close.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-close.c"; sourceTree = "<group>"; };
+		BBFEC280879475E897FF7236 /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
+		BC490BFAE8CA30DA94A8C469 /* LICENSE-NotoSansCJK.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LICENSE-NotoSansCJK.txt"; sourceTree = "<group>"; };
+		BC60BF5989139083144EF51D /* smb2-cmd-echo.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-echo.c"; sourceTree = "<group>"; };
+		BC8544A9DB8AD3DDF5345F91 /* NotoSansCJKsc-Regular.otf */ = {isa = PBXFileReference; path = "NotoSansCJKsc-Regular.otf"; sourceTree = "<group>"; };
+		C15AF3176BF69270DB77E761 /* sha.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = sha.h; sourceTree = "<group>"; };
+		C1D6EC3E96D0DACA4B92BCE1 /* PlaybackRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackRegressionTests.swift; sourceTree = "<group>"; };
+		C41923F57D5B197911263F24 /* LibrarySearchIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySearchIndexTests.swift; sourceTree = "<group>"; };
+		C4C9C435B64757D74C2D5E41 /* PlayerCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerCommands.swift; sourceTree = "<group>"; };
+		C50C29E3558DACCFEF94E341 /* SMBClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBClient.swift; sourceTree = "<group>"; };
+		C7E84BA7F534981A70CA0DAF /* IceMovieUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IceMovieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C8707606C130002AF9C339F4 /* smb2-cmd-tree-disconnect.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-tree-disconnect.c"; sourceTree = "<group>"; };
+		C87B75365F9A77FC47EE9996 /* smb2-cmd-query-info.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-query-info.c"; sourceTree = "<group>"; };
+		C93B07747898F31BBACA3E2C /* PlaybackProgressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackProgressTests.swift; sourceTree = "<group>"; };
+		C9F2612F7E8CE017A81B91B7 /* md4c.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = md4c.c; sourceTree = "<group>"; };
+		CA342CBA50C1FB3FDAFC5ACF /* SubtitleSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSelfTest.swift; sourceTree = "<group>"; };
+		CB953A79A0BD059EF4359F69 /* Fsctl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fsctl.swift; sourceTree = "<group>"; };
+		CCBECF69A9981899FEE90702 /* krb5-wrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "krb5-wrapper.h"; sourceTree = "<group>"; };
+		CD9D385034A7A819DEDE2367 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		CE5BB53FAD5BF790A41BEEC9 /* smb2-data-filesystem-info.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-data-filesystem-info.c"; sourceTree = "<group>"; };
+		D0A6AEC43798DFB972A8772D /* IceMovieApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IceMovieApp.swift; sourceTree = "<group>"; };
+		D1B5E2FBCC6B2C799929630A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		D26899814BD689F60A24CC4E /* SubtitleLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleLoader.swift; sourceTree = "<group>"; };
+		D3473E0418EF1A3C1D99045B /* LibrarySearchIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySearchIndex.swift; sourceTree = "<group>"; };
+		D3A54B45114CA74AF47A7E92 /* smb2-cmd-ioctl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-ioctl.c"; sourceTree = "<group>"; };
+		D437AC8A252349B9AF73F4F3 /* AVIOBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVIOBridge.swift; sourceTree = "<group>"; };
+		D4D412DD9D3EFFFA078AE348 /* smb2-cmd-error.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-error.c"; sourceTree = "<group>"; };
+		D6E3F2903B4223885C32AC50 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
+		D72D6053970187D12C387E8C /* SMBReadSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBReadSchedulerTests.swift; sourceTree = "<group>"; };
+		D7DB639C7028F2641716DC4B /* SMBHostAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBHostAddressTests.swift; sourceTree = "<group>"; };
+		D88351A4C9F91DE7A6E1CCEF /* smb2-cmd-session-setup.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-session-setup.c"; sourceTree = "<group>"; };
+		D9BD0A5DA2A31B45F4EAA9DA /* LibrarySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySource.swift; sourceTree = "<group>"; };
+		DB959A89B35076954685CBF5 /* RenderKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RenderKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCFBA02E0DC880A658B1B946 /* PlaybackAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackAudioSession.swift; sourceTree = "<group>"; };
+		DF1522221E0EE12B3F128935 /* ThumbnailKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ThumbnailKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF9933BAFEAEE67D0EF296AE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E0FD967742E98E308E069322 /* liblibsmb2.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = liblibsmb2.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		E1AD6B7668EAB32BE501CABE /* krb5-wrapper.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "krb5-wrapper.c"; sourceTree = "<group>"; };
+		E519C20165E358624778A385 /* DemuxProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemuxProbe.swift; sourceTree = "<group>"; };
+		E6C0D79F94A5C2935356CD53 /* SeekBurstTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeekBurstTest.swift; sourceTree = "<group>"; };
+		E8C6BE9C82E4F4CD6D369FC2 /* SMBFileByteSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBFileByteSource.swift; sourceTree = "<group>"; };
+		EA3B73DA50FDD2E98CB8A6A1 /* VideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenderer.swift; sourceTree = "<group>"; };
+		EA8662610A04358D7D86F572 /* MasterClockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterClockTests.swift; sourceTree = "<group>"; };
+		EB5B8062C5BE41B87F470307 /* SMBReconnectPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBReconnectPolicyTests.swift; sourceTree = "<group>"; };
+		EC3058C1160C80D2334B54BD /* hmac.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = hmac.c; sourceTree = "<group>"; };
+		EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SubtitleKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE0470A5A19712F81A1FEBD5 /* smb2-cmd-query-directory.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-query-directory.c"; sourceTree = "<group>"; };
+		EE7E1261F026C9649BBCE556 /* aes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aes.h; sourceTree = "<group>"; };
+		EECDD086AED4C8137BB05830 /* DemuxKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DemuxKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1C7BABF6AFE7B7A84AD15E3 /* ntlmssp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ntlmssp.c; sourceTree = "<group>"; };
+		F3ED235157138D2F46D9B61A /* SMBSession.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SMBSession.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4BB1E5BC399549EAFAB8AA4 /* MasterClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasterClock.swift; sourceTree = "<group>"; };
+		F536C1F04AD26DE91931CB43 /* AudioSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSelfTest.swift; sourceTree = "<group>"; };
+		F65AF0D4676D4DB1DE9C7A24 /* PlayerControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlsView.swift; sourceTree = "<group>"; };
+		F8B687C55BB0ED5F157F109D /* asn1-ber.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "asn1-ber.c"; sourceTree = "<group>"; };
+		FA581B0D69FD6E72AD30A1DA /* init.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = init.c; sourceTree = "<group>"; };
+		FB947DA03A35CC09FFE4528A /* smb2-signing.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "smb2-signing.h"; sourceTree = "<group>"; };
+		FCC4F46777949ED43A5C14D5 /* smb2-cmd-negotiate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-negotiate.c"; sourceTree = "<group>"; };
+		FD7BD87D464935C3295D32C1 /* LibrarySearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySearchResultsView.swift; sourceTree = "<group>"; };
+		FFDC78B3F1B61E28368FCE29 /* md5.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = md5.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3F0743E7AF85028B61A9C158 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C6A595A7E4C78093765DFB90 /* IceCore.framework in Frameworks */,
+				77FBD2CF7D192A138E08B7E6 /* SubtitleKit.framework in Frameworks */,
+				3197D23106A008983C0E51B6 /* MediaLibraryKit.framework in Frameworks */,
+				D487C806EC81F322593153B2 /* ThumbnailKit.framework in Frameworks */,
+				29B6828E646CF54660EF13C0 /* PersistenceKit.framework in Frameworks */,
+				22CE9DFE31D7DB3EC8024952 /* SMBSession.framework in Frameworks */,
+				A663D3ACBA404B0F1D3EB9A1 /* DemuxKit.framework in Frameworks */,
+				F7E49B479915CD720FA6F2EF /* RenderKit.framework in Frameworks */,
+				4DDADB4927E97C296582D68B /* liblibsmb2.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A467CE6C49CCD6D1FE76C4C7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AB323A741DFA0D2B0F536A61 /* IceCore.framework in Frameworks */,
+				90828CB1A7DA041CB6A2C824 /* SMBSession.framework in Frameworks */,
+				BBB8FDD49AD66A0C764D91AB /* DemuxKit.framework in Frameworks */,
+				109025521DAAB49DA1FCB924 /* RenderKit.framework in Frameworks */,
+				FDC81B4F39B4972312E26ACC /* SubtitleKit.framework in Frameworks */,
+				3F5EEF3AD9B0D52A8FA0029D /* ThumbnailKit.framework in Frameworks */,
+				C2BEEEFDE28A947EAFE64272 /* MediaLibraryKit.framework in Frameworks */,
+				D5B8FC071662CB3909524626 /* PersistenceKit.framework in Frameworks */,
+				628C41B1C21D16DB6697EE16 /* liblibsmb2.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		03EE9B4545F0BD7B1A367E0F /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				0BA5564DB9C90FCA9C1DCBFF /* LibraryCell.swift */,
+				39ECE539E0125D8FE8912E36 /* LibraryGridView.swift */,
+				FD7BD87D464935C3295D32C1 /* LibrarySearchResultsView.swift */,
+				474CE946F1BEBE59A76D0D9C /* LibrarySidebar.swift */,
+				D9BD0A5DA2A31B45F4EAA9DA /* LibrarySource.swift */,
+				D6E3F2903B4223885C32AC50 /* LibraryStore.swift */,
+				CD9D385034A7A819DEDE2367 /* LibraryView.swift */,
+				AC02316E8A8421F4F7C61D45 /* PlaybackFailure.swift */,
+				D26899814BD689F60A24CC4E /* SubtitleLoader.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		04C49E9DACB5685AEAEA2F37 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				EECDD086AED4C8137BB05830 /* DemuxKit.framework */,
+				74BF8BD1AFC731A033495C60 /* IceCore.framework */,
+				092F8C30C6E8AE0A240E0B85 /* IceMovie.app */,
+				64F29146A7268F1339714F50 /* IceMovieTests.xctest */,
+				C7E84BA7F534981A70CA0DAF /* IceMovieUITests.xctest */,
+				E0FD967742E98E308E069322 /* liblibsmb2.a */,
+				52A4205F4A967608BC0CA78F /* MediaLibraryKit.framework */,
+				56410093F974C63FDC24D347 /* PersistenceKit.framework */,
+				DB959A89B35076954685CBF5 /* RenderKit.framework */,
+				F3ED235157138D2F46D9B61A /* SMBSession.framework */,
+				EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */,
+				DF1522221E0EE12B3F128935 /* ThumbnailKit.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		09BB7C88BE894D050D5E2799 /* SubtitleKit */ = {
+			isa = PBXGroup;
+			children = (
+				56021EB4DFC4ADFEB584FEC1 /* LibassSubtitleRenderer.swift */,
+				8C4E6E2DE5D29D927C57BB71 /* SubtitleDocument.swift */,
+				0DDA0872974E62E90E3E29DD /* SubtitleKit.swift */,
+				957B9B7DEEA4C1261003CF35 /* SubtitlePreferences.swift */,
+				7AE426DEA88252027DE30FCC /* SubtitleTrack.swift */,
+			);
+			path = SubtitleKit;
+			sourceTree = "<group>";
+		};
+		24B7DD1CCA6635561519AB6E /* IceMovieTests */ = {
+			isa = PBXGroup;
+			children = (
+				0D7BA73AC9192F46890011CB /* CredentialStoreTests.swift */,
+				44C971F09698C16BF95C38C0 /* EmbeddedSubtitleExtractionTests.swift */,
+				8FF0FEAEB28A458160604F98 /* ExternalSubtitleMatchingTests.swift */,
+				7BCFB017F2F57DDC3A0001DF /* HostRecordStoreTests.swift */,
+				96F917685EE7D554F0BB0EA5 /* LibassRendererTests.swift */,
+				23CD065F93385C16FB114B36 /* LibraryLayoutTests.swift */,
+				1862B1155ABAB26324A90F6E /* LibraryNavigationTests.swift */,
+				5384CD9F9A3686EF1B53C28B /* LibraryOrderingTests.swift */,
+				C41923F57D5B197911263F24 /* LibrarySearchIndexTests.swift */,
+				EA8662610A04358D7D86F572 /* MasterClockTests.swift */,
+				5FDF5054DA6F410E92A42D48 /* MediaTitleTests.swift */,
+				C93B07747898F31BBACA3E2C /* PlaybackProgressTests.swift */,
+				77E29475D31AB0D1690A6FB3 /* PlaybackQueueTests.swift */,
+				C1D6EC3E96D0DACA4B92BCE1 /* PlaybackRegressionTests.swift */,
+				1F71DF9AD4E077E016ABBE9D /* SMBChunkRingTests.swift */,
+				D7DB639C7028F2641716DC4B /* SMBHostAddressTests.swift */,
+				D72D6053970187D12C387E8C /* SMBReadSchedulerTests.swift */,
+				EB5B8062C5BE41B87F470307 /* SMBReconnectPolicyTests.swift */,
+				4B4EA9B08C5B4DC7A36060AC /* SubtitleDiscoveryTests.swift */,
+				2468012F00109073276BBB8E /* SubtitleParserTests.swift */,
+				8A34F48A21548F9DFD2AD6B4 /* SubtitlePreferencesTests.swift */,
+				10B6B4E2A425B2CE5DFF87A5 /* ThumbnailCacheTests.swift */,
+			);
+			path = IceMovieTests;
+			sourceTree = "<group>";
+		};
+		25236541D48CCD26A8354E08 /* lib */ = {
+			isa = PBXGroup;
+			children = (
+				15F93D0582E033BDEBA1618C /* aes_apple.c */,
+				5C828137108BB34C9CBAA35F /* aes_apple.h */,
+				8FDEF0075AE107C4A248BF6C /* aes_reference.c */,
+				92ED44FD89D38AF111899ECA /* aes_reference.h */,
+				727445B3AB2B70047B30BB41 /* aes.c */,
+				EE7E1261F026C9649BBCE556 /* aes.h */,
+				5B98FB6F9F105DB20AA9D587 /* aes128ccm.c */,
+				9188AB51D41A8CFD8C8E6BFC /* aes128ccm.h */,
+				5E5AF853981F2412DC7DD530 /* alloc.c */,
+				F8B687C55BB0ED5F157F109D /* asn1-ber.c */,
+				9C6FA6637506E9BF763352A2 /* asn1-ber.h */,
+				0F81E958F0B9867B542DADBC /* compat.c */,
+				6632E09B9B084A337AA3F622 /* compat.h */,
+				0992ACAEE3B5CB33BE024B37 /* dcerpc-lsa.c */,
+				0CC1E3E0BD9653E4F3FFE5CC /* dcerpc-srvsvc.c */,
+				394385820D9B3735DF023D64 /* dcerpc.c */,
+				15A02D18A14499B38F067FE3 /* errors.c */,
+				660E8930A208CFDB49899F8C /* hmac-md5.c */,
+				11DEE745D7C0B85564800765 /* hmac-md5.h */,
+				EC3058C1160C80D2334B54BD /* hmac.c */,
+				FA581B0D69FD6E72AD30A1DA /* init.c */,
+				E1AD6B7668EAB32BE501CABE /* krb5-wrapper.c */,
+				CCBECF69A9981899FEE90702 /* krb5-wrapper.h */,
+				5CB90AF90874B7CE2D67FE3D /* libsmb2.c */,
+				9F1E1F7C77766837D30C61F3 /* md4.h */,
+				C9F2612F7E8CE017A81B91B7 /* md4c.c */,
+				3A225DE48AA45D92486FF3C3 /* md5.c */,
+				FFDC78B3F1B61E28368FCE29 /* md5.h */,
+				F1C7BABF6AFE7B7A84AD15E3 /* ntlmssp.c */,
+				AC183146132E1B4709638C39 /* ntlmssp.h */,
+				60496F37B161CA1E04012FE4 /* pdu.c */,
+				12A09682AFF6D89DFB50CA41 /* sha-private.h */,
+				C15AF3176BF69270DB77E761 /* sha.h */,
+				1C6ADCCD3D9002377484C624 /* sha1.c */,
+				A834B305AFBA6CB7831CDA40 /* sha224-256.c */,
+				755A189B178FF7E7CC733215 /* sha384-512.c */,
+				B87D56763F553292B0B0DC8F /* smb2-cmd-close.c */,
+				33375A8A24E8D18F70A049FC /* smb2-cmd-create.c */,
+				BC60BF5989139083144EF51D /* smb2-cmd-echo.c */,
+				D4D412DD9D3EFFFA078AE348 /* smb2-cmd-error.c */,
+				4C4C85AF8AFF38E88E8AD2FE /* smb2-cmd-flush.c */,
+				D3A54B45114CA74AF47A7E92 /* smb2-cmd-ioctl.c */,
+				18D9264FB8F27E7C679CC242 /* smb2-cmd-lock.c */,
+				79CBFEA294714776D440C1E6 /* smb2-cmd-logoff.c */,
+				FCC4F46777949ED43A5C14D5 /* smb2-cmd-negotiate.c */,
+				934F3DA27F0AD430C710887B /* smb2-cmd-notify-change.c */,
+				11BF4786E6C34E3199D4FBA1 /* smb2-cmd-oplock-break.c */,
+				EE0470A5A19712F81A1FEBD5 /* smb2-cmd-query-directory.c */,
+				C87B75365F9A77FC47EE9996 /* smb2-cmd-query-info.c */,
+				2D47D7ABA141BF3B3B6BA83B /* smb2-cmd-read.c */,
+				D88351A4C9F91DE7A6E1CCEF /* smb2-cmd-session-setup.c */,
+				7AD863E411BAD152016E9D3A /* smb2-cmd-set-info.c */,
+				561D10295F5706658AC8EFE0 /* smb2-cmd-tree-connect.c */,
+				C8707606C130002AF9C339F4 /* smb2-cmd-tree-disconnect.c */,
+				B02021EE9F9330926FA6E924 /* smb2-cmd-write.c */,
+				6ED6F13A55EC3F5CB3FBAE70 /* smb2-data-file-info.c */,
+				CE5BB53FAD5BF790A41BEEC9 /* smb2-data-filesystem-info.c */,
+				6B4B4B1A3C891FF91169DCAB /* smb2-data-reparse-point.c */,
+				5D3C9F5C1C940CF5F200671B /* smb2-data-security-descriptor.c */,
+				49C3BB2E78CBF372FD84C0C1 /* smb2-share-enum.c */,
+				0DF4C6AF0400E5A54B976F9F /* smb2-signing.c */,
+				FB947DA03A35CC09FFE4528A /* smb2-signing.h */,
+				2B7F58B9D2F806C50FF62CE2 /* smb3-seal.c */,
+				799493648B5929AEF3956408 /* smb3-seal.h */,
+				6B9724FBD21585DB564CCCD1 /* socket.c */,
+				B6FFC44C571BE6E388EFECA8 /* spnego-wrapper.c */,
+				2A1780EC3E651F0FF870F339 /* spnego-wrapper.h */,
+				BBFEC280879475E897FF7236 /* sync.c */,
+				133AE057266D3DEF6DAAC867 /* timestamps.c */,
+				B431F56C87DF8439A68F7B7D /* unicode.c */,
+				57143BD5E7BA0380DA11310B /* usha.c */,
+			);
+			path = lib;
+			sourceTree = "<group>";
+		};
+		2D49C670A7E1D49E3BDEA427 /* Connection */ = {
+			isa = PBXGroup;
+			children = (
+				B28B4C8940F1E99790C7511F /* ConnectionView.swift */,
+			);
+			path = Connection;
+			sourceTree = "<group>";
+		};
+		2E82028B3C6F0B2F5B24D3A3 /* SMBSession */ = {
+			isa = PBXGroup;
+			children = (
+				9084856BE30D7ADD0185F610 /* SMBChunkRing.swift */,
+				C50C29E3558DACCFEF94E341 /* SMBClient.swift */,
+				E8C6BE9C82E4F4CD6D369FC2 /* SMBFileByteSource.swift */,
+				5C0FCB797E969186A3E4FF01 /* SMBHostAddress.swift */,
+				ADBC59DF37A5B11F4F27AD57 /* SMBReadScheduler.swift */,
+				35628CB8A368A39D9C865817 /* SMBRecovery.swift */,
+				AC5CC4EE19F553DDA256771A /* SMBSessionModule.swift */,
+			);
+			path = SMBSession;
+			sourceTree = "<group>";
+		};
+		36FB9FA1C17F00073EB1C58D /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				BC490BFAE8CA30DA94A8C469 /* LICENSE-NotoSansCJK.txt */,
+				BC8544A9DB8AD3DDF5345F91 /* NotoSansCJKsc-Regular.otf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		37C6D8689C3515CF5DAB8E1C /* ThumbnailKit */ = {
+			isa = PBXGroup;
+			children = (
+				3AB8A6846EA8303D2FECB83C /* ThumbnailKit.swift */,
+			);
+			path = ThumbnailKit;
+			sourceTree = "<group>";
+		};
+		3E462E900CE5E2E3D67C49F1 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F536C1F04AD26DE91931CB43 /* AudioSelfTest.swift */,
+				1E74DF668B3873D3BA808874 /* DemuxSelfTest.swift */,
+				D0A6AEC43798DFB972A8772D /* IceMovieApp.swift */,
+				DCFBA02E0DC880A658B1B946 /* PlaybackAudioSession.swift */,
+				C4C9C435B64757D74C2D5E41 /* PlayerCommands.swift */,
+				D1B5E2FBCC6B2C799929630A /* RootView.swift */,
+				E6C0D79F94A5C2935356CD53 /* SeekBurstTest.swift */,
+				59E096806D62D0789B98155E /* SeekSelfTest.swift */,
+				0F2B1B80EF9DCFB045456247 /* SubtitleOverlayTest.swift */,
+				CA342CBA50C1FB3FDAFC5ACF /* SubtitleSelfTest.swift */,
+				08A23B0557E678A555D88531 /* VideoSelfTest.swift */,
+				1DDDC4E889111A5E48475A53 /* VideoTestSession.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		40EA8FD263BC261A15F51CEF /* IceMovieUITests */ = {
+			isa = PBXGroup;
+			children = (
+				29763954658256AED7D4FDFC /* DeviceSmokeUITests.swift */,
+				2E96EC62DFFAE6A3866284CE /* PlaybackControlsUITests.swift */,
+			);
+			path = IceMovieUITests;
+			sourceTree = "<group>";
+		};
+		4AAE89167F2FBB97BFD63D44 /* IceMovie */ = {
+			isa = PBXGroup;
+			children = (
+				3E462E900CE5E2E3D67C49F1 /* App */,
+				5B23ADFDF3F6C2F35FE37C51 /* Core */,
+				7B2F94A6BC14A475065B97AA /* Feature */,
+				DBDC20DC797696234E369676 /* Resources */,
+			);
+			path = IceMovie;
+			sourceTree = "<group>";
+		};
+		4FB07BA192643FECCF65BF0D /* libsmb2 */ = {
+			isa = PBXGroup;
+			children = (
+				25236541D48CCD26A8354E08 /* lib */,
+			);
+			path = libsmb2;
+			sourceTree = "<group>";
+		};
+		5574AA0305721AAFB349A3B9 /* DemuxKit */ = {
+			isa = PBXGroup;
+			children = (
+				1DBA8B2F8482960892CBE65F /* AudioDecoder.swift */,
+				D437AC8A252349B9AF73F4F3 /* AVIOBridge.swift */,
+				A3BE9DFEF381585516CFB46E /* DemuxKit.swift */,
+				E519C20165E358624778A385 /* DemuxProbe.swift */,
+				0B16ED4F99A7834F8172AF00 /* MediaReader.swift */,
+			);
+			path = DemuxKit;
+			sourceTree = "<group>";
+		};
+		5B23ADFDF3F6C2F35FE37C51 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				5574AA0305721AAFB349A3B9 /* DemuxKit */,
+				F1D9771B4159C7306160AFFC /* Diagnostics */,
+				8998FA3E251A7A5CAABD6B69 /* IceCore */,
+				F84C870C83414B1C75FAE613 /* PersistenceKit */,
+				C881AAEA3C9EB2CEDE450FE0 /* RenderKit */,
+				2E82028B3C6F0B2F5B24D3A3 /* SMBSession */,
+				09BB7C88BE894D050D5E2799 /* SubtitleKit */,
+				37C6D8689C3515CF5DAB8E1C /* ThumbnailKit */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		6CA73AECF4316B4CD6C967D6 /* LibraryKit */ = {
+			isa = PBXGroup;
+			children = (
+				6AF07D1B23AEE0B3B9861E69 /* LibraryLayout.swift */,
+				43667A8A52C005FE3CC985BD /* LibraryLoader.swift */,
+				A528C44222F9937B6A42DC37 /* LibraryNavigation.swift */,
+				D3473E0418EF1A3C1D99045B /* LibrarySearchIndex.swift */,
+				9943175F3DC3E81245E2C6C3 /* MediaEntry.swift */,
+				596D890E8D840AABB6D3EB8A /* MediaTitle.swift */,
+				36288AA19E881A15D9CD2E99 /* PlaybackQueue.swift */,
+			);
+			path = LibraryKit;
+			sourceTree = "<group>";
+		};
+		7B2F94A6BC14A475065B97AA /* Feature */ = {
+			isa = PBXGroup;
+			children = (
+				2D49C670A7E1D49E3BDEA427 /* Connection */,
+				03EE9B4545F0BD7B1A367E0F /* Library */,
+				6CA73AECF4316B4CD6C967D6 /* LibraryKit */,
+				DA5753A79D2000B54D1CC4F5 /* Player */,
+			);
+			path = Feature;
+			sourceTree = "<group>";
+		};
+		87764F2FC5BE61E084A1C313 /* Vendor */ = {
+			isa = PBXGroup;
+			children = (
+				A2A0A267299912B34E2FD8B0 /* AMSMB2 */,
+			);
+			path = Vendor;
+			sourceTree = "<group>";
+		};
+		8998FA3E251A7A5CAABD6B69 /* IceCore */ = {
+			isa = PBXGroup;
+			children = (
+				2481DD4C9FC0DFDCED1B000C /* AudioFormatSpec.swift */,
+				5D56ADCFDECD69ABE1BD9431 /* ByteSource.swift */,
+				61DAA2EA743408613E22C90C /* CredentialStore.swift */,
+				2A941B16C93A7C69CC61DBBB /* Log.swift */,
+				F4BB1E5BC399549EAFAB8AA4 /* MasterClock.swift */,
+			);
+			path = IceCore;
+			sourceTree = "<group>";
+		};
+		A2A0A267299912B34E2FD8B0 /* AMSMB2 */ = {
+			isa = PBXGroup;
+			children = (
+				D200B2D6312CF3D685162138 /* AMSMB2 */,
+				C5667F8EE262EFAB9DC9464F /* Dependencies */,
+			);
+			path = AMSMB2;
+			sourceTree = "<group>";
+		};
+		C5667F8EE262EFAB9DC9464F /* Dependencies */ = {
+			isa = PBXGroup;
+			children = (
+				4FB07BA192643FECCF65BF0D /* libsmb2 */,
+			);
+			path = Dependencies;
+			sourceTree = "<group>";
+		};
+		C881AAEA3C9EB2CEDE450FE0 /* RenderKit */ = {
+			isa = PBXGroup;
+			children = (
+				1BE8328E22D9B13F051E6B82 /* AudioOutput.swift */,
+				4598B3CD3B68F54947AFEEC3 /* NowPlayingCoordinator.swift */,
+				125589B55BB39EB321F1B539 /* PictureInPictureCoordinator.swift */,
+				6E8FD1C14E85B7149BF6FA86 /* PlaybackEngine.swift */,
+				9BC6C0DD0921FB6055AF9462 /* RenderKit.swift */,
+				46BEC0D090ACE7E1F2856968 /* SampleBufferBuilder.swift */,
+				EA3B73DA50FDD2E98CB8A6A1 /* VideoRenderer.swift */,
+				9C754117633E854C9D7278D8 /* VideoSurface.swift */,
+			);
+			path = RenderKit;
+			sourceTree = "<group>";
+		};
+		D200B2D6312CF3D685162138 /* AMSMB2 */ = {
+			isa = PBXGroup;
+			children = (
+				925B9DE316645A37C593E9D4 /* AMSMB2.swift */,
+				49ED363336D98D044F54B63E /* Context.swift */,
+				07715A460A94AB02CA84DCE6 /* Directory.swift */,
+				706E3E3688143E52EE1E2695 /* Extensions.swift */,
+				1EDC55F166A5862A1CD09912 /* FileHandle.swift */,
+				72DAAFF9A5B9F91918A2428F /* FileMonitoring.swift */,
+				CB953A79A0BD059EF4359F69 /* Fsctl.swift */,
+				7A11CA9182FAA7BC8B283116 /* MSRPC.swift */,
+				A6E10ECD1D66965133553620 /* ObjCCompat.swift */,
+				6752AD5FF54B58655852493B /* Parsers.swift */,
+				8E4F105A33E87D1BFD92C363 /* Stream.swift */,
+			);
+			path = AMSMB2;
+			sourceTree = "<group>";
+		};
+		DA5753A79D2000B54D1CC4F5 /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				F65AF0D4676D4DB1DE9C7A24 /* PlayerControlsView.swift */,
+				5BC233A9E26729959E91BC13 /* PlayerScreen.swift */,
+				3B80588C849D8D9DFB27C55F /* SubtitleOverlayView.swift */,
+			);
+			path = Player;
+			sourceTree = "<group>";
+		};
+		DBDC20DC797696234E369676 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				DF9933BAFEAEE67D0EF296AE /* Assets.xcassets */,
+				36FB9FA1C17F00073EB1C58D /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		F1D9771B4159C7306160AFFC /* Diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				6EC052C22FA1DAFE73E505A3 /* DiagnosticsView.swift */,
+			);
+			path = Diagnostics;
+			sourceTree = "<group>";
+		};
+		F84C870C83414B1C75FAE613 /* PersistenceKit */ = {
+			isa = PBXGroup;
+			children = (
+				8A905A5532979D6BE549F699 /* PersistenceKit.swift */,
+			);
+			path = PersistenceKit;
+			sourceTree = "<group>";
+		};
+		FA34E524EC97394B5E14AC48 = {
+			isa = PBXGroup;
+			children = (
+				4AAE89167F2FBB97BFD63D44 /* IceMovie */,
+				24B7DD1CCA6635561519AB6E /* IceMovieTests */,
+				40EA8FD263BC261A15F51CEF /* IceMovieUITests */,
+				87764F2FC5BE61E084A1C313 /* Vendor */,
+				04C49E9DACB5685AEAEA2F37 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0EE87289CB389DE0D5F2F6D4 /* SubtitleKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AE6D51C87970D0BA68DF5DAC /* Build configuration list for PBXNativeTarget "SubtitleKit" */;
+			buildPhases = (
+				A5F522C3B792746EAEAD1428 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A327F7442D5885872E1B4FEC /* PBXTargetDependency */,
+			);
+			name = SubtitleKit;
+			productName = SubtitleKit;
+			productReference = EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		18134ECA418C1B98F953C112 /* IceMovieTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 25AA0805D623C3A03A177824 /* Build configuration list for PBXNativeTarget "IceMovieTests" */;
+			buildPhases = (
+				8A5A0D59D64CACEB6D9182CA /* Sources */,
+				3F0743E7AF85028B61A9C158 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				381C79C241D77F3158E97192 /* PBXTargetDependency */,
+				836D4F578E5DC63F2930C17C /* PBXTargetDependency */,
+				34104405C4B9A1999F548DDF /* PBXTargetDependency */,
+				D0785D68D336FEF2F1452292 /* PBXTargetDependency */,
+				33B8527315337DFC342A2D8C /* PBXTargetDependency */,
+				6593EE6C50DD9051DAA75D5F /* PBXTargetDependency */,
+				D344699F09B40FB80A74B239 /* PBXTargetDependency */,
+				A27BAC439E63EF6EE3DA0146 /* PBXTargetDependency */,
+				05C747E03E74FA8850B9AD2A /* PBXTargetDependency */,
+				A10C0BE4A1442C4FF232221D /* PBXTargetDependency */,
+			);
+			name = IceMovieTests;
+			productName = IceMovieTests;
+			productReference = 64F29146A7268F1339714F50 /* IceMovieTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2AA125379AABFAC44FBE42F4 /* ThumbnailKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 79CA7D01CEC2D7535C562AFE /* Build configuration list for PBXNativeTarget "ThumbnailKit" */;
+			buildPhases = (
+				663FED6F1C63A7DA3C279A0C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				18536525AC0B38024AD1821F /* PBXTargetDependency */,
+				E793293A301E4716A8F9C19B /* PBXTargetDependency */,
+			);
+			name = ThumbnailKit;
+			productName = ThumbnailKit;
+			productReference = DF1522221E0EE12B3F128935 /* ThumbnailKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		34DAA36576B09ACE5B9A9AD9 /* IceMovieUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E79EB864186F772D2E46507A /* Build configuration list for PBXNativeTarget "IceMovieUITests" */;
+			buildPhases = (
+				60221CCCAD7197A2621B2532 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				21E615498F774D02BCD98FF1 /* PBXTargetDependency */,
+			);
+			name = IceMovieUITests;
+			productName = IceMovieUITests;
+			productReference = C7E84BA7F534981A70CA0DAF /* IceMovieUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		37986646DF360F97333B7143 /* DemuxKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 10199136EDAB1BBF686576FC /* Build configuration list for PBXNativeTarget "DemuxKit" */;
+			buildPhases = (
+				740C14B9B24CECF8DF898EB8 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				98F0E3FE1CA79F8270C1CAED /* PBXTargetDependency */,
+			);
+			name = DemuxKit;
+			productName = DemuxKit;
+			productReference = EECDD086AED4C8137BB05830 /* DemuxKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		529DFF7552DDD46E228AB15E /* IceMovie */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FAB148D20397955CC3A41F4F /* Build configuration list for PBXNativeTarget "IceMovie" */;
+			buildPhases = (
+				9925FE803BE99EB6E69524E1 /* Sources */,
+				1028A9938CFBA16DBCB594A6 /* Resources */,
+				A467CE6C49CCD6D1FE76C4C7 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E91E01690BD2EBE3AEA7C154 /* PBXTargetDependency */,
+				E830C68D44A5BABBA05A0EB0 /* PBXTargetDependency */,
+				D0F9287B2B28FEAB48C272AB /* PBXTargetDependency */,
+				8F8357DFD9A5B921A531CE49 /* PBXTargetDependency */,
+				9202C21EC67005D7496548C5 /* PBXTargetDependency */,
+				D428095FDB2225596768FE6A /* PBXTargetDependency */,
+				58D5C265918B93392EB14580 /* PBXTargetDependency */,
+				743B545F9E964A8156A32865 /* PBXTargetDependency */,
+				B46717EC7C44A826B4287A3E /* PBXTargetDependency */,
+			);
+			name = IceMovie;
+			productName = IceMovie;
+			productReference = 092F8C30C6E8AE0A240E0B85 /* IceMovie.app */;
+			productType = "com.apple.product-type.application";
+		};
+		836058483A15C960FB77D6DA /* MediaLibraryKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC42FF60F7B014E07B332EA4 /* Build configuration list for PBXNativeTarget "MediaLibraryKit" */;
+			buildPhases = (
+				70FFFA2A42DA731FC93C84BD /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MediaLibraryKit;
+			productName = MediaLibraryKit;
+			productReference = 52A4205F4A967608BC0CA78F /* MediaLibraryKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		9079EA0F37754E129412B3C0 /* libsmb2 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 44E0CB99F454E7F0D348B176 /* Build configuration list for PBXNativeTarget "libsmb2" */;
+			buildPhases = (
+				C363EEA5641ACCD05023C3F8 /* CopyFiles */,
+				44FFE220AAD3220CE0BECA17 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = libsmb2;
+			productName = libsmb2;
+			productReference = E0FD967742E98E308E069322 /* liblibsmb2.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		981C50F913A7D7FD19717A9F /* IceCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 82F60F30B9BBA05ACC19E2CB /* Build configuration list for PBXNativeTarget "IceCore" */;
+			buildPhases = (
+				74441A4BAF87EE23C7BBDFAF /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = IceCore;
+			productName = IceCore;
+			productReference = 74BF8BD1AFC731A033495C60 /* IceCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		A00D930E1688AF808F1D0CE8 /* RenderKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FFE9C16E33C9C17CD833301 /* Build configuration list for PBXNativeTarget "RenderKit" */;
+			buildPhases = (
+				4ABB62DC99C759AF2F4945C7 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1A2E72F63F334F901B328AF /* PBXTargetDependency */,
+				00FA05852FC8F698F2933E2D /* PBXTargetDependency */,
+			);
+			name = RenderKit;
+			productName = RenderKit;
+			productReference = DB959A89B35076954685CBF5 /* RenderKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		C1D90C2D7A249B86E8F45A31 /* SMBSession */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60BCE59EED1F2A790E19110 /* Build configuration list for PBXNativeTarget "SMBSession" */;
+			buildPhases = (
+				22373480A35955AA7A0DE968 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3E25E4419B23366471B82487 /* PBXTargetDependency */,
+				A311F778D7E3E9DBE0651338 /* PBXTargetDependency */,
+			);
+			name = SMBSession;
+			productName = SMBSession;
+			productReference = F3ED235157138D2F46D9B61A /* SMBSession.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		CD056C1465D689E71B2717CE /* PersistenceKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 716ACC082C8C5FD7961F7467 /* Build configuration list for PBXNativeTarget "PersistenceKit" */;
+			buildPhases = (
+				FDC11A61CBC266140644C9F3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8C332424F2AA916022E132DD /* PBXTargetDependency */,
+			);
+			name = PersistenceKit;
+			productName = PersistenceKit;
+			productReference = 56410093F974C63FDC24D347 /* PersistenceKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E979729ACBCCE445E81C9C9C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0EE87289CB389DE0D5F2F6D4 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					18134ECA418C1B98F953C112 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					2AA125379AABFAC44FBE42F4 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					34DAA36576B09ACE5B9A9AD9 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 529DFF7552DDD46E228AB15E;
+					};
+					37986646DF360F97333B7143 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					529DFF7552DDD46E228AB15E = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					836058483A15C960FB77D6DA = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					9079EA0F37754E129412B3C0 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					981C50F913A7D7FD19717A9F = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					A00D930E1688AF808F1D0CE8 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					C1D90C2D7A249B86E8F45A31 = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+					CD056C1465D689E71B2717CE = {
+						DevelopmentTeam = 39R699SCD9;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = DBF0263A2E4AC419B3922A98 /* Build configuration list for PBXProject "IceMovie" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = FA34E524EC97394B5E14AC48;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				37986646DF360F97333B7143 /* DemuxKit */,
+				981C50F913A7D7FD19717A9F /* IceCore */,
+				529DFF7552DDD46E228AB15E /* IceMovie */,
+				18134ECA418C1B98F953C112 /* IceMovieTests */,
+				34DAA36576B09ACE5B9A9AD9 /* IceMovieUITests */,
+				836058483A15C960FB77D6DA /* MediaLibraryKit */,
+				CD056C1465D689E71B2717CE /* PersistenceKit */,
+				A00D930E1688AF808F1D0CE8 /* RenderKit */,
+				C1D90C2D7A249B86E8F45A31 /* SMBSession */,
+				0EE87289CB389DE0D5F2F6D4 /* SubtitleKit */,
+				2AA125379AABFAC44FBE42F4 /* ThumbnailKit */,
+				9079EA0F37754E129412B3C0 /* libsmb2 */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1028A9938CFBA16DBCB594A6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6B175B07DA933FA7852D2B87 /* Assets.xcassets in Resources */,
+				15E2C630FCCD5EC89EB2DC95 /* LICENSE-NotoSansCJK.txt in Resources */,
+				4514E6258C97F61D5BAAE5C2 /* NotoSansCJKsc-Regular.otf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		22373480A35955AA7A0DE968 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FBD62FB63D0846C8BE7AEC94 /* AMSMB2.swift in Sources */,
+				8D17A056BD9867FE543D4CB5 /* Context.swift in Sources */,
+				42D0F2D03306E19DFE7C1602 /* Directory.swift in Sources */,
+				6BAE93B0E10DD13C8F364718 /* Extensions.swift in Sources */,
+				D3ECBF3E16F0AE573584F103 /* FileHandle.swift in Sources */,
+				9E9034F9D0486D2E140AC655 /* FileMonitoring.swift in Sources */,
+				23814EEE51EF43816799A7FE /* Fsctl.swift in Sources */,
+				1995889D2A87614083003208 /* MSRPC.swift in Sources */,
+				A76DDE45183CB4CB35132B08 /* ObjCCompat.swift in Sources */,
+				8CEAD3E25CA424E6F3F3C880 /* Parsers.swift in Sources */,
+				90D80B78AC9C275371A1B00F /* SMBChunkRing.swift in Sources */,
+				EE22A26D6984AC449B72F9AE /* SMBClient.swift in Sources */,
+				DD1A8382A1D35A3402AD2231 /* SMBFileByteSource.swift in Sources */,
+				3AE56521762FA035517B1801 /* SMBHostAddress.swift in Sources */,
+				596E54B68619618EE7868429 /* SMBReadScheduler.swift in Sources */,
+				09E211A6BD7533C90218DB45 /* SMBRecovery.swift in Sources */,
+				669B7FA9B1162DB3989EDF4B /* SMBSessionModule.swift in Sources */,
+				B3BBB37B21CD7A19A6B859E6 /* Stream.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		44FFE220AAD3220CE0BECA17 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				69241FAC8B2E5E0AF71B40D5 /* aes.c in Sources */,
+				87F7577A2AD046554F4BD88F /* aes128ccm.c in Sources */,
+				539CB9DA8C863DD9016E413C /* aes_apple.c in Sources */,
+				8B5E77FA3575AB9183450C42 /* aes_reference.c in Sources */,
+				A6A537D3C4C2802004BF695A /* alloc.c in Sources */,
+				7FBB3F1CA74C3A50E8C45BDD /* asn1-ber.c in Sources */,
+				6088F68FA5D88CF8FF61CFE4 /* compat.c in Sources */,
+				9730644AFE757D4FB33AC5DB /* dcerpc-lsa.c in Sources */,
+				7FCB1A5767825D323A8AE3E2 /* dcerpc-srvsvc.c in Sources */,
+				F4EBE8F54E28C7EE924F936E /* dcerpc.c in Sources */,
+				445DFA058C19ECC4152C1C9A /* errors.c in Sources */,
+				B2143F3DBC2DCFEDD399292C /* hmac-md5.c in Sources */,
+				30E85BD59BD000E181D6DD7E /* hmac.c in Sources */,
+				CB367F3209FBCCB517BBCD43 /* init.c in Sources */,
+				F687E43D0416B87A08D3A3E3 /* krb5-wrapper.c in Sources */,
+				4BE4533C6DF0091D3024B16D /* libsmb2.c in Sources */,
+				F571A496FF103E2369E1FF80 /* md4c.c in Sources */,
+				C13EB8A8B84D545DD58F609F /* md5.c in Sources */,
+				0277077E409975768DE3F0DA /* ntlmssp.c in Sources */,
+				F08433EF28D94F0A7B5E52E4 /* pdu.c in Sources */,
+				E924B460BD52C30E4BF339B5 /* sha1.c in Sources */,
+				24ED76DB67869D64902E2ABC /* sha224-256.c in Sources */,
+				FF0B853971024DC01B19FE9B /* sha384-512.c in Sources */,
+				87FB3F8866F2F0E425C9068B /* smb2-cmd-close.c in Sources */,
+				4C60674585A61022277EC335 /* smb2-cmd-create.c in Sources */,
+				88C087E173C852B096AC2539 /* smb2-cmd-echo.c in Sources */,
+				67F419E37674BAA8C7F8F9FD /* smb2-cmd-error.c in Sources */,
+				03D1B4BCA176CAC51C73D1E6 /* smb2-cmd-flush.c in Sources */,
+				6BDD2D0F815AFF4F26EC1236 /* smb2-cmd-ioctl.c in Sources */,
+				A96572EA760DF3D1593F8B7A /* smb2-cmd-lock.c in Sources */,
+				8A8238D32F600DE437DFC2EF /* smb2-cmd-logoff.c in Sources */,
+				8E7BD2586D3432BF436FF21A /* smb2-cmd-negotiate.c in Sources */,
+				D909731FEAE6F36B311E4035 /* smb2-cmd-notify-change.c in Sources */,
+				238CC9E4FCA037B70C2DD63B /* smb2-cmd-oplock-break.c in Sources */,
+				ACD85F0656D825E111CBDC29 /* smb2-cmd-query-directory.c in Sources */,
+				699EE334A621F3C8544DEE60 /* smb2-cmd-query-info.c in Sources */,
+				250AFC5A07716572D575A5AF /* smb2-cmd-read.c in Sources */,
+				7B6367384A37FC7324B23903 /* smb2-cmd-session-setup.c in Sources */,
+				980A6071F3B60B78C3906F6E /* smb2-cmd-set-info.c in Sources */,
+				EAD2E0204CDC385AD391865D /* smb2-cmd-tree-connect.c in Sources */,
+				9A969D8BE605561974A3CC3B /* smb2-cmd-tree-disconnect.c in Sources */,
+				1FA80FA18D15C9E7A11FE908 /* smb2-cmd-write.c in Sources */,
+				4305922FA91DA0C26CDC79F7 /* smb2-data-file-info.c in Sources */,
+				9988E75ACE258C047649C640 /* smb2-data-filesystem-info.c in Sources */,
+				C35E220DAE9964F8EAA39B08 /* smb2-data-reparse-point.c in Sources */,
+				956471AD2793D72783002D0E /* smb2-data-security-descriptor.c in Sources */,
+				D0B066817023A2669C316CE9 /* smb2-share-enum.c in Sources */,
+				5DB954F30DBCFBCB75F10499 /* smb2-signing.c in Sources */,
+				0B1680AD71C5793AB846BF87 /* smb3-seal.c in Sources */,
+				B19271FD872276E3C54742D1 /* socket.c in Sources */,
+				8CA36852F17433B8CB8C5E0B /* spnego-wrapper.c in Sources */,
+				84767DD6FF79409E8A350681 /* sync.c in Sources */,
+				CAE186F0B172DFFB1D0E2412 /* timestamps.c in Sources */,
+				1AD740EB604B338903CC3380 /* unicode.c in Sources */,
+				BD08D3EF134F563320440323 /* usha.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4ABB62DC99C759AF2F4945C7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FFD0CA08AA71A4759C0047B6 /* AudioOutput.swift in Sources */,
+				E13D46D79CA30CB7AE2ED423 /* NowPlayingCoordinator.swift in Sources */,
+				BC7EB46E336757635EB08B44 /* PictureInPictureCoordinator.swift in Sources */,
+				880400EF9EA9F346E77BFB6A /* PlaybackEngine.swift in Sources */,
+				625684C1EF3624D00D8C13FB /* RenderKit.swift in Sources */,
+				83E9851CF18DE3DF2A59F428 /* SampleBufferBuilder.swift in Sources */,
+				D676EB738336BBFD44140B85 /* VideoRenderer.swift in Sources */,
+				C0A8B48A8F30C58EA97CE55D /* VideoSurface.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		60221CCCAD7197A2621B2532 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E63E08A1365A7B673E671E5C /* DeviceSmokeUITests.swift in Sources */,
+				47EFBE3F6E6BD93FB465F325 /* PlaybackControlsUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		663FED6F1C63A7DA3C279A0C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1D9E8831E78B95425DBA91CF /* ThumbnailKit.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		70FFFA2A42DA731FC93C84BD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BE2F9E732FC06F41268D6753 /* LibraryLayout.swift in Sources */,
+				162A1C26EF6F6FB6183B0D74 /* LibraryLoader.swift in Sources */,
+				9660D7B3DE0035D8F4232383 /* LibraryNavigation.swift in Sources */,
+				B740246702542392155123E0 /* LibrarySearchIndex.swift in Sources */,
+				9C9D089B6EE9F598E9B10B14 /* MediaEntry.swift in Sources */,
+				894411C28208CBE38DA334C3 /* MediaTitle.swift in Sources */,
+				0229FCB518F744D1F059D43D /* PlaybackQueue.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		740C14B9B24CECF8DF898EB8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B444092EF10B0B0D4BC3347F /* AVIOBridge.swift in Sources */,
+				1399674732948DECC39B663F /* AudioDecoder.swift in Sources */,
+				7BFB11F3D115DD0812C74C58 /* DemuxKit.swift in Sources */,
+				0F144B2D9223DEE9307CF221 /* DemuxProbe.swift in Sources */,
+				D81DA6B2044B82CC57366E85 /* MediaReader.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74441A4BAF87EE23C7BBDFAF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2CC221EEB8258CA21CC42870 /* AudioFormatSpec.swift in Sources */,
+				6BC856E2918015C0D9E281DA /* ByteSource.swift in Sources */,
+				47CC156CCCB714B08604C008 /* CredentialStore.swift in Sources */,
+				7F34862C1B69346669F9C214 /* Log.swift in Sources */,
+				1ED5DD95098E043F3AE2BF00 /* MasterClock.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8A5A0D59D64CACEB6D9182CA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5F32E20734C11608F8C56134 /* CredentialStoreTests.swift in Sources */,
+				F486F12CAB90057675709F77 /* EmbeddedSubtitleExtractionTests.swift in Sources */,
+				DF46F474E5C828B2E296EA18 /* ExternalSubtitleMatchingTests.swift in Sources */,
+				D70A47031FA27C6CB03521BB /* HostRecordStoreTests.swift in Sources */,
+				6208BE5C38B124976C09FC41 /* LibassRendererTests.swift in Sources */,
+				A686D0B1DF5BB4BF04C23591 /* LibraryLayoutTests.swift in Sources */,
+				42384298398FD392A5F5F02E /* LibraryNavigationTests.swift in Sources */,
+				E5F265108E234453ECA33408 /* LibraryOrderingTests.swift in Sources */,
+				FF50A58CA0A2F3CA5D47502F /* LibrarySearchIndexTests.swift in Sources */,
+				3CC321B6D4620CD548FBB3C8 /* MasterClockTests.swift in Sources */,
+				C36A47C6596DB0E966C7A06B /* MediaTitleTests.swift in Sources */,
+				0DBCF374D8848362A8BB707E /* PlaybackProgressTests.swift in Sources */,
+				615EAB0F6615F74A2CF8C219 /* PlaybackQueueTests.swift in Sources */,
+				E07B5B1235AF1FE95EA08C3E /* PlaybackRegressionTests.swift in Sources */,
+				CC14DBDEB341A09C2D628422 /* SMBChunkRingTests.swift in Sources */,
+				B527B8A99DBEEAD04CBAF453 /* SMBHostAddressTests.swift in Sources */,
+				B4984214B924CA97FFBF965C /* SMBReadSchedulerTests.swift in Sources */,
+				9E858593FCCFF97F74DEA596 /* SMBReconnectPolicyTests.swift in Sources */,
+				6D3DA0DE85E85E1121D04C8E /* SubtitleDiscoveryTests.swift in Sources */,
+				CDA905D005CD304355DAEFE4 /* SubtitleParserTests.swift in Sources */,
+				8C49CB9740A91CAB10050C6C /* SubtitlePreferencesTests.swift in Sources */,
+				4A3C60C0D3875976A368C626 /* ThumbnailCacheTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9925FE803BE99EB6E69524E1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E3871A377277049652C39988 /* AudioSelfTest.swift in Sources */,
+				C393AABE586A5ECC3C76E206 /* ConnectionView.swift in Sources */,
+				E68D11D6F235EBA95D27B5CA /* DemuxSelfTest.swift in Sources */,
+				412502C910C80E9D081E4BAC /* DiagnosticsView.swift in Sources */,
+				90F8DECAB41DDB21A5989822 /* IceMovieApp.swift in Sources */,
+				1C50676AC2CAEA756C78FCED /* LibraryCell.swift in Sources */,
+				191AC128B08D1BEF8DD60D47 /* LibraryGridView.swift in Sources */,
+				5A0AC4D66AEAB2166DD37758 /* LibrarySearchResultsView.swift in Sources */,
+				82F69FA7C72336E70EF723E3 /* LibrarySidebar.swift in Sources */,
+				10AC2F6ED3337C9CC0CA5EF6 /* LibrarySource.swift in Sources */,
+				2CD0121814E1C9C81B90F670 /* LibraryStore.swift in Sources */,
+				6059672F635557F8169FEEA8 /* LibraryView.swift in Sources */,
+				026572203132EC5C5CCDC463 /* PlaybackAudioSession.swift in Sources */,
+				DCE1296E29541E61F0B4EE98 /* PlaybackFailure.swift in Sources */,
+				5F09A3E2C706BB9ECE568708 /* PlayerCommands.swift in Sources */,
+				FA3911B2811159596786C9A9 /* PlayerControlsView.swift in Sources */,
+				B9038C03DAE0760939913BB4 /* PlayerScreen.swift in Sources */,
+				3CC10309C906B48581A405F6 /* RootView.swift in Sources */,
+				2C9407121764CEFBFD89AC53 /* SeekBurstTest.swift in Sources */,
+				B8CE4666E0CDD005EAD00A97 /* SeekSelfTest.swift in Sources */,
+				0040ACFA899BBB01E96D3936 /* SubtitleLoader.swift in Sources */,
+				16C0983E14455145894A7DFF /* SubtitleOverlayTest.swift in Sources */,
+				82D0D270A6C09FEF7860323C /* SubtitleOverlayView.swift in Sources */,
+				8FD75440D33DF8EE465301F0 /* SubtitleSelfTest.swift in Sources */,
+				62F2B0EDFE00019805ACBC6F /* VideoSelfTest.swift in Sources */,
+				CDCDD553CECFE35BD39528B2 /* VideoTestSession.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5F522C3B792746EAEAD1428 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EEB4A8F7C7F059DA623318CD /* LibassSubtitleRenderer.swift in Sources */,
+				AA64CC7C7240CBBA4109C9E2 /* SubtitleDocument.swift in Sources */,
+				C20D1B977C52068BB32E212D /* SubtitleKit.swift in Sources */,
+				7C6463EDD015B14A33790855 /* SubtitlePreferences.swift in Sources */,
+				FFC69951D5225C66616202F4 /* SubtitleTrack.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FDC11A61CBC266140644C9F3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				173F07AAF068B02D147272B3 /* PersistenceKit.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		00FA05852FC8F698F2933E2D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 37986646DF360F97333B7143 /* DemuxKit */;
+			targetProxy = 09D5D8D3E64CFB1099467351 /* PBXContainerItemProxy */;
+		};
+		05C747E03E74FA8850B9AD2A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9079EA0F37754E129412B3C0 /* libsmb2 */;
+			targetProxy = 0DDEB3E41DD6CD313A9F8234 /* PBXContainerItemProxy */;
+		};
+		18536525AC0B38024AD1821F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = 8E781A5E5FE0A5EDB7EFE9FF /* PBXContainerItemProxy */;
+		};
+		21E615498F774D02BCD98FF1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 529DFF7552DDD46E228AB15E /* IceMovie */;
+			targetProxy = EBD2A1DE2004761AFB7667A0 /* PBXContainerItemProxy */;
+		};
+		33B8527315337DFC342A2D8C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CD056C1465D689E71B2717CE /* PersistenceKit */;
+			targetProxy = C72F8C691215871FD99A78A3 /* PBXContainerItemProxy */;
+		};
+		34104405C4B9A1999F548DDF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 836058483A15C960FB77D6DA /* MediaLibraryKit */;
+			targetProxy = B16A14DC9B634CE6546E1DE7 /* PBXContainerItemProxy */;
+		};
+		381C79C241D77F3158E97192 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = A58002737CC8F044966CB0CB /* PBXContainerItemProxy */;
+		};
+		3E25E4419B23366471B82487 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9079EA0F37754E129412B3C0 /* libsmb2 */;
+			targetProxy = D476659B12D56292DF7E120A /* PBXContainerItemProxy */;
+		};
+		58D5C265918B93392EB14580 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 836058483A15C960FB77D6DA /* MediaLibraryKit */;
+			targetProxy = 12746BA0CC6B05A2E6240293 /* PBXContainerItemProxy */;
+		};
+		6593EE6C50DD9051DAA75D5F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1D90C2D7A249B86E8F45A31 /* SMBSession */;
+			targetProxy = 7935ECA64012FC51603F8A36 /* PBXContainerItemProxy */;
+		};
+		743B545F9E964A8156A32865 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CD056C1465D689E71B2717CE /* PersistenceKit */;
+			targetProxy = 7D48C0183D6CDA6552CAB5B1 /* PBXContainerItemProxy */;
+		};
+		836D4F578E5DC63F2930C17C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0EE87289CB389DE0D5F2F6D4 /* SubtitleKit */;
+			targetProxy = D37BF81403AF4C395B75C561 /* PBXContainerItemProxy */;
+		};
+		8C332424F2AA916022E132DD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = D250A69F6D4059C4CC4ED9FC /* PBXContainerItemProxy */;
+		};
+		8F8357DFD9A5B921A531CE49 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00D930E1688AF808F1D0CE8 /* RenderKit */;
+			targetProxy = D4C8A7254CFDB5FFACE147A8 /* PBXContainerItemProxy */;
+		};
+		9202C21EC67005D7496548C5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0EE87289CB389DE0D5F2F6D4 /* SubtitleKit */;
+			targetProxy = BE2A774541849F12CEF62A43 /* PBXContainerItemProxy */;
+		};
+		98F0E3FE1CA79F8270C1CAED /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = AC474CBA783432BC8574308A /* PBXContainerItemProxy */;
+		};
+		A10C0BE4A1442C4FF232221D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 529DFF7552DDD46E228AB15E /* IceMovie */;
+			targetProxy = 6570A2F967803DEDEEFEF30D /* PBXContainerItemProxy */;
+		};
+		A1A2E72F63F334F901B328AF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = 0CC7063CD1D516CC3C0C64DC /* PBXContainerItemProxy */;
+		};
+		A27BAC439E63EF6EE3DA0146 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00D930E1688AF808F1D0CE8 /* RenderKit */;
+			targetProxy = 371EF5F3FC457069FFD26A48 /* PBXContainerItemProxy */;
+		};
+		A311F778D7E3E9DBE0651338 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = 6435B0EA95E34A2023543110 /* PBXContainerItemProxy */;
+		};
+		A327F7442D5885872E1B4FEC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = 5FF07C620A3B47A884E8BF21 /* PBXContainerItemProxy */;
+		};
+		B46717EC7C44A826B4287A3E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9079EA0F37754E129412B3C0 /* libsmb2 */;
+			targetProxy = E16D60060E987AA1D2CC7D39 /* PBXContainerItemProxy */;
+		};
+		D0785D68D336FEF2F1452292 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2AA125379AABFAC44FBE42F4 /* ThumbnailKit */;
+			targetProxy = 92825093CA5A34B422B3A08C /* PBXContainerItemProxy */;
+		};
+		D0F9287B2B28FEAB48C272AB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 37986646DF360F97333B7143 /* DemuxKit */;
+			targetProxy = 91EFB8839BA7FF239BACBE11 /* PBXContainerItemProxy */;
+		};
+		D344699F09B40FB80A74B239 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 37986646DF360F97333B7143 /* DemuxKit */;
+			targetProxy = F0F2F565792F091D9E3D55CB /* PBXContainerItemProxy */;
+		};
+		D428095FDB2225596768FE6A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2AA125379AABFAC44FBE42F4 /* ThumbnailKit */;
+			targetProxy = 51C72B00E8A338B5B6523E81 /* PBXContainerItemProxy */;
+		};
+		E793293A301E4716A8F9C19B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 37986646DF360F97333B7143 /* DemuxKit */;
+			targetProxy = 7858B6DF42E42123D683DD2C /* PBXContainerItemProxy */;
+		};
+		E830C68D44A5BABBA05A0EB0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1D90C2D7A249B86E8F45A31 /* SMBSession */;
+			targetProxy = A13CA3B72FC74B6D8CDB0408 /* PBXContainerItemProxy */;
+		};
+		E91E01690BD2EBE3AEA7C154 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 981C50F913A7D7FD19717A9F /* IceCore */;
+			targetProxy = 0C39FCE4252B18EE360FE669 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0803C789E4EE844B710B64D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
+				);
+				MACH_O_TYPE = staticlib;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lavformat",
+					"-lavcodec",
+					"-lavutil",
+					"-lswscale",
+					"-lswresample",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.demux;
+				PRODUCT_NAME = DemuxKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		0939F4A70FCDE5B5C85EAC9F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.thumbnail;
+				PRODUCT_NAME = ThumbnailKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		0D19EC27B1D1B23DD15D451E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.core;
+				PRODUCT_NAME = IceCore;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		13BBE4161B0837EF41001F26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.smbsession;
+				PRODUCT_NAME = SMBSession;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		2A566B4C0DCDE3F74F544A57 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = IceMovie;
+			};
+			name = Release;
+		};
+		2BC512B0F1440F818FF1897D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.render;
+				PRODUCT_NAME = RenderKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		33BD4B37B023381E12AEFC31 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 39R699SCD9;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		34C23943960D96E299976C0C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.thumbnail;
+				PRODUCT_NAME = ThumbnailKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		3F7591D9A68AD8AB9A0ED08D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.persistence;
+				PRODUCT_NAME = PersistenceKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		44BBF98A6C5DCE7E159685FE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.librarykit;
+				PRODUCT_NAME = MediaLibraryKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		49E3D4D2FFFC4768ACAE9910 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = IceMovie;
+			};
+			name = Debug;
+		};
+		569EA3A310D564B895CEFCF3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"_U_=__attribute__((unused))",
+					"HAVE_CONFIG_H=1",
+				);
+				GCC_WARN_UNUSED_VARIABLE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/lib",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.libsmb2;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6783C662BFA1784BC6B9F040 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
+				);
+				MACH_O_TYPE = staticlib;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lavformat",
+					"-lavcodec",
+					"-lavutil",
+					"-lswscale",
+					"-lswresample",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.demux;
+				PRODUCT_NAME = DemuxKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		75C54887F3CE4F42ED0D5A4E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include",
+				);
+				INFOPLIST_FILE = IceMovie/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib",
+				);
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lavformat",
+					"-lavcodec",
+					"-lavutil",
+					"-lswscale",
+					"-lswresample",
+					"-lass",
+					"-lharfbuzz",
+					"-lfreetype",
+					"-lfribidi",
+					"-liconv",
+					"-lc++",
+					"-framework",
+					CoreText,
+					"-framework",
+					CoreGraphics,
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie;
+				PRODUCT_NAME = IceMovie;
+				SDKROOT = iphoneos;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+					"$(SRCROOT)/IceMovie/Core/CLibass",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7838CCEB0E2A3A96629FEDBA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 39R699SCD9;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		7D848FE5E26C2BC4C66F0CBA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.subtitle;
+				PRODUCT_NAME = SubtitleKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/IceMovie/Core/CLibass",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		86E1B799FB906E05427A14FD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.smbsession;
+				PRODUCT_NAME = SMBSession;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		88D5E879398C58A8C0A2FA2E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.subtitle;
+				PRODUCT_NAME = SubtitleKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/IceMovie/Core/CLibass",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		B0BA4AD4873AD505F8613148 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"_U_=__attribute__((unused))",
+					"HAVE_CONFIG_H=1",
+				);
+				GCC_WARN_UNUSED_VARIABLE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/lib",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.libsmb2;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BF0327ABB06A18E0AF91C7D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.render;
+				PRODUCT_NAME = RenderKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		C258C03732B7F902FC8D34BD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lavformat",
+					"-lavcodec",
+					"-lavutil",
+					"-lswscale",
+					"-lswresample",
+					"-lass",
+					"-lharfbuzz",
+					"-lfreetype",
+					"-lfribidi",
+					"-liconv",
+					"-lc++",
+					"-framework",
+					CoreText,
+					"-framework",
+					CoreGraphics,
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.tests;
+				SDKROOT = iphoneos;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/IceMovie/Core/CLibass",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IceMovie.app/IceMovie";
+			};
+			name = Debug;
+		};
+		D723502F24BA1E5FAB984298 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.librarykit;
+				PRODUCT_NAME = MediaLibraryKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		DD07F6945D09CAB99A056F21 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.persistence;
+				PRODUCT_NAME = PersistenceKit;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		E15F1155BC280C77F0A0D05E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include",
+				);
+				INFOPLIST_FILE = IceMovie/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib",
+				);
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lavformat",
+					"-lavcodec",
+					"-lavutil",
+					"-lswscale",
+					"-lswresample",
+					"-lass",
+					"-lharfbuzz",
+					"-lfreetype",
+					"-lfribidi",
+					"-liconv",
+					"-lc++",
+					"-framework",
+					CoreText,
+					"-framework",
+					CoreGraphics,
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie;
+				PRODUCT_NAME = IceMovie;
+				SDKROOT = iphoneos;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+					"$(SRCROOT)/IceMovie/Core/CLibass",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E4D297679ADB238B6DE6BCAC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.core;
+				PRODUCT_NAME = IceCore;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		EEC779FD3F4A19E230EA4AE9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/apple",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include/smb2",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/include",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
+					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lavformat",
+					"-lavcodec",
+					"-lavutil",
+					"-lswscale",
+					"-lswresample",
+					"-lass",
+					"-lharfbuzz",
+					"-lfreetype",
+					"-lfribidi",
+					"-liconv",
+					"-lc++",
+					"-framework",
+					CoreText,
+					"-framework",
+					CoreGraphics,
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wangzicheng.icemovie.tests;
+				SDKROOT = iphoneos;
+				SWIFT_INCLUDE_PATHS = (
+					"$(SRCROOT)/Vendor/ffmpeg/include",
+					"$(SRCROOT)/Vendor/AMSMB2/Dependencies/libsmb2/include",
+					"$(SRCROOT)/IceMovie/Core/CLibass",
+				);
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/IceMovie.app/IceMovie";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		10199136EDAB1BBF686576FC /* Build configuration list for PBXNativeTarget "DemuxKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6783C662BFA1784BC6B9F040 /* Debug */,
+				0803C789E4EE844B710B64D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		25AA0805D623C3A03A177824 /* Build configuration list for PBXNativeTarget "IceMovieTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C258C03732B7F902FC8D34BD /* Debug */,
+				EEC779FD3F4A19E230EA4AE9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		44E0CB99F454E7F0D348B176 /* Build configuration list for PBXNativeTarget "libsmb2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				569EA3A310D564B895CEFCF3 /* Debug */,
+				B0BA4AD4873AD505F8613148 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		716ACC082C8C5FD7961F7467 /* Build configuration list for PBXNativeTarget "PersistenceKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3F7591D9A68AD8AB9A0ED08D /* Debug */,
+				DD07F6945D09CAB99A056F21 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		79CA7D01CEC2D7535C562AFE /* Build configuration list for PBXNativeTarget "ThumbnailKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0939F4A70FCDE5B5C85EAC9F /* Debug */,
+				34C23943960D96E299976C0C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7FFE9C16E33C9C17CD833301 /* Build configuration list for PBXNativeTarget "RenderKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2BC512B0F1440F818FF1897D /* Debug */,
+				BF0327ABB06A18E0AF91C7D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		82F60F30B9BBA05ACC19E2CB /* Build configuration list for PBXNativeTarget "IceCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E4D297679ADB238B6DE6BCAC /* Debug */,
+				0D19EC27B1D1B23DD15D451E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A60BCE59EED1F2A790E19110 /* Build configuration list for PBXNativeTarget "SMBSession" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				13BBE4161B0837EF41001F26 /* Debug */,
+				86E1B799FB906E05427A14FD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AE6D51C87970D0BA68DF5DAC /* Build configuration list for PBXNativeTarget "SubtitleKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7D848FE5E26C2BC4C66F0CBA /* Debug */,
+				88D5E879398C58A8C0A2FA2E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CC42FF60F7B014E07B332EA4 /* Build configuration list for PBXNativeTarget "MediaLibraryKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D723502F24BA1E5FAB984298 /* Debug */,
+				44BBF98A6C5DCE7E159685FE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DBF0263A2E4AC419B3922A98 /* Build configuration list for PBXProject "IceMovie" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7838CCEB0E2A3A96629FEDBA /* Debug */,
+				33BD4B37B023381E12AEFC31 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E79EB864186F772D2E46507A /* Build configuration list for PBXNativeTarget "IceMovieUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				49E3D4D2FFFC4768ACAE9910 /* Debug */,
+				2A566B4C0DCDE3F74F544A57 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FAB148D20397955CC3A41F4F /* Build configuration list for PBXNativeTarget "IceMovie" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				75C54887F3CE4F42ED0D5A4E /* Debug */,
+				E15F1155BC280C77F0A0D05E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E979729ACBCCE445E81C9C9C /* Project object */;
+}

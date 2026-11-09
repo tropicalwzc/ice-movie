@@ -1,0 +1,663 @@
+GEN	libavutil/libavutil.version
+GEN	libavcodec/libavcodec.version
+GEN	libavformat/libavformat.version
+GEN	libavfilter/libavfilter.version
+GEN	libswresample/libswresample.version
+GEN	libswscale/libswscale.version
+CC	libavfilter/allfilters.o
+CC	libavfilter/avfilter.o
+CC	libavfilter/audio.o
+CC	libavfilter/avfiltergraph.o
+CC	libavfilter/buffersrc.o
+CC	libavfilter/buffersink.o
+CC	libavfilter/ccfifo.o
+CC	libavfilter/colorspace.o
+CC	libavfilter/drawutils.o
+CC	libavfilter/framepool.o
+CC	libavfilter/graphdump.o
+CC	libavfilter/formats.o
+CC	libavfilter/framequeue.o
+CC	libavfilter/graphparser.o
+CC	libavfilter/pthread.o
+CC	libavfilter/version.o
+CC	libavfilter/video.o
+GEN	libavfilter/libavfilter.pc
+CC	libavformat/allformats.o
+CC	libavformat/avidec.o
+CC	libavformat/avformat.o
+CC	libavformat/avio.o
+CC	libavformat/aviobuf.o
+CC	libavformat/demux_utils.o
+CC	libavformat/demux.o
+CC	libavformat/dovi_isom.o
+CC	libavformat/dump.o
+src/libavformat/avio.c:63:137: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   63 |     {"rw_timeout", "Timeout for IO operations (in microseconds)", offsetof(URLContext, rw_timeout), AV_OPT_TYPE_INT64, { .i64 = 0 }, 0, INT64_MAX, AV_OPT_FLAG_ENCODING_PARAM | AV_OPT_FLAG_DECODING_PARAM },
+      |     ~                                                                                                                                   ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+CC	libavformat/dv.o
+src/libavformat/avidec.c:1131:22: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+ 1131 |         AVIOContext *pb = avio_alloc_context(pkt->data + 7,
+      |                      ^
+src/libavformat/avidec.c:1837:22: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+ 1837 |             uint32_t tag1 = avio_rl32(pb);
+      |                      ^
+CC	libavformat/file.o
+src/libavformat/demux.c:1388:13: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+ 1388 |         int new_extradata = !!av_packet_side_data_get(pkt->side_data, pkt->side_data_elems,
+      |             ^
+src/libavformat/demux.c:1782:40: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+ 1782 |         if (bitrate >= 0 && bitrate <= INT64_MAX)
+      |                                     ~~ ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+src/libavformat/dump.c:231:53: warning: implicit conversion from 'unsigned int' to 'float' changes value from 4294967295 to 4294967296 [-Wimplicit-const-int-float-conversion]
+  231 |         av_log(ctx, log_level, "%f", (float) peak / UINT32_MAX);
+      |                                                   ~ ^~~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:109:27: note: expanded from macro 'UINT32_MAX'
+  109 | #define UINT32_MAX        4294967295U
+      |                           ^~~~~~~~~~~
+CC	libavformat/flac_picture.o
+CC	libavformat/format.o
+CC	libavformat/iamf.o
+CC	libavformat/iamf_parse.o
+CC	libavformat/iamf_reader.o
+CC	libavformat/id3v1.o
+CC	libavformat/id3v2.o
+CC	libavformat/isom.o
+CC	libavformat/isom_tags.o
+CC	libavformat/m4vdec.o
+CC	libavformat/matroskadec.o
+CC	libavformat/matroska.o
+1 warning generated.
+CC	libavformat/metadata.o
+CC	libavformat/mov.o
+CC	libavformat/mov_chan.o
+CC	libavformat/mov_esds.o
+CC	libavformat/mpegts.o
+CC	libavformat/mux.o
+2 warnings generated.
+CC	libavformat/mux_utils.o
+CC	libavformat/oggparsevorbis.o
+CC	libavformat/options.o
+src/libavformat/matroskadec.c:3175:40: warning: implicit conversion from 'unsigned long long' to 'double' changes value from 18446744073709551615 to 18446744073709551616 [-Wimplicit-const-int-float-conversion]
+ 3175 |                 if (default_duration > UINT64_MAX || default_duration < 0) {
+      |                                      ~ ^~~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:110:27: note: expanded from macro 'UINT64_MAX'
+  110 | #define UINT64_MAX        18446744073709551615ULL
+      |                           ^~~~~~~~~~~~~~~~~~~~~~~
+CC	libavformat/os_support.o
+CC	libavformat/protocols.o
+In file included from src/libavformat/options.c:41:
+src/libavformat/options_table.h:111:181: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+  111 | {"duration_probesize", "Maximum number of bytes to probe the durations of the streams in estimate_timings_from_pts", OFFSET(duration_probesize), AV_OPT_TYPE_INT64, {.i64 = 0 }, 0, INT64_MAX, D},
+      | ~                                                                                                                                                                                   ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+In file included from src/libavformat/options.c:41:
+src/libavformat/options_table.h:89:146: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   89 | {"max_interleave_delta", "maximum buffering duration for interleaving", OFFSET(max_interleave_delta), AV_OPT_TYPE_INT64, { .i64 = 10000000 }, 0, INT64_MAX, E },
+      | ~                                                                                                                                                ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+In file included from src/libavformat/options.c:41:
+src/libavformat/options_table.h:88:125: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   88 | {"output_ts_offset", "set output timestamp offset", OFFSET(output_ts_offset), AV_OPT_TYPE_DURATION, {.i64 = 0}, -INT64_MAX, INT64_MAX, E},
+      | ~                                                                                                                           ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+In file included from src/libavformat/options.c:41:
+src/libavformat/options_table.h:88:113: warning: implicit conversion from 'long long' to 'double' changes value from -9223372036854775807 to -9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   88 | {"output_ts_offset", "set output timestamp offset", OFFSET(output_ts_offset), AV_OPT_TYPE_DURATION, {.i64 = 0}, -INT64_MAX, INT64_MAX, E},
+      | ~                                                                                                               ^~~~~~~~~~
+src/libavformat/options_table.h:84:159: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775806 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   84 | {"skip_initial_bytes", "set number of bytes to skip before reading header and frames", OFFSET(skip_initial_bytes), AV_OPT_TYPE_INT64, {.i64 = 0}, 0, INT64_MAX-1, D},
+      | ~                                                                                                                                                    ~~~~~~~~~^~
+src/libavformat/options_table.h:66:156: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   66 | {"start_time_realtime", "wall-clock time when stream begins (PTS==0)", OFFSET(start_time_realtime), AV_OPT_TYPE_INT64, {.i64 = AV_NOPTS_VALUE}, INT64_MIN, INT64_MAX, E},
+      | ~                                                                                                                                                          ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+In file included from src/libavformat/options.c:41:
+src/libavformat/options_table.h:59:151: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   59 | {"analyzeduration", "specify how many microseconds are analyzed to probe the input", OFFSET(max_analyze_duration), AV_OPT_TYPE_INT64, {.i64 = 0 }, 0, INT64_MAX, D},
+      | ~                                                                                                                                                     ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+In file included from src/libavformat/options.c:41:
+src/libavformat/options_table.h:39:96: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   39 | {"probesize", "set probing size", OFFSET(probesize), AV_OPT_TYPE_INT64, {.i64 = 5000000 }, 32, INT64_MAX, D},
+      | ~                                                                                              ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+src/libavformat/options.c:427:91: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]CC	libavformat/qtpalette.o
+CC	libavformat/rawdec.o
+
+  427 |     {"id", "Set group id", offsetof(AVStreamGroup, id), AV_OPT_TYPE_INT64, {.i64 = 0}, 0, INT64_MAX, AV_OPT_FLAG_ENCODING_PARAM },
+      |     ~                                                                                     ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+9 warnings generated.
+CC	libavformat/replaygain.o
+CC	libavformat/riff.o
+CC	libavformat/riffdec.o
+CC	libavformat/rmsipr.o
+src/libavformat/rawdec.c:106:12: warning: unused function 'raw_data_read_header' [-Wunused-function]
+  106 | static int raw_data_read_header(AVFormatContext *s)
+      |            ^~~~~~~~~~~~~~~~~~~~
+CC	libavformat/sdp.o
+1 warning generated.
+CC	libavformat/seek.o
+CC	libavformat/url.o
+CC	libavformat/utils.o
+CC	libavformat/version.o
+CC	libavformat/vorbiscomment.o
+GEN	libavformat/libavformat.pc
+CC	libavcodec/mpegaudiotabs.o
+CC	libavcodec/to_upper4.o
+GEN	libavcodec/libavcodec.pc
+GEN	libswresample/libswresample.pc
+2 warnings generated.
+GEN	libswscale/libswscale.pc
+GEN	libavutil/libavutil.pc
+CC	libavcodec/aac/aacdec.o
+CC	libavcodec/aac/aacdec_ac.o
+CC	libavcodec/aac/aacdec_float.o
+CC	libavcodec/aac/aacdec_lpd.o
+1 warning generated.
+CC	libavcodec/aac/aacdec_tab.o
+CC	libavcodec/aac/aacdec_usac.o
+src/libavcodec/aac/aacdec.c:1138:24: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+ 1138 |         AACUSACConfig *usac = &oc->usac;
+      |                        ^
+src/libavcodec/aac/aacdec.c:2585:8: warning: 'sample_fmts' is deprecated [-Wdeprecated-declarations]
+ 2585 |     .p.sample_fmts   = (const enum AVSampleFormat[]) {
+      |        ^
+src/libavcodec/codec.h:218:5: note: 'sample_fmts' has been explicitly marked deprecated here
+  218 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+src/libavcodec/aac/aacdec.c:2590:8: warning: 'ch_layouts' is deprecated [-Wdeprecated-declarations]
+ 2590 |     .p.ch_layouts    = ff_aac_ch_layout,
+      |        ^
+src/libavcodec/codec.h:240:5: note: 'ch_layouts' has been explicitly marked deprecated here
+  240 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+CC	libavcodec/aac_ac3_parser.o
+CC	libavcodec/aac_parser.o
+src/libavcodec/aac/aacdec_usac.c:218:13: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+  218 |         int numBands = ((int[]){0,28,20,14,10,7,5,4})[e->mps.freq_res]; // ISO/IEC 23003-1:2007, 5.2, Table 39
+      |             ^
+CC	libavcodec/aacps_common.o
+AR	libavfilter/libavfilter.a
+CC	libavcodec/aacps_float.o
+src/libavcodec/aac_ac3_parser.c:151:17: warning: unused variable 'profile' [-Wunused-variable]
+  151 |             int profile;
+      |                 ^~~~~~~
+1 warning generated.
+CC	libavcodec/aacpsdsp_float.o
+CC	libavcodec/aacsbr.o
+CC	libavcodec/aactab.o
+CC	libavcodec/aarch64/aacpsdsp_init_aarch64.o
+AS	libavcodec/aarch64/aacpsdsp_neon.o
+CC	libavcodec/aarch64/ac3dsp_init_aarch64.o
+AS	libavcodec/aarch64/ac3dsp_neon.o
+CC	libavcodec/aarch64/fdctdsp_init_aarch64.o
+AS	libavcodec/aarch64/fdctdsp_neon.o
+AS	libavcodec/aarch64/fmtconvert_neon.o
+CC	libavcodec/aarch64/fmtconvert_init.o
+CC	libavcodec/aarch64/h264chroma_init_aarch64.o
+AS	libavcodec/aarch64/h264cmc_neon.o
+CC	libavcodec/aarch64/h264dsp_init_aarch64.o
+AS	libavcodec/aarch64/h264dsp_neon.o
+AS	libavcodec/aarch64/h264idct_neon.o
+CC	libavcodec/aarch64/h264pred_init.o
+AS	libavcodec/aarch64/h264pred_neon.o
+CC	libavcodec/aarch64/h264qpel_init_aarch64.o
+AS	libavcodec/aarch64/h264qpel_neon.o
+AS	libavcodec/aarch64/h26x/epel_neon.o
+AS	libavcodec/aarch64/h26x/qpel_neon.o
+AS	libavcodec/aarch64/h26x/sao_neon.o
+AS	libavcodec/aarch64/hevcdsp_deblock_neon.o
+AS	libavcodec/aarch64/hevcdsp_idct_neon.o
+CC	libavcodec/aarch64/hevcdsp_init_aarch64.o
+1 warning generated.
+AS	libavcodec/aarch64/hpeldsp_neon.o
+3 warnings generated.
+CC	libavcodec/aarch64/idctdsp_init_aarch64.o
+AS	libavcodec/aarch64/idctdsp_neon.o
+CC	libavcodec/aarch64/me_cmp_init_aarch64.o
+AS	libavcodec/aarch64/me_cmp_neon.o
+AS	libavcodec/aarch64/opusdsp_neon.o
+CC	libavcodec/aarch64/opusdsp_init.o
+CC	libavcodec/aarch64/sbrdsp_init_aarch64.o
+AS	libavcodec/aarch64/sbrdsp_neon.o
+AS	libavcodec/aarch64/simple_idct_neon.o
+CC	libavcodec/aarch64/synth_filter_init.o
+AS	libavcodec/aarch64/synth_filter_neon.o
+AS	libavcodec/aarch64/videodsp.o
+CC	libavcodec/aarch64/videodsp_init.o
+CC	libavcodec/aarch64/vorbisdsp_init.o
+AS	libavcodec/aarch64/vorbisdsp_neon.o
+CC	libavcodec/ac3.o
+CC	libavcodec/ac3_channel_layout_tab.o
+CC	libavcodec/ac3_parser.o
+CC	libavcodec/ac3dec_data.o
+CC	libavcodec/ac3dec_float.o
+CC	libavcodec/ac3dsp.o
+CC	libavcodec/ac3tab.o
+CC	libavcodec/adts_parser.o
+CC	libavcodec/adts_header.o
+CC	libavcodec/allcodecs.o
+CC	libavcodec/aom_film_grain.o
+CC	libavcodec/ass.o
+CC	libavcodec/assdec.o
+CC	libavcodec/atsc_a53.o
+CC	libavcodec/avcodec.o
+CC	libavcodec/avdct.o
+CC	libavcodec/avfft.o
+CC	libavcodec/bitstream.o
+CC	libavcodec/bitstream_filters.o
+CC	libavcodec/bsf.o
+CC	libavcodec/bswapdsp.o
+src/libavcodec/ac3dec_float.c:75:8: warning: 'sample_fmts' is deprecated [-Wdeprecated-declarations]
+   75 |     .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+      |        ^
+src/libavcodec/codec.h:218:5: note: 'sample_fmts' has been explicitly marked deprecated here
+  218 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+src/libavcodec/ac3dec_float.c:93:8: warning: 'sample_fmts' is deprecated [-Wdeprecated-declarations]
+   93 |     .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+      |        ^
+src/libavcodec/codec.h:218:5: note: 'sample_fmts' has been explicitly marked deprecated here
+  218 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+CC	libavcodec/cabac.o
+CC	libavcodec/cbrt_data.o
+CC	libavcodec/codec_desc.o
+CC	libavcodec/codec_par.o
+CC	libavcodec/container_fifo.o
+CC	libavcodec/d3d11va.o
+CC	libavcodec/dca.o
+CC	libavcodec/dca_core.o
+CC	libavcodec/dca_exss.o
+CC	libavcodec/dca_lbr.o
+CC	libavcodec/dca_sample_rate_tab.o
+CC	libavcodec/dca_xll.o
+CC	libavcodec/dcadata.o
+CC	libavcodec/dcadct.o
+CC	libavcodec/dcadec.o
+CC	libavcodec/dcadsp.o
+CC	libavcodec/dcahuff.o
+CC	libavcodec/decode.o
+CC	libavcodec/dirac.o
+src/libavcodec/dcadec.c:419:8: warning: 'sample_fmts' is deprecated [-Wdeprecated-declarations]
+  419 |     .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16P, AV_SAMPLE_FMT_S32P,
+      |        ^
+src/libavcodec/codec.h:218:5: note: 'sample_fmts' has been explicitly marked deprecated here
+  218 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+CC	libavcodec/dovi_rpu.o
+CC	libavcodec/dovi_rpudec.o
+1 warning generated.
+CC	libavcodec/dv_profile.o
+CC	libavcodec/dynamic_hdr_vivid.o
+CC	libavcodec/eac3_data.o
+CC	libavcodec/encode.o
+CC	libavcodec/error_resilience.o
+CC	libavcodec/exif.o
+CC	libavcodec/faandct.o
+CC	libavcodec/faanidct.o
+CC	libavcodec/fdctdsp.o
+CC	libavcodec/flac.o
+CC	libavcodec/flacdata.o
+CC	libavcodec/flac_parser.o
+CC	libavcodec/flacdec.o
+CC	libavcodec/flacdsp.o
+CC	libavcodec/fmtconvert.o
+CC	libavcodec/get_buffer.o
+CC	libavcodec/golomb.o
+CC	libavcodec/h2645_parse.o
+CC	libavcodec/h2645_sei.o
+CC	libavcodec/h2645_vui.o
+CC	libavcodec/h2645data.o
+CC	libavcodec/h264_cabac.o
+src/libavcodec/flacdec.c:830:8: warning: 'sample_fmts' is deprecated [-Wdeprecated-declarations]
+  830 |     .p.sample_fmts  = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_S16,
+      |        ^
+src/libavcodec/codec.h:218:5: note: 'sample_fmts' has been explicitly marked deprecated here
+  218 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+CC	libavcodec/h264_cavlc.o
+CC	libavcodec/h264_direct.o
+CC	libavcodec/h264_loopfilter.o
+CC	libavcodec/h264_mb.o
+CC	libavcodec/h264_parse.o
+CC	libavcodec/h264_parser.o
+CC	libavcodec/h264_picture.o
+CC	libavcodec/h264_ps.o
+src/libavcodec/h264_direct.c:190:9: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+  190 |     int ref_field         = ref->reference - 1;
+      |         ^
+1 warning generated.
+CC	libavcodec/h264_sei.o
+CC	libavcodec/h264_refs.o
+CC	libavcodec/h264_slice.o
+src/libavcodec/h264_parser.c:229:24: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+  229 |             MMCOOpcode opcode = get_ue_golomb_31(gb);
+      |                        ^
+2 warnings generated.
+CC	libavcodec/h264chroma.o
+CC	libavcodec/h264data.o
+CC	libavcodec/h264dec.o
+1 warning generated.
+CC	libavcodec/h264dsp.o
+1 warning generated.
+CC	libavcodec/h264idct.o
+CC	libavcodec/h264pred.o
+CC	libavcodec/h264qpel.o
+CC	libavcodec/h274.o
+CC	libavcodec/hevc/cabac.o
+CC	libavcodec/hevc/data.o
+CC	libavcodec/hevc/dsp.o
+CC	libavcodec/hevc/filter.o
+CC	libavcodec/hevc/hevcdec.o
+CC	libavcodec/hevc/mvs.o
+CC	libavcodec/hevc/parse.o
+CC	libavcodec/hevc/parser.o
+CC	libavcodec/hevc/pred.o
+CC	libavcodec/hevc/refs.o
+CC	libavcodec/hevc/ps.o
+CC	libavcodec/hevc/sei.o
+CC	libavcodec/htmlsubtitles.o
+CC	libavcodec/idctdsp.o
+CC	libavcodec/imgconvert.o
+src/libavcodec/hevc/refs.c:138:16: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+  138 |         size_t rpl_bytes;
+      |                ^
+CC	libavcodec/jfdctfst.o
+CC	libavcodec/jfdctint.o
+CC	libavcodec/jni.o
+CC	libavcodec/jrevdct.o
+CC	libavcodec/kbdwin.o
+CC	libavcodec/mathtables.o
+1 warning generated.
+CC	libavcodec/me_cmp.o
+CC	libavcodec/mediacodec.o
+CC	libavcodec/mpeg12framerate.o
+CC	libavcodec/mpeg4audio.o
+CC	libavcodec/mpeg4audio_sample_rates.o
+CC	libavcodec/options.o
+CC	libavcodec/opus/celt.o
+CC	libavcodec/opus/dec.o
+CC	libavcodec/opus/dec_celt.o
+CC	libavcodec/opus/dsp.o
+In file included from src/libavcodec/options.c:39:
+src/libavcodec/options_table.h:50:110: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+   50 | {"b", "set bitrate (in bits/s)", OFFSET(bit_rate), AV_OPT_TYPE_INT64, {.i64 = AV_CODEC_DEFAULT_BITRATE }, 0, INT64_MAX, A|V|E},
+      | ~                                                                                                            ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223CC	libavcodec/opus/parse.o
+372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+CC	libavcodec/opus/parser.o
+CC	libavcodec/opus/pvq.o
+CC	libavcodec/opus/rc.o
+CC	libavcodec/opus/silk.o
+CC	libavcodec/opus/tab.o
+CC	libavcodec/packet.o
+CC	libavcodec/parser.o
+CC	libavcodec/parsers.o
+CC	libavcodec/profiles.o
+CC	libavcodec/pthread.o
+CC	libavcodec/pthread_frame.o
+CC	libavcodec/pthread_slice.o
+CC	libavcodec/qsv_api.o
+CC	libavcodec/raw.o
+CC	libavcodec/refstruct.o
+src/libavcodec/pthread_frame.c:890:27: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+  890 |     const AVCodecContext *src = first ? copy : avctx;
+      |                           ^
+CC	libavcodec/sbrdsp.o
+CC	libavcodec/simple_idct.o
+CC	libavcodec/sinewin.o
+CC	libavcodec/srtdec.o
+CC	libavcodec/startcode.o
+CC	libavcodec/synth_filter.o
+1 warning generated.
+CC	libavcodec/threadprogress.o
+CC	libavcodec/tiff_common.o
+CC	libavcodec/utils.o
+CC	libavcodec/version.o
+CC	libavcodec/videodsp.o
+CC	libavcodec/vlc.o
+CC	libavcodec/vorbis.o
+CC	libavcodec/vorbis_data.o
+CC	libavcodec/vorbis_parser.o
+CC	libavcodec/vorbisdec.o
+CC	libavcodec/vorbisdsp.o
+CC	libavcodec/webvttdec.o
+CC	libavcodec/xiph.o
+CC	libswresample/aarch64/audio_convert_init.o
+AS	libswresample/aarch64/audio_convert_neon.o
+AS	libswresample/aarch64/resample.o
+CC	libswresample/aarch64/resample_init.o
+CC	libswresample/audioconvert.o
+src/libavcodec/vorbisdec.c:1899:8: warning: 'ch_layouts' is deprecated [-Wdeprecated-declarations]
+ 1899 |     .p.ch_layouts    = ff_vorbis_ch_layouts,
+      |        ^
+src/libavcodec/codec.h:240:5: note: 'ch_layouts' has been explicitly marked deprecated here
+  240 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+src/libavcodec/vorbisdec.c:1900:8: warning: 'sample_fmts' is deprecated [-Wdeprecated-declarations]
+ 1900 |     .p.sample_fmts   = (const enum AVSampleFormat[]) { AV_SAMPLE_FMT_FLTP,
+      |        ^
+src/libavcodec/codec.h:218:5: note: 'sample_fmts' has been explicitly marked deprecated here
+  218 |     attribute_deprecated
+      |     ^
+src/libavutil/attributes.h:100:49: note: expanded from macro 'attribute_deprecated'
+  100 | #    define attribute_deprecated __attribute__((deprecated))
+      |                                                 ^
+CC	libswresample/options.o
+CC	libswresample/dither.o
+CC	libswresample/rematrix.o
+CC	libswresample/resample.o
+CC	libswresample/resample_dsp.o
+CC	libswresample/swresample.o
+CC	libswresample/swresample_frame.o
+src/libswresample/options.c:111:144: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+  110 | {"first_pts"            , "Assume the first pts should be this value (in samples)."
+      | ~
+  111 |                                                         , OFFSET(firstpts_in_samples), AV_OPT_TYPE_INT64 ,{.i64=AV_NOPTS_VALUE    }, INT64_MIN,INT64_MAX, PARAM },
+      |                                                                                                                                                ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+CC	libswresample/version.o
+AS	libswscale/aarch64/hscale.o
+AS	libswscale/aarch64/input.o
+AS	libswscale/aarch64/output.o
+AS	libswscale/aarch64/range_convert_neon.o
+CC	libswscale/aarch64/rgb2rgb.o
+AS	libswscale/aarch64/rgb2rgb_neon.o
+CC	libswscale/aarch64/swscale.o
+CC	libswscale/aarch64/swscale_unscaled.o
+AS	libswscale/aarch64/yuv2rgb_neon.o
+AS	libswscale/aarch64/swscale_unscaled_neon.o
+CC	libswscale/alphablend.o
+CC	libswscale/gamma.o
+CC	libswscale/half2float.o
+CC	libswscale/hscale.o
+CC	libswscale/hscale_fast_bilinear.o
+CC	libswscale/input.o
+CC	libswscale/options.o
+CC	libswscale/output.o
+CC	libswscale/rgb2rgb.o
+CC	libswscale/slice.o
+CC	libswscale/swscale.o
+CC	libswscale/swscale_unscaled.o
+CC	libswscale/utils.o
+CC	libswscale/version.o
+CC	libswscale/vscale.o
+CC	libswscale/yuv2rgb.o
+2 warnings generated.
+CC	libavutil/aarch64/cpu.o
+src/libswscale/utils.c:1916:13: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+ 1916 |         int usecascade = (ret == RETCODE_USE_CASCADE);
+      |             ^
+src/libswscale/utils.c:1422:13: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+ 1422 |     int64_t lumXInc      = (((int64_t)srcW << 16) + (dstW >> 1)) / dstW;
+      |             ^
+CC	libavutil/aarch64/float_dsp_init.o
+AS	libavutil/aarch64/float_dsp_neon.o
+AS	libavutil/aarch64/tx_float_neon.o
+CC	libavutil/aarch64/tx_float_init.o
+CC	libavutil/adler32.o
+CC	libavutil/aes.o
+CC	libavutil/aes_ctr.o
+CC	libavutil/ambient_viewing_environment.o
+CC	libavutil/audio_fifo.o
+CC	libavutil/avsscanf.o
+CC	libavutil/avstring.o
+CC	libavutil/base64.o
+CC	libavutil/blowfish.o
+CC	libavutil/bprint.o
+CC	libavutil/buffer.o
+CC	libavutil/camellia.o
+CC	libavutil/cast5.o
+CC	libavutil/channel_layout.o
+2 warnings generated.
+CC	libavutil/cpu.o
+src/libavutil/cpu.c:120:76: warning: implicit conversion from 'long long' to 'double' changes value from 9223372036854775807 to 9223372036854775808 [-Wimplicit-const-int-float-conversion]
+  120 |         { "flags"   , NULL, 0, AV_OPT_TYPE_FLAGS, { .i64 = 0 }, INT64_MIN, INT64_MAX, .unit = "flags" },
+      |         ~                                                                  ^~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:94:26: note: expanded from macro 'INT64_MAX'
+   94 | #define INT64_MAX        9223372036854775807LL
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+CC	libavutil/crc.o
+CC	libavutil/csp.o
+CC	libavutil/des.o
+CC	libavutil/detection_bbox.o
+CC	libavutil/dict.o
+CC	libavutil/display.o
+CC	libavutil/dovi_meta.o
+CC	libavutil/downmix_info.o
+CC	libavutil/encryption_info.o
+CC	libavutil/error.o
+CC	libavutil/eval.o
+CC	libavutil/executor.o
+CC	libavutil/fifo.o
+CC	libavutil/file.o
+src/libavutil/eval.c:252:29: warning: implicit conversion from 'unsigned long long' to 'double' changes value from 18446744073709551615 to 18446744073709551616 [-Wimplicit-const-int-float-conversion]
+  252 |             return r * (1.0/UINT64_MAX);
+      |                            ~^~~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:110:27: note: expanded from macro 'UINT64_MAX'
+  110 | #define UINT64_MAX        18446744073709551615ULL
+      |                           ^~~~~~~~~~~~~~~~~~~~~~~
+src/libavutil/eval.c:258:44: warning: implicit conversion from 'unsigned long long' to 'double' changes value from 18446744073709551615 to 18446744073709551616 [-Wimplicit-const-int-float-conversion]
+  258 |             return min + (max - min) * r / UINT64_MAX;
+      |                                          ~ ^~~~~~~~~~
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/usr/include/stdint.h:110:27: note: expanded from macro 'UINT64_MAX'
+  110 | #define UINT64_MAX        18446744073709551615ULL
+      |                           ^~~~~~~~~~~~~~~~~~~~~~~
+src/libavutil/eval.c:546:13: warning: mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]
+  546 |     AVExpr *e = av_mallocz(sizeof(AVExpr));
+      |             ^
+CC	libavutil/file_open.o
+CC	libavutil/film_grain_params.o
+CC	libavutil/fixed_dsp.o
+CC	libavutil/float_dsp.o
+CC	libavutil/frame.o
+CC	libavutil/hash.o
+3 warnings generated.
+CC	libavutil/hdr_dynamic_vivid_metadata.o
+CC	libavutil/hdr_dynamic_metadata.o
+CC	libavutil/hmac.o
+CC	libavutil/hwcontext.o
+CC	libavutil/hwcontext_stub.o
+CC	libavutil/iamf.o
+CC	libavutil/imgutils.o
+CC	libavutil/integer.o
+CC	libavutil/intmath.o
+CC	libavutil/lfg.o
+CC	libavutil/lls.o
+CC	libavutil/log.o
+CC	libavutil/log2_tab.o
+CC	libavutil/lzo.o
+CC	libavutil/mastering_display_metadata.o
+CC	libavutil/mathematics.o
+CC	libavutil/md5.o
+CC	libavutil/mem.o
+CC	libavutil/murmur3.o
+CC	libavutil/opt.o
+CC	libavutil/pixdesc.o
+CC	libavutil/parseutils.o
+CC	libavutil/pixelutils.o
+CC	libavutil/random_seed.o
+CC	libavutil/rational.o
+CC	libavutil/rc4.o
+CC	libavutil/reverse.o
+CC	libavutil/ripemd.o
+CC	libavutil/samplefmt.o
+CC	libavutil/sha.o
+CC	libavutil/sha512.o
+CC	libavutil/slicethread.o
+CC	libavutil/spherical.o
+CC	libavutil/stereo3d.o
+CC	libavutil/tea.o
+CC	libavutil/threadmessage.o
+CC	libavutil/time.o
+CC	libavutil/timecode.o
+CC	libavutil/timestamp.o
+CC	libavutil/tree.o
+CC	libavutil/twofish.o
+CC	libavutil/tx.o
+CC	libavutil/tx_double.o
+CC	libavutil/tx_float.o
+CC	libavutil/tx_int32.o
+CC	libavutil/utils.o
+CC	libavutil/uuid.o
+CC	libavutil/version.o
+CC	libavutil/video_enc_params.o
+CC	libavutil/video_hint.o
+CC	libavutil/xga_font_data.o
+CC	libavutil/xtea.o
+AR	libavformat/libavformat.a
+AR	libswresample/libswresample.a
+AR	libavutil/libavutil.a
+AR	libswscale/libswscale.a
+AR	libavcodec/libavcodec.a

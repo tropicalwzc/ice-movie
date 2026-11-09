@@ -1,0 +1,3 @@
+framework module SMBSession {
+  header "SMBSession-Swift.h"
+}

@@ -1,0 +1,19 @@
+{
+  "" : {
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit-primary.dia",
+    "emit-module-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit-primary-emit-module.dia",
+    "pch" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit-primary.swiftdeps"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/ThumbnailKit/ThumbnailKit.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/ThumbnailKit.build/Objects-normal/arm64/ThumbnailKit~partial.swiftmodule"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "" : {
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/IceMovieUITests-primary.dia",
+    "emit-module-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/IceMovieUITests-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/IceMovieUITests-primary-emit-module.dia",
+    "pch" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/IceMovieUITests-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/IceMovieUITests-primary.swiftdeps"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovieUITests/DeviceSmokeUITests.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/DeviceSmokeUITests~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovieUITests/PlaybackControlsUITests.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Intermediates.noindex/IceMovie.build/Debug-iphoneos/IceMovieUITests.build/Objects-normal/arm64/PlaybackControlsUITests~partial.swiftmodule"
+  }
+}

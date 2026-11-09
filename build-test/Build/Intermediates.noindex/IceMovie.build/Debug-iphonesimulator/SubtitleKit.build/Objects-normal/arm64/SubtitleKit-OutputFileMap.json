@@ -1,0 +1,59 @@
+{
+  "" : {
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit-primary.dia",
+    "emit-module-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit-primary-emit-module.dia",
+    "pch" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit-primary.swiftdeps"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/SubtitleKit/LibassSubtitleRenderer.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/LibassSubtitleRenderer~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/SubtitleKit/SubtitleDocument.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleDocument~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/SubtitleKit/SubtitleKit.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleKit~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/SubtitleKit/SubtitlePreferences.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitlePreferences~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/SubtitleKit/SubtitleTrack.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/SubtitleKit.build/Objects-normal/arm64/SubtitleTrack~partial.swiftmodule"
+  }
+}

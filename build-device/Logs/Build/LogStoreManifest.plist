@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>13</integer>
+	<key>logs</key>
+	<dict>
+		<key>15DA2AFD-3530-47DE-9C38-F63884C9C3B9</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>15DA2AFD-3530-47DE-9C38-F63884C9C3B9.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>6</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>IceMovie project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>IceMovie</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project IceMovie with scheme IceMovie</string>
+			<key>timeStartedRecording</key>
+			<real>815895630.24872196</real>
+			<key>timeStoppedRecording</key>
+			<real>815895633.06288898</real>
+			<key>title</key>
+			<string>Building project IceMovie with scheme IceMovie</string>
+			<key>uniqueIdentifier</key>
+			<string>15DA2AFD-3530-47DE-9C38-F63884C9C3B9</string>
+		</dict>
+		<key>E84F47C8-2070-4E7B-BFBE-076A9EF99E9C</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>E84F47C8-2070-4E7B-BFBE-076A9EF99E9C.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>5</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>IceMovie project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>IceMovie</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project IceMovie with scheme IceMovie</string>
+			<key>timeStartedRecording</key>
+			<real>815894659.21045494</real>
+			<key>timeStoppedRecording</key>
+			<real>815894662.44869399</real>
+			<key>title</key>
+			<string>Building project IceMovie with scheme IceMovie</string>
+			<key>uniqueIdentifier</key>
+			<string>E84F47C8-2070-4E7B-BFBE-076A9EF99E9C</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

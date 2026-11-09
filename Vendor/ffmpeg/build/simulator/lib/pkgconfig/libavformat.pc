@@ -1,0 +1,14 @@
+prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator
+exec_prefix=${prefix}
+libdir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator/lib
+includedir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator/include
+
+Name: libavformat
+Description: FFmpeg container format library
+Version: 61.7.103
+Requires: libavcodec >= 61.19.101, libswresample >= 5.3.100, libavutil >= 59.39.100
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavformat -lm
+Libs.private: 
+Cflags: -I${includedir}

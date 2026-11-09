@@ -1,0 +1,14 @@
+prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator
+exec_prefix=${prefix}
+libdir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator/lib
+includedir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator/include
+
+Name: libavcodec
+Description: FFmpeg codec library
+Version: 61.19.101
+Requires: libswresample >= 5.3.100, libavutil >= 59.39.100
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavcodec -pthread -lm
+Libs.private: 
+Cflags: -I${includedir}

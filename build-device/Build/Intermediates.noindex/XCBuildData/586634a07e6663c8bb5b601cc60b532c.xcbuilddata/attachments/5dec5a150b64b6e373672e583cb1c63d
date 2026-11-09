@@ -1,0 +1,3 @@
+framework module DemuxKit {
+  header "DemuxKit-Swift.h"
+}

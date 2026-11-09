@@ -1,0 +1,19 @@
+{
+  "" : {
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit-primary.dia",
+    "emit-module-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit-primary-emit-module.dia",
+    "pch" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit-primary.swiftdeps"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/PersistenceKit/PersistenceKit.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build-test/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/PersistenceKit.build/Objects-normal/arm64/PersistenceKit~partial.swiftmodule"
+  }
+}

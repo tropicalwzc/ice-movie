@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/wangzicheng/iceWorkSpace/ice-movie/build-device/Build/Products/Debug-iphoneos/IceMovieUITests-Runner.app/PlugIns/IceMovieUITests.xctest/IceMovieUITests'
+relocations:     []
+...

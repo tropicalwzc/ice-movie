@@ -1,0 +1,8 @@
+module CLibass {
+    header "ass_shim.h"
+    link "ass"
+    link "harfbuzz"
+    link "freetype"
+    link "fribidi"
+    export *
+}

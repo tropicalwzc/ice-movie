@@ -1,0 +1,14 @@
+prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator
+exec_prefix=${prefix}
+libdir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator/lib
+includedir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/ffmpeg/build/simulator/include
+
+Name: libswresample
+Description: FFmpeg audio resampling library
+Version: 5.3.100
+Requires: libavutil >= 59.39.100
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lswresample -lm
+Libs.private: 
+Cflags: -I${includedir}

@@ -1,0 +1,4 @@
+module CFFmpeg [system] {
+    header "ice_ffmpeg_shim.h"
+    export *
+}

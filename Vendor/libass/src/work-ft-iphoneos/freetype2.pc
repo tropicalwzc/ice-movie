@@ -1,0 +1,14 @@
+prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphoneos
+exec_prefix=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphoneos
+libdir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphoneos/lib
+includedir=/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphoneos/include
+
+Name: FreeType 2
+URL: https://freetype.org
+Description: A free, high-quality, and portable font engine.
+Version: 26.1.20
+Requires: 
+Requires.private: 
+Libs: -L/Users/wangzicheng/iceWorkSpace/ice-movie/Vendor/libass/out/iphoneos/lib -lfreetype 
+Libs.private: 
+Cflags: -I${includedir}/freetype2

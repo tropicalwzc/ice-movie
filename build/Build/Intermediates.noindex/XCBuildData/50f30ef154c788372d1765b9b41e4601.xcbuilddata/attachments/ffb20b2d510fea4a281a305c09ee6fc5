@@ -1,0 +1,59 @@
+{
+  "" : {
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit-primary.dia",
+    "emit-module-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit-primary-emit-module.dia",
+    "pch" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit-primary.swiftdeps"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/DemuxKit/AVIOBridge.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AVIOBridge~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/DemuxKit/AudioDecoder.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/AudioDecoder~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/DemuxKit/DemuxKit.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxKit~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/DemuxKit/DemuxProbe.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/DemuxProbe~partial.swiftmodule"
+  },
+  "/Users/wangzicheng/iceWorkSpace/ice-movie/IceMovie/Core/DemuxKit/MediaReader.swift" : {
+    "const-values" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.swiftconstvalues",
+    "dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.d",
+    "diagnostics" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.dia",
+    "index-unit-output-path" : "/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.o",
+    "llvm-bc" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.bc",
+    "object" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.o",
+    "swift-dependencies" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader.swiftdeps",
+    "swiftmodule" : "/Users/wangzicheng/iceWorkSpace/ice-movie/build/Build/Intermediates.noindex/IceMovie.build/Debug-iphonesimulator/DemuxKit.build/Objects-normal/arm64/MediaReader~partial.swiftmodule"
+  }
+}

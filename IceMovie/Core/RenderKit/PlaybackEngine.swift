@@ -30,15 +30,28 @@ public final class PlaybackEngine: @unchecked Sendable {
         public var lastSeekPrerollFrames = 0
         public var lastSeekDrift: Double = 0
         public var droppedSeeks = 0
+        /// 播放中进入“缓冲不足”的次数与累计时长。
+        public var bufferStalls = 0
+        public var bufferSeconds: Double = 0
+        /// 任意 60 秒窗口内最多的缓冲次数；≥6 视为频繁缓冲。
+        public var maxBufferStallsPerMinute = 0
         /// 全部数据都已播完（区别于「读到文件结尾」）。
         public var drained = false
         public var failure: String?
     }
 
     /// 起播前先垫这么多秒的音频。
-    private static let prerollSeconds = 1.0
-    /// 视频最多领先主时钟这么多秒。
-    private static let videoAheadSeconds = 3.0
+    private static let prerollSeconds = 3.0
+    /// 起播前视频至少垫这么多秒，避免音频先响、画面还在等数据。
+    private static let videoPrerollSeconds = 2.0
+    /// 播放中音频低于这个水位就暂停主时钟。
+    private static let audioStallSeconds = 0.12
+    /// 缓冲暂停后音频回到这个水位才恢复。
+    private static let audioResumeSeconds = 0.5
+    /// 读包一直补到音频领先这个水位；8GB 设备内存充足，用时间换稳定。
+    private static let audioAheadSeconds = 15.0
+    /// 视频最多领先主时钟这么多秒；局域网带宽足够时提前解码，吸收网络抖动。
+    private static let videoAheadSeconds = 15.0
 
     public let clock: MasterClock
     public let duration: Double
@@ -65,6 +78,10 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var syncTimer: DispatchSourceTimer?
     private var playStartedAt: Double?
     private var pausedAt: Double?
+    private var stalledForBuffering = false
+    private var lowSupplyTicks = 0
+    private var bufferStallTimes: [Double] = []
+    private var bufferStallBeganAt: Double?
     private var tickCount = 0
     /// 跳转后各条流各自的追赶目标，追上了就清空。
     private var audioSeekTarget: Double?
@@ -74,6 +91,9 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var seekPrerollFrames = 0
     private var volume: Float = 1
     private var wasBuffering = false
+    private var subtitleStreamIndex: Int?
+    private var subtitleDecoder: SubtitlePacketDecoder?
+    private var onSubtitleEvents: (([SubtitlePacketEvent]) -> Void)?
 
     public init(reader: MediaReader) throws {
         let clock = MasterClock()
@@ -139,6 +159,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             )
         }
         pausedAt = nil
+        resetBufferStallState()
         condition.lock()
         wantsPlay = true
         condition.broadcast()
@@ -151,10 +172,21 @@ public final class PlaybackEngine: @unchecked Sendable {
         guard wantsPlay, !clock.isPlaying, !stopped else { return }
         if output != nil {
             guard ended || output?.bufferedAhead ?? 0 >= Self.prerollSeconds else { return }
-        } else {
-            // 纯视频：先攒几帧再开时基，避免第一帧就要等解码。
-            let ready = videoRenderer?.metrics.enqueued ?? 0
-            guard ended || ready >= 3 else { return }
+            // 显示层尚未绑定时不能等视频水位，否则无头播放/测试永远起不来；
+            // 正常 App 里图层会在覆盖层出现后立即绑定并补发缓存帧。
+            if let videoRenderer, videoRenderer.isBound {
+                guard ended || videoRenderer.bufferedAhead >= Self.videoPrerollSeconds else {
+                    return
+                }
+            }
+        } else if let videoRenderer {
+            if videoRenderer.isBound {
+                guard ended || videoRenderer.bufferedAhead >= Self.videoPrerollSeconds else {
+                    return
+                }
+            } else {
+                guard ended || videoRenderer.pendingCount >= 3 else { return }
+            }
         }
         if playStartedAt == nil {
             playStartedAt = ProcessInfo.processInfo.systemUptime
@@ -165,12 +197,15 @@ public final class PlaybackEngine: @unchecked Sendable {
         startSyncTimer()
         Log.info(
             .render,
-            "开始播放 位置=\(fmt(clock.currentTime))s 预缓冲=\(fmt(output?.bufferedAhead ?? 0))s"
+            "开始播放 位置=\(fmt(clock.currentTime))s "
+                + "预缓冲 音频=\(fmt(output?.bufferedAhead ?? 0))s "
+                + "视频=\(fmt(videoRenderer?.bufferedAhead ?? 0))s"
         )
     }
 
     public func pause() {
         guard !stopped else { return }
+        resetBufferStallState()
         condition.lock()
         wantsPlay = false
         pausedAt = ProcessInfo.processInfo.systemUptime
@@ -212,13 +247,30 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     public func setRate(_ rate: Float) {
-        clock.setRate(rate)
-        output?.setRate(rate)
+        // MasterClock 支持 0.25–4，AudioOutput 只支持 0.5–2.0。
+        // 必须取交集后统一钳制，否则时钟与音频速率不一致会触发持续校正。
+        let clamped = Self.clampedRate(rate)
+        if clamped != rate {
+            Log.info(
+                .render,
+                "倍速钳制 输入=\(String(format: "%.2f", rate)) "
+                    + "实际=\(String(format: "%.2f", clamped))"
+            )
+        }
+        clock.setRate(clamped)
+        output?.setRate(clamped)
         videoRenderer?.syncTimebase()
         Log.info(
             .render,
-            "主时钟速率=\(String(format: "%.2f", rate)) 位置=\(fmt(clock.currentTime))s"
+            "主时钟速率=\(String(format: "%.2f", clamped)) 位置=\(fmt(clock.currentTime))s"
         )
+    }
+
+    /// 音画共同支持的倍速范围（MasterClock 与 AudioOutput 的交集）。
+    static let supportedRateRange: ClosedRange<Float> = 0.5...2.0
+
+    static func clampedRate(_ rate: Float) -> Float {
+        min(max(rate, supportedRateRange.lowerBound), supportedRateRange.upperBound)
     }
 
     public var currentVolume: Float {
@@ -236,18 +288,55 @@ public final class PlaybackEngine: @unchecked Sendable {
         condition.lock()
         stopped = true
         wantsPlay = false
+        resetBufferStallState()
         condition.broadcast()
         condition.unlock()
         stopSyncTimer()
         output?.pause()
         output?.reset()
         clock.pause()
+        lock.withLock {
+            subtitleStreamIndex = nil
+            subtitleDecoder = nil
+            onSubtitleEvents = nil
+        }
         Log.info(.render, "停止 位置=\(fmt(clock.currentTime))s")
     }
 
     // MARK: - 状态
 
+    /// 大文件 ASS/文本字幕直接复用播放泵读到的字幕包，避免为字幕二次扫描 SMB。
+    public func setSubtitleCollector(
+        streamIndex: Int?,
+        onEvents: (([SubtitlePacketEvent]) -> Void)?
+    ) {
+        let decoder = streamIndex.flatMap { reader.makeSubtitlePacketDecoder(streamIndex: $0) }
+        lock.withLock {
+            subtitleStreamIndex = streamIndex
+            subtitleDecoder = decoder
+            onSubtitleEvents = onEvents
+        }
+    }
+
     public var isPlaying: Bool { clock.isPlaying }
+
+    /// 播放源最近的实际下载速度。
+    public var downloadBytesPerSecond: Double { reader.downloadBytesPerSecond }
+
+    /// 当前播放点之后已缓冲的秒数（解码缓冲 + SMB 预读环换算）。
+    public var bufferedAheadSeconds: Double {
+        let avAhead = max(output?.bufferedAhead ?? 0, videoRenderer?.bufferedAhead ?? 0)
+        let bytesPerSecond: Double
+        if let length = reader.byteLength, duration > 0 {
+            bytesPerSecond = Double(length) / duration
+        } else {
+            bytesPerSecond = 0
+        }
+        let ringAhead = bytesPerSecond > 0
+            ? Double(reader.bufferedAheadBytes) / bytesPerSecond
+            : 0
+        return max(0, avAhead + ringAhead)
+    }
 
     public var statistics: Statistics {
         lock.withLock {
@@ -260,12 +349,106 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     public var bufferedAhead: Double { output?.bufferedAhead ?? 0 }
 
-    /// 播放中供给不足：音频与视频缓冲都低于 250 ms 时视为缓冲。
+    /// 播放中供给不足：音频缓冲低于阈值时暂停主时钟，避免声音恢复后落后于画面。
     public var isBuffering: Bool {
-        guard isPlaying, !stopped else { return false }
-        let audioLow = output.map { _ in bufferedAhead < 0.25 } ?? true
-        let videoLow = videoRenderer.map { renderer in renderer.bufferedAhead < 0.25 } ?? true
-        return audioLow && videoLow
+        guard !stopped else { return false }
+        if stalledForBuffering { return true }
+        guard isPlaying else { return false }
+        return audioSupplyLow || (output == nil && videoSupplyLow)
+    }
+
+    private var audioSupplyLow: Bool {
+        guard let output else { return false }
+        return output.bufferedAhead < Self.audioStallSeconds
+    }
+
+    private var videoSupplyLow: Bool {
+        guard let videoRenderer else { return false }
+        return videoRenderer.bufferedAhead < 0.08
+    }
+
+    /// 缓冲时冻结主时钟与音频，恢复后从同一位置继续；否则静音期间时钟继续走，
+    /// 新排入的音频会整体落后于画面。
+    private func updateBufferingState() {
+        guard !stopped, !ended, wantsPlay else {
+            if stalledForBuffering {
+                finishBufferStall()
+            }
+            stalledForBuffering = false
+            lowSupplyTicks = 0
+            return
+        }
+        let low = audioSupplyLow || (output == nil && videoSupplyLow)
+        if !stalledForBuffering {
+            // 供给水位会在 100ms 内被拉流线程补上；连续两次偏低才暂停，
+            // 避免在正常波动时反复暂停/恢复。
+            lowSupplyTicks = low ? lowSupplyTicks + 1 : 0
+            guard lowSupplyTicks >= 2, clock.isPlaying else { return }
+            stalledForBuffering = true
+            recordBufferStall()
+            lowSupplyTicks = 0
+            output?.pause()
+            clock.pause()
+            videoRenderer?.syncTimebase()
+            Log.notice(
+                .render,
+                "缓冲不足，暂停主时钟 音频=\(fmt(bufferedAhead))s "
+                    + "本次第 \(statistics.bufferStalls) 次"
+            )
+            return
+        }
+
+        lowSupplyTicks = 0
+        let recovered: Bool
+        if output != nil {
+            recovered = bufferedAhead >= Self.audioResumeSeconds
+        } else {
+            recovered = (videoRenderer?.bufferedAhead ?? 0) >= Self.audioResumeSeconds
+        }
+        guard recovered else { return }
+        stalledForBuffering = false
+        finishBufferStall()
+        output?.play()
+        clock.play()
+        videoRenderer?.syncTimebase()
+        let snapshot = statistics
+        Log.info(
+            .render,
+            "缓冲恢复，继续播放 位置=\(fmt(clock.currentTime))s "
+                + "累计=\(snapshot.bufferStalls) 次/\(fmt(snapshot.bufferSeconds))s"
+        )
+    }
+
+    /// 记录一次缓冲事件，并维护任意 60 秒窗口内的峰值次数（验收用）。
+    private func recordBufferStall() {
+        let now = ProcessInfo.processInfo.systemUptime
+        lock.withLock {
+            stats.bufferStalls += 1
+            bufferStallTimes.append(now)
+            bufferStallTimes.removeAll { now - $0 > 60 }
+            stats.maxBufferStallsPerMinute = max(
+                stats.maxBufferStallsPerMinute,
+                bufferStallTimes.count
+            )
+            bufferStallBeganAt = now
+        }
+    }
+
+    private func finishBufferStall() {
+        let now = ProcessInfo.processInfo.systemUptime
+        lock.withLock {
+            guard let began = bufferStallBeganAt else { return }
+            stats.bufferSeconds += max(0, now - began)
+            bufferStallBeganAt = nil
+        }
+    }
+
+    private func resetBufferStallState() {
+        if stalledForBuffering {
+            finishBufferStall()
+        }
+        stalledForBuffering = false
+        lowSupplyTicks = 0
     }
 
     /// 阻塞等待播放结束或超时，返回最终统计。仅用于自检与验收脚本。
@@ -358,7 +541,21 @@ public final class PlaybackEngine: @unchecked Sendable {
             lock.withLock {
                 stats.bytesRead += Int64(max(0, packet.pointee.size))
             }
-            if index == audioStreamIndex {
+            let subtitleIndex = lock.withLock { subtitleStreamIndex }
+            if let subtitleIndex, index == subtitleIndex {
+                let decoder = lock.withLock { subtitleDecoder }
+                let events: [SubtitlePacketEvent]
+                if let decoder {
+                    events = decoder.decode(packet)
+                } else if let event = reader.subtitleEvent(from: packet, streamIndex: subtitleIndex) {
+                    events = [event]
+                } else {
+                    events = []
+                }
+                if let callback = lock.withLock({ onSubtitleEvents }) {
+                    callback(events)
+                }
+            } else if index == audioStreamIndex {
                 decodeAudio(packet)
             } else if index == videoStreamIndex {
                 enqueueVideo(packet)
@@ -368,9 +565,28 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func isAheadEnough() -> Bool {
-        if let output, output.bufferedAhead > 1.5 { return true }
-        if let videoRenderer, videoRenderer.bufferedAhead > Self.videoAheadSeconds { return true }
-        return false
+        // 显示层尚未绑定时视频水位来自待发缓存；先垫到起播量就停止读包，
+        // 否则缓存帧上限会让视频水位永远达不到 8 秒，播放泵会把整个文件读进来。
+        if let videoRenderer, !videoRenderer.isBound {
+            let audioReady = output.map { $0.bufferedAhead >= Self.prerollSeconds } ?? true
+            return audioReady && videoRenderer.pendingAhead >= Self.videoPrerollSeconds
+        }
+        return Self.isReadAheadEnough(
+            audioAhead: output?.bufferedAhead,
+            videoAhead: videoRenderer.map(\.bufferedAhead)
+        )
+    }
+
+    /// 读包限速策略：音频和视频都补到各自的高水位才停，避免只维持 1.5 秒音频、
+    /// 一点网络抖动就进入“缓冲中”。纯音频/纯视频只检查各自的水位。
+    static func isReadAheadEnough(audioAhead: Double?, videoAhead: Double?) -> Bool {
+        if let audioAhead {
+            guard audioAhead >= Self.audioAheadSeconds else { return false }
+            guard let videoAhead else { return true }
+            return videoAhead >= Self.videoAheadSeconds
+        }
+        guard let videoAhead else { return true }
+        return videoAhead >= Self.videoAheadSeconds
     }
 
     private func decodeAudio(_ packet: UnsafeMutablePointer<AVPacket>) {
@@ -478,6 +694,8 @@ public final class PlaybackEngine: @unchecked Sendable {
             Log.error(.demux, "seek 被拒绝 id=\(id) 目标=\(fmt(target))s")
             return
         }
+        resetBufferStallState()
+        lock.withLock { subtitleDecoder }?.reset()
         decoder?.reset(to: target)
         output?.reset()
         // reset 会把播放器停掉；如果本来就在播，立刻重新挂上，否则跳转后只剩画面没有声音。
@@ -497,6 +715,10 @@ public final class PlaybackEngine: @unchecked Sendable {
             ended = false
             stats.drained = false
             stats.seekCount += 1
+        }
+        // 纯视频没有音频解码回调来启动时基；缓冲暂停期间 seek 后必须在这里重新拉起。
+        if wantsPlay {
+            tryStartPlayback()
         }
         let queued = Int((ProcessInfo.processInfo.systemUptime - requestedAt) * 1000)
         Log.info(
@@ -548,6 +770,8 @@ public final class PlaybackEngine: @unchecked Sendable {
             )
         }
 
+        updateBufferingState()
+        guard !stalledForBuffering else { return }
         guard let audioTime = output?.playedContentTime else {
             checkDrained()
             return
@@ -580,6 +804,7 @@ public final class PlaybackEngine: @unchecked Sendable {
                 .render,
                 "播放水位 位置=\(fmt(clock.currentTime))s 音频缓冲=\(fmt(ahead))s "
                     + "视频缓冲=\(fmt(videoRenderer?.bufferedAhead ?? 0))s "
+                    + "已缓冲=\(fmt(bufferedAheadSeconds))s "
                     + "已读包=\(snapshot.packetsRead) 视频包=\(snapshot.videoPackets) "
                     + "当前偏差=\(fmt(clock.lastSyncDrift))s 最大偏差=\(fmt(snapshot.maxDrift))s "
                     + "显示偏差=\(fmt(snapshot.maxVideoOffset))s 校正=\(snapshot.clockCorrections)"

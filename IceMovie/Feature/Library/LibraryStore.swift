@@ -85,7 +85,7 @@ final class LibraryStore {
     init(
         source: any LibrarySource,
         initialPath: String = "",
-        cacheCapacityBytes: Int64 = 200 * 1024 * 1024
+        cacheCapacityBytes: Int64 = 150 * 1024 * 1024
     ) throws {
         self.source = source
         let components = initialPath
@@ -99,9 +99,11 @@ final class LibraryStore {
                 stack: components
             )
         )
-        self.thumbnails = ThumbnailService(
+        let thumbnails = ThumbnailService(
             store: try ThumbnailStore(capacityBytes: cacheCapacityBytes)
         )
+        self.thumbnails = thumbnails
+        Task { await thumbnails.trimToCapacity() }
         imageCache.totalCostLimit = 64 * 1024 * 1024
     }
 
@@ -348,7 +350,7 @@ final class LibraryStore {
             path: entry.path,
             size: entry.size,
             modified: entry.modified,
-            namespace: "\(source.hostName)|\(source.shareName)"
+            namespace: source.cacheNamespace
         ) as NSString
         if let cached = imageCache.object(forKey: key) {
             return cached
@@ -357,7 +359,7 @@ final class LibraryStore {
             path: entry.path,
             size: entry.size,
             modified: entry.modified,
-            namespace: "\(source.hostName)|\(source.shareName)",
+            namespace: source.cacheNamespace,
             provider: source
         ) else {
             return nil
@@ -391,7 +393,16 @@ final class LibraryStore {
                     }
             )
             let external = await discoverExternalSubtitles(for: entry)
-            let tracks = embedded + external
+            // 位图字幕（PGS/DVD/DVB）当前没有可用的文本渲染路径，直接排除，
+            // 避免默认选轨或用户手选后“已选中但始终不显示”。
+            let discovered = embedded + external
+            let tracks = discovered.filter { $0.format != .bitmap }
+            if tracks.count != discovered.count {
+                Log.info(
+                    .subtitle,
+                    "忽略位图字幕 \(discovered.count - tracks.count) 条（暂不支持）"
+                )
+            }
 
             let loader = SubtitleLoader(source: source, entry: entry)
             let candidates = tracks
@@ -471,10 +482,24 @@ final class LibraryStore {
         }
     }
 
+    func clearCaches() async {
+        imageCache.removeAllObjects()
+        await thumbnails.removeAll()
+        SubtitleScriptCache.removeAll()
+        Log.info(.app, "本地缓存已清空（缩略图 + 字幕脚本）")
+    }
+
     func displayTitle(for entry: MediaEntry) -> String {
         entry.isDirectory
             ? MediaTitleParser.directoryDisplayName(entry.name)
             : MediaTitleParser.parse(entry.name).title
+    }
+
+    /// 播放页标题：文件条目保留集数并放在末尾，方便长标题从头部截断。
+    func playbackTitle(for entry: MediaEntry) -> String {
+        entry.isDirectory
+            ? displayTitle(for: entry)
+            : MediaTitleParser.playbackTitle(for: entry.name)
     }
 
     func subtitle(for entry: MediaEntry) -> String {

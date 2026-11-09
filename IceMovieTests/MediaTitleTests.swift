@@ -43,6 +43,23 @@ final class MediaTitleTests: XCTestCase {
         XCTAssertNil(parsed.episode)
     }
 
+    func testPlaybackTitleKeepsEpisodeAtTail() {
+        XCTAssertEqual(
+            MediaTitleParser.playbackTitle(
+                for: "[LoliHouse] Tensei Shitara Slime Datta Ken 2nd Season - 25 [WebRip 1080p HEVC-10bit AAC SRTx3].mkv"
+            ),
+            "Tensei Shitara Slime Datta Ken 2nd Season · 第 25 集"
+        )
+        XCTAssertEqual(
+            MediaTitleParser.playbackTitle(for: "冰海战记 第二季 第01话"),
+            "冰海战记 第二季 · 第 1 集"
+        )
+        XCTAssertEqual(
+            MediaTitleParser.playbackTitle(for: "some_random_file.mkv"),
+            "some random file"
+        )
+    }
+
     func testDirectoryDisplayNameRemovesReleaseTags() {
         XCTAssertEqual(
             MediaTitleParser.directoryDisplayName(

@@ -4,8 +4,11 @@ import IceCore
 /// 读取优先级。数值越小越先执行。
 public enum SMBReadPriority: Int, Sendable, Comparable, CaseIterable {
     case playback = 0
-    case enumeration = 1
-    case thumbnail = 2
+    /// 字幕窗口读取：用户可见，必须排在播放预读之前，否则首屏字幕会被 24MB 预读拖住。
+    case subtitle = 1
+    /// 后台预读与目录/索引扫描：可让位于播放与字幕。
+    case enumeration = 2
+    case thumbnail = 3
 
     public static func < (lhs: SMBReadPriority, rhs: SMBReadPriority) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -14,6 +17,7 @@ public enum SMBReadPriority: Int, Sendable, Comparable, CaseIterable {
     public var label: String {
         switch self {
         case .playback: "playback"
+        case .subtitle: "subtitle"
         case .enumeration: "enumeration"
         case .thumbnail: "thumbnail"
         }

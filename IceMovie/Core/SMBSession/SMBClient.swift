@@ -435,10 +435,21 @@ public actor SMBClient {
                 .smb,
                 "已打开文件 \(Log.shortPath(path)) 大小=\(size ?? -1) 优先级=\(priority.label)"
             )
-            // 播放保持 1MB 块 + 24MB 环；抽帧用更小块，缩短单次占用读线程的时间，
-            // 让播放请求最多只需等一个 256KB 读取即可插队。
-            let chunkSize = priority == .thumbnail ? 256 * 1024 : 1 << 20
-            let ringCapacity = priority == .thumbnail ? 8 : 24
+            // 播放用 4MB 块 + 512MB 预读环：8GB 设备内存充足，提前把更多内容读进内存；
+            // 只占内存、不扩硬盘缓存。字幕/抽帧仍用小块，避免长时间占用读线程。
+            let chunkSize: Int
+            let ringCapacity: Int
+            switch priority {
+            case .thumbnail:
+                chunkSize = 256 * 1024
+                ringCapacity = 8
+            case .playback:
+                chunkSize = 4 * 1024 * 1024
+                ringCapacity = 128
+            default:
+                chunkSize = 1 << 20
+                ringCapacity = 24
+            }
             return SMBFileByteSource(
                 handle: handle,
                 length: size,

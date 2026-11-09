@@ -13,6 +13,8 @@
 		026572203132EC5C5CCDC463 /* PlaybackAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCFBA02E0DC880A658B1B946 /* PlaybackAudioSession.swift */; };
 		0277077E409975768DE3F0DA /* ntlmssp.c in Sources */ = {isa = PBXBuildFile; fileRef = F1C7BABF6AFE7B7A84AD15E3 /* ntlmssp.c */; };
 		03D1B4BCA176CAC51C73D1E6 /* smb2-cmd-flush.c in Sources */ = {isa = PBXBuildFile; fileRef = 4C4C85AF8AFF38E88E8AD2FE /* smb2-cmd-flush.c */; };
+		0660B5E2C4BF4D79471173FD /* PlaybackRateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2239B041DA0C4106BB263589 /* PlaybackRateTests.swift */; };
+		09782954D5FA7693A687EE10 /* ASSScriptSanitizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E27C9A12DBC225D91CF87231 /* ASSScriptSanitizerTests.swift */; };
 		09E211A6BD7533C90218DB45 /* SMBRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35628CB8A368A39D9C865817 /* SMBRecovery.swift */; };
 		0B1680AD71C5793AB846BF87 /* smb3-seal.c in Sources */ = {isa = PBXBuildFile; fileRef = 2B7F58B9D2F806C50FF62CE2 /* smb3-seal.c */; };
 		0DBCF374D8848362A8BB707E /* PlaybackProgressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93B07747898F31BBACA3E2C /* PlaybackProgressTests.swift */; };
@@ -89,6 +91,7 @@
 		6D3DA0DE85E85E1121D04C8E /* SubtitleDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4EA9B08C5B4DC7A36060AC /* SubtitleDiscoveryTests.swift */; };
 		713E92BF68240C884EA40344 /* sha.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = C15AF3176BF69270DB77E761 /* sha.h */; };
 		77FBD2CF7D192A138E08B7E6 /* SubtitleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */; };
+		7815C990E0646EF42A575733 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A03740F640AD84226A9948F3 /* AppDelegate.swift */; };
 		7B6367384A37FC7324B23903 /* smb2-cmd-session-setup.c in Sources */ = {isa = PBXBuildFile; fileRef = D88351A4C9F91DE7A6E1CCEF /* smb2-cmd-session-setup.c */; };
 		7BFB11F3D115DD0812C74C58 /* DemuxKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3BE9DFEF381585516CFB46E /* DemuxKit.swift */; };
 		7C6463EDD015B14A33790855 /* SubtitlePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957B9B7DEEA4C1261003CF35 /* SubtitlePreferences.swift */; };
@@ -125,11 +128,13 @@
 		9C9D089B6EE9F598E9B10B14 /* MediaEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9943175F3DC3E81245E2C6C3 /* MediaEntry.swift */; };
 		9E858593FCCFF97F74DEA596 /* SMBReconnectPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB5B8062C5BE41B87F470307 /* SMBReconnectPolicyTests.swift */; };
 		9E9034F9D0486D2E140AC655 /* FileMonitoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DAAFF9A5B9F91918A2428F /* FileMonitoring.swift */; };
+		A4E6BDD4CC98FF9F9F6F7DE8 /* PlaybackReadPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F12AEBB87342410E0D2AF6 /* PlaybackReadPolicyTests.swift */; };
 		A663D3ACBA404B0F1D3EB9A1 /* DemuxKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EECDD086AED4C8137BB05830 /* DemuxKit.framework */; };
 		A686D0B1DF5BB4BF04C23591 /* LibraryLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CD065F93385C16FB114B36 /* LibraryLayoutTests.swift */; };
 		A6A537D3C4C2802004BF695A /* alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 5E5AF853981F2412DC7DD530 /* alloc.c */; };
 		A76DDE45183CB4CB35132B08 /* ObjCCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E10ECD1D66965133553620 /* ObjCCompat.swift */; };
 		A96572EA760DF3D1593F8B7A /* smb2-cmd-lock.c in Sources */ = {isa = PBXBuildFile; fileRef = 18D9264FB8F27E7C679CC242 /* smb2-cmd-lock.c */; };
+		A9FBC608AACF24FCCB56CCFC /* ShardedSubtitleLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674BC473C5792A1AEFCFA103 /* ShardedSubtitleLoader.swift */; };
 		AA64CC7C7240CBBA4109C9E2 /* SubtitleDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4E6E2DE5D29D927C57BB71 /* SubtitleDocument.swift */; };
 		AB323A741DFA0D2B0F536A61 /* IceCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74BF8BD1AFC731A033495C60 /* IceCore.framework */; };
 		ACD85F0656D825E111CBDC29 /* smb2-cmd-query-directory.c in Sources */ = {isa = PBXBuildFile; fileRef = EE0470A5A19712F81A1FEBD5 /* smb2-cmd-query-directory.c */; };
@@ -139,6 +144,7 @@
 		B444092EF10B0B0D4BC3347F /* AVIOBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D437AC8A252349B9AF73F4F3 /* AVIOBridge.swift */; };
 		B4984214B924CA97FFBF965C /* SMBReadSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72D6053970187D12C387E8C /* SMBReadSchedulerTests.swift */; };
 		B527B8A99DBEEAD04CBAF453 /* SMBHostAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7DB639C7028F2641716DC4B /* SMBHostAddressTests.swift */; };
+		B5D8E121A1A251271FE0D108 /* SubtitlePacketDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6B4EC7B9CAA7CF04EFAA3FD /* SubtitlePacketDecoder.swift */; };
 		B740246702542392155123E0 /* LibrarySearchIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3473E0418EF1A3C1D99045B /* LibrarySearchIndex.swift */; };
 		B8CE4666E0CDD005EAD00A97 /* SeekSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E096806D62D0789B98155E /* SeekSelfTest.swift */; };
 		B8FA0297590152DF84D26917 /* aes_reference.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 92ED44FD89D38AF111899ECA /* aes_reference.h */; };
@@ -148,6 +154,7 @@
 		BC7EB46E336757635EB08B44 /* PictureInPictureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125589B55BB39EB321F1B539 /* PictureInPictureCoordinator.swift */; };
 		BD08D3EF134F563320440323 /* usha.c in Sources */ = {isa = PBXBuildFile; fileRef = 57143BD5E7BA0380DA11310B /* usha.c */; };
 		BE2F9E732FC06F41268D6753 /* LibraryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF07D1B23AEE0B3B9861E69 /* LibraryLayout.swift */; };
+		BFA1F184F806E61CCC57127C /* ASSEventParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90200129B7BFB5CBB5A2F7C7 /* ASSEventParsingTests.swift */; };
 		C0A8B48A8F30C58EA97CE55D /* VideoSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C754117633E854C9D7278D8 /* VideoSurface.swift */; };
 		C13EB8A8B84D545DD58F609F /* md5.c in Sources */ = {isa = PBXBuildFile; fileRef = 3A225DE48AA45D92486FF3C3 /* md5.c */; };
 		C20D1B977C52068BB32E212D /* SubtitleKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DDA0872974E62E90E3E29DD /* SubtitleKit.swift */; };
@@ -158,6 +165,7 @@
 		C6A595A7E4C78093765DFB90 /* IceCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74BF8BD1AFC731A033495C60 /* IceCore.framework */; };
 		CAE186F0B172DFFB1D0E2412 /* timestamps.c in Sources */ = {isa = PBXBuildFile; fileRef = 133AE057266D3DEF6DAAC867 /* timestamps.c */; };
 		CB367F3209FBCCB517BBCD43 /* init.c in Sources */ = {isa = PBXBuildFile; fileRef = FA581B0D69FD6E72AD30A1DA /* init.c */; };
+		CB88A263BBCE8EAC10636EB9 /* ASSScriptSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FD5B27B5C9F29D747255B8 /* ASSScriptSanitizer.swift */; };
 		CC14DBDEB341A09C2D628422 /* SMBChunkRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F71DF9AD4E077E016ABBE9D /* SMBChunkRingTests.swift */; };
 		CDA905D005CD304355DAEFE4 /* SubtitleParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468012F00109073276BBB8E /* SubtitleParserTests.swift */; };
 		CDCDD553CECFE35BD39528B2 /* VideoTestSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDDC4E889111A5E48475A53 /* VideoTestSession.swift */; };
@@ -194,9 +202,12 @@
 		F7E49B479915CD720FA6F2EF /* RenderKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB959A89B35076954685CBF5 /* RenderKit.framework */; };
 		FA3911B2811159596786C9A9 /* PlayerControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65AF0D4676D4DB1DE9C7A24 /* PlayerControlsView.swift */; };
 		FBD62FB63D0846C8BE7AEC94 /* AMSMB2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925B9DE316645A37C593E9D4 /* AMSMB2.swift */; };
+		FC2E5E25BFADDD9943FC341C /* SubtitleScriptCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA5BEA965E7F3BFD30CEC0C /* SubtitleScriptCacheTests.swift */; };
 		FDC81B4F39B4972312E26ACC /* SubtitleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDB09C8634C4ACDC1CBAFD98 /* SubtitleKit.framework */; };
 		FF0B853971024DC01B19FE9B /* sha384-512.c in Sources */ = {isa = PBXBuildFile; fileRef = 755A189B178FF7E7CC733215 /* sha384-512.c */; };
 		FF50A58CA0A2F3CA5D47502F /* LibrarySearchIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41923F57D5B197911263F24 /* LibrarySearchIndexTests.swift */; };
+		FF6958219CFDCDB16F56F989 /* SubtitleScriptCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62D80D2ADD61477E0A67C72 /* SubtitleScriptCache.swift */; };
+		FFA5EF80EF3F90869A1B18AD /* AppOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7736A424FD60DD45CFF236B1 /* AppOrientation.swift */; };
 		FFC69951D5225C66616202F4 /* SubtitleTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AE426DEA88252027DE30FCC /* SubtitleTrack.swift */; };
 		FFD0CA08AA71A4759C0047B6 /* AudioOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BE8328E22D9B13F051E6B82 /* AudioOutput.swift */; };
 /* End PBXBuildFile section */
@@ -448,6 +459,7 @@
 		0DF4C6AF0400E5A54B976F9F /* smb2-signing.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-signing.c"; sourceTree = "<group>"; };
 		0F2B1B80EF9DCFB045456247 /* SubtitleOverlayTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleOverlayTest.swift; sourceTree = "<group>"; };
 		0F81E958F0B9867B542DADBC /* compat.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = compat.c; sourceTree = "<group>"; };
+		0FA5BEA965E7F3BFD30CEC0C /* SubtitleScriptCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleScriptCacheTests.swift; sourceTree = "<group>"; };
 		10B6B4E2A425B2CE5DFF87A5 /* ThumbnailCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailCacheTests.swift; sourceTree = "<group>"; };
 		11BF4786E6C34E3199D4FBA1 /* smb2-cmd-oplock-break.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-oplock-break.c"; sourceTree = "<group>"; };
 		11DEE745D7C0B85564800765 /* hmac-md5.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "hmac-md5.h"; sourceTree = "<group>"; };
@@ -465,6 +477,7 @@
 		1E74DF668B3873D3BA808874 /* DemuxSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemuxSelfTest.swift; sourceTree = "<group>"; };
 		1EDC55F166A5862A1CD09912 /* FileHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileHandle.swift; sourceTree = "<group>"; };
 		1F71DF9AD4E077E016ABBE9D /* SMBChunkRingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBChunkRingTests.swift; sourceTree = "<group>"; };
+		2239B041DA0C4106BB263589 /* PlaybackRateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackRateTests.swift; sourceTree = "<group>"; };
 		23CD065F93385C16FB114B36 /* LibraryLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayoutTests.swift; sourceTree = "<group>"; };
 		2468012F00109073276BBB8E /* SubtitleParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleParserTests.swift; sourceTree = "<group>"; };
 		2481DD4C9FC0DFDCED1B000C /* AudioFormatSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFormatSpec.swift; sourceTree = "<group>"; };
@@ -513,6 +526,7 @@
 		64F29146A7268F1339714F50 /* IceMovieTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IceMovieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		660E8930A208CFDB49899F8C /* hmac-md5.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "hmac-md5.c"; sourceTree = "<group>"; };
 		6632E09B9B084A337AA3F622 /* compat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compat.h; sourceTree = "<group>"; };
+		674BC473C5792A1AEFCFA103 /* ShardedSubtitleLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShardedSubtitleLoader.swift; sourceTree = "<group>"; };
 		6752AD5FF54B58655852493B /* Parsers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Parsers.swift; sourceTree = "<group>"; };
 		6AF07D1B23AEE0B3B9861E69 /* LibraryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryLayout.swift; sourceTree = "<group>"; };
 		6B4B4B1A3C891FF91169DCAB /* smb2-data-reparse-point.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-data-reparse-point.c"; sourceTree = "<group>"; };
@@ -524,7 +538,9 @@
 		727445B3AB2B70047B30BB41 /* aes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes.c; sourceTree = "<group>"; };
 		72DAAFF9A5B9F91918A2428F /* FileMonitoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileMonitoring.swift; sourceTree = "<group>"; };
 		74BF8BD1AFC731A033495C60 /* IceCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = IceCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		74F12AEBB87342410E0D2AF6 /* PlaybackReadPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackReadPolicyTests.swift; sourceTree = "<group>"; };
 		755A189B178FF7E7CC733215 /* sha384-512.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "sha384-512.c"; sourceTree = "<group>"; };
+		7736A424FD60DD45CFF236B1 /* AppOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppOrientation.swift; sourceTree = "<group>"; };
 		77E29475D31AB0D1690A6FB3 /* PlaybackQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackQueueTests.swift; sourceTree = "<group>"; };
 		799493648B5929AEF3956408 /* smb3-seal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "smb3-seal.h"; sourceTree = "<group>"; };
 		79CBFEA294714776D440C1E6 /* smb2-cmd-logoff.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-logoff.c"; sourceTree = "<group>"; };
@@ -538,6 +554,7 @@
 		8E4F105A33E87D1BFD92C363 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		8FDEF0075AE107C4A248BF6C /* aes_reference.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes_reference.c; sourceTree = "<group>"; };
 		8FF0FEAEB28A458160604F98 /* ExternalSubtitleMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalSubtitleMatchingTests.swift; sourceTree = "<group>"; };
+		90200129B7BFB5CBB5A2F7C7 /* ASSEventParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASSEventParsingTests.swift; sourceTree = "<group>"; };
 		9084856BE30D7ADD0185F610 /* SMBChunkRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBChunkRing.swift; sourceTree = "<group>"; };
 		9188AB51D41A8CFD8C8E6BFC /* aes128ccm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aes128ccm.h; sourceTree = "<group>"; };
 		925B9DE316645A37C593E9D4 /* AMSMB2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AMSMB2.swift; sourceTree = "<group>"; };
@@ -546,10 +563,12 @@
 		957B9B7DEEA4C1261003CF35 /* SubtitlePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePreferences.swift; sourceTree = "<group>"; };
 		96F917685EE7D554F0BB0EA5 /* LibassRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibassRendererTests.swift; sourceTree = "<group>"; };
 		9943175F3DC3E81245E2C6C3 /* MediaEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaEntry.swift; sourceTree = "<group>"; };
+		99FD5B27B5C9F29D747255B8 /* ASSScriptSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASSScriptSanitizer.swift; sourceTree = "<group>"; };
 		9BC6C0DD0921FB6055AF9462 /* RenderKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderKit.swift; sourceTree = "<group>"; };
 		9C6FA6637506E9BF763352A2 /* asn1-ber.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "asn1-ber.h"; sourceTree = "<group>"; };
 		9C754117633E854C9D7278D8 /* VideoSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurface.swift; sourceTree = "<group>"; };
 		9F1E1F7C77766837D30C61F3 /* md4.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = md4.h; sourceTree = "<group>"; };
+		A03740F640AD84226A9948F3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A3BE9DFEF381585516CFB46E /* DemuxKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemuxKit.swift; sourceTree = "<group>"; };
 		A528C44222F9937B6A42DC37 /* LibraryNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryNavigation.swift; sourceTree = "<group>"; };
 		A6E10ECD1D66965133553620 /* ObjCCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjCCompat.swift; sourceTree = "<group>"; };
@@ -561,6 +580,7 @@
 		B02021EE9F9330926FA6E924 /* smb2-cmd-write.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-write.c"; sourceTree = "<group>"; };
 		B28B4C8940F1E99790C7511F /* ConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionView.swift; sourceTree = "<group>"; };
 		B431F56C87DF8439A68F7B7D /* unicode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = unicode.c; sourceTree = "<group>"; };
+		B6B4EC7B9CAA7CF04EFAA3FD /* SubtitlePacketDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePacketDecoder.swift; sourceTree = "<group>"; };
 		B6FFC44C571BE6E388EFECA8 /* spnego-wrapper.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "spnego-wrapper.c"; sourceTree = "<group>"; };
 		B87D56763F553292B0B0DC8F /* smb2-cmd-close.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-close.c"; sourceTree = "<group>"; };
 		BBFEC280879475E897FF7236 /* sync.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sync.c; sourceTree = "<group>"; };
@@ -589,6 +609,7 @@
 		D3A54B45114CA74AF47A7E92 /* smb2-cmd-ioctl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-ioctl.c"; sourceTree = "<group>"; };
 		D437AC8A252349B9AF73F4F3 /* AVIOBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVIOBridge.swift; sourceTree = "<group>"; };
 		D4D412DD9D3EFFFA078AE348 /* smb2-cmd-error.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-cmd-error.c"; sourceTree = "<group>"; };
+		D62D80D2ADD61477E0A67C72 /* SubtitleScriptCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleScriptCache.swift; sourceTree = "<group>"; };
 		D6E3F2903B4223885C32AC50 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		D72D6053970187D12C387E8C /* SMBReadSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBReadSchedulerTests.swift; sourceTree = "<group>"; };
 		D7DB639C7028F2641716DC4B /* SMBHostAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBHostAddressTests.swift; sourceTree = "<group>"; };
@@ -600,6 +621,7 @@
 		DF9933BAFEAEE67D0EF296AE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E0FD967742E98E308E069322 /* liblibsmb2.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = liblibsmb2.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		E1AD6B7668EAB32BE501CABE /* krb5-wrapper.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "krb5-wrapper.c"; sourceTree = "<group>"; };
+		E27C9A12DBC225D91CF87231 /* ASSScriptSanitizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASSScriptSanitizerTests.swift; sourceTree = "<group>"; };
 		E519C20165E358624778A385 /* DemuxProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemuxProbe.swift; sourceTree = "<group>"; };
 		E6C0D79F94A5C2935356CD53 /* SeekBurstTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeekBurstTest.swift; sourceTree = "<group>"; };
 		E8C6BE9C82E4F4CD6D369FC2 /* SMBFileByteSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMBFileByteSource.swift; sourceTree = "<group>"; };
@@ -671,7 +693,9 @@
 				D6E3F2903B4223885C32AC50 /* LibraryStore.swift */,
 				CD9D385034A7A819DEDE2367 /* LibraryView.swift */,
 				AC02316E8A8421F4F7C61D45 /* PlaybackFailure.swift */,
+				674BC473C5792A1AEFCFA103 /* ShardedSubtitleLoader.swift */,
 				D26899814BD689F60A24CC4E /* SubtitleLoader.swift */,
+				D62D80D2ADD61477E0A67C72 /* SubtitleScriptCache.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -698,6 +722,7 @@
 		09BB7C88BE894D050D5E2799 /* SubtitleKit */ = {
 			isa = PBXGroup;
 			children = (
+				99FD5B27B5C9F29D747255B8 /* ASSScriptSanitizer.swift */,
 				56021EB4DFC4ADFEB584FEC1 /* LibassSubtitleRenderer.swift */,
 				8C4E6E2DE5D29D927C57BB71 /* SubtitleDocument.swift */,
 				0DDA0872974E62E90E3E29DD /* SubtitleKit.swift */,
@@ -710,6 +735,8 @@
 		24B7DD1CCA6635561519AB6E /* IceMovieTests */ = {
 			isa = PBXGroup;
 			children = (
+				90200129B7BFB5CBB5A2F7C7 /* ASSEventParsingTests.swift */,
+				E27C9A12DBC225D91CF87231 /* ASSScriptSanitizerTests.swift */,
 				0D7BA73AC9192F46890011CB /* CredentialStoreTests.swift */,
 				44C971F09698C16BF95C38C0 /* EmbeddedSubtitleExtractionTests.swift */,
 				8FF0FEAEB28A458160604F98 /* ExternalSubtitleMatchingTests.swift */,
@@ -723,6 +750,8 @@
 				5FDF5054DA6F410E92A42D48 /* MediaTitleTests.swift */,
 				C93B07747898F31BBACA3E2C /* PlaybackProgressTests.swift */,
 				77E29475D31AB0D1690A6FB3 /* PlaybackQueueTests.swift */,
+				2239B041DA0C4106BB263589 /* PlaybackRateTests.swift */,
+				74F12AEBB87342410E0D2AF6 /* PlaybackReadPolicyTests.swift */,
 				C1D6EC3E96D0DACA4B92BCE1 /* PlaybackRegressionTests.swift */,
 				1F71DF9AD4E077E016ABBE9D /* SMBChunkRingTests.swift */,
 				D7DB639C7028F2641716DC4B /* SMBHostAddressTests.swift */,
@@ -731,6 +760,7 @@
 				4B4EA9B08C5B4DC7A36060AC /* SubtitleDiscoveryTests.swift */,
 				2468012F00109073276BBB8E /* SubtitleParserTests.swift */,
 				8A34F48A21548F9DFD2AD6B4 /* SubtitlePreferencesTests.swift */,
+				0FA5BEA965E7F3BFD30CEC0C /* SubtitleScriptCacheTests.swift */,
 				10B6B4E2A425B2CE5DFF87A5 /* ThumbnailCacheTests.swift */,
 			);
 			path = IceMovieTests;
@@ -856,6 +886,8 @@
 		3E462E900CE5E2E3D67C49F1 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				A03740F640AD84226A9948F3 /* AppDelegate.swift */,
+				7736A424FD60DD45CFF236B1 /* AppOrientation.swift */,
 				F536C1F04AD26DE91931CB43 /* AudioSelfTest.swift */,
 				1E74DF668B3873D3BA808874 /* DemuxSelfTest.swift */,
 				D0A6AEC43798DFB972A8772D /* IceMovieApp.swift */,
@@ -908,6 +940,7 @@
 				A3BE9DFEF381585516CFB46E /* DemuxKit.swift */,
 				E519C20165E358624778A385 /* DemuxProbe.swift */,
 				0B16ED4F99A7834F8172AF00 /* MediaReader.swift */,
+				B6B4EC7B9CAA7CF04EFAA3FD /* SubtitlePacketDecoder.swift */,
 			);
 			path = DemuxKit;
 			sourceTree = "<group>";
@@ -1528,6 +1561,7 @@
 				7BFB11F3D115DD0812C74C58 /* DemuxKit.swift in Sources */,
 				0F144B2D9223DEE9307CF221 /* DemuxProbe.swift in Sources */,
 				D81DA6B2044B82CC57366E85 /* MediaReader.swift in Sources */,
+				B5D8E121A1A251271FE0D108 /* SubtitlePacketDecoder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1547,6 +1581,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BFA1F184F806E61CCC57127C /* ASSEventParsingTests.swift in Sources */,
+				09782954D5FA7693A687EE10 /* ASSScriptSanitizerTests.swift in Sources */,
 				5F32E20734C11608F8C56134 /* CredentialStoreTests.swift in Sources */,
 				F486F12CAB90057675709F77 /* EmbeddedSubtitleExtractionTests.swift in Sources */,
 				DF46F474E5C828B2E296EA18 /* ExternalSubtitleMatchingTests.swift in Sources */,
@@ -1560,6 +1596,8 @@
 				C36A47C6596DB0E966C7A06B /* MediaTitleTests.swift in Sources */,
 				0DBCF374D8848362A8BB707E /* PlaybackProgressTests.swift in Sources */,
 				615EAB0F6615F74A2CF8C219 /* PlaybackQueueTests.swift in Sources */,
+				0660B5E2C4BF4D79471173FD /* PlaybackRateTests.swift in Sources */,
+				A4E6BDD4CC98FF9F9F6F7DE8 /* PlaybackReadPolicyTests.swift in Sources */,
 				E07B5B1235AF1FE95EA08C3E /* PlaybackRegressionTests.swift in Sources */,
 				CC14DBDEB341A09C2D628422 /* SMBChunkRingTests.swift in Sources */,
 				B527B8A99DBEEAD04CBAF453 /* SMBHostAddressTests.swift in Sources */,
@@ -1568,6 +1606,7 @@
 				6D3DA0DE85E85E1121D04C8E /* SubtitleDiscoveryTests.swift in Sources */,
 				CDA905D005CD304355DAEFE4 /* SubtitleParserTests.swift in Sources */,
 				8C49CB9740A91CAB10050C6C /* SubtitlePreferencesTests.swift in Sources */,
+				FC2E5E25BFADDD9943FC341C /* SubtitleScriptCacheTests.swift in Sources */,
 				4A3C60C0D3875976A368C626 /* ThumbnailCacheTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1576,6 +1615,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7815C990E0646EF42A575733 /* AppDelegate.swift in Sources */,
+				FFA5EF80EF3F90869A1B18AD /* AppOrientation.swift in Sources */,
 				E3871A377277049652C39988 /* AudioSelfTest.swift in Sources */,
 				C393AABE586A5ECC3C76E206 /* ConnectionView.swift in Sources */,
 				E68D11D6F235EBA95D27B5CA /* DemuxSelfTest.swift in Sources */,
@@ -1596,9 +1637,11 @@
 				3CC10309C906B48581A405F6 /* RootView.swift in Sources */,
 				2C9407121764CEFBFD89AC53 /* SeekBurstTest.swift in Sources */,
 				B8CE4666E0CDD005EAD00A97 /* SeekSelfTest.swift in Sources */,
+				A9FBC608AACF24FCCB56CCFC /* ShardedSubtitleLoader.swift in Sources */,
 				0040ACFA899BBB01E96D3936 /* SubtitleLoader.swift in Sources */,
 				16C0983E14455145894A7DFF /* SubtitleOverlayTest.swift in Sources */,
 				82D0D270A6C09FEF7860323C /* SubtitleOverlayView.swift in Sources */,
+				FF6958219CFDCDB16F56F989 /* SubtitleScriptCache.swift in Sources */,
 				8FD75440D33DF8EE465301F0 /* SubtitleSelfTest.swift in Sources */,
 				62F2B0EDFE00019805ACBC6F /* VideoSelfTest.swift in Sources */,
 				CDCDD553CECFE35BD39528B2 /* VideoTestSession.swift in Sources */,
@@ -1609,6 +1652,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CB88A263BBCE8EAC10636EB9 /* ASSScriptSanitizer.swift in Sources */,
 				EEB4A8F7C7F059DA623318CD /* LibassSubtitleRenderer.swift in Sources */,
 				AA64CC7C7240CBBA4109C9E2 /* SubtitleDocument.swift in Sources */,
 				C20D1B977C52068BB32E212D /* SubtitleKit.swift in Sources */,

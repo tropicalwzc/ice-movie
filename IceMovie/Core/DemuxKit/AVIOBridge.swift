@@ -18,6 +18,18 @@ final class AVIOBridge {
 
     private(set) var context: UnsafeMutablePointer<AVIOContext>?
 
+    /// 已预读到当前读位置之后的字节数；进度条缓冲区间使用。
+    var bufferedAheadBytes: Int64 {
+        (source as? BufferMetricsProviding)?.bufferedAheadBytes ?? 0
+    }
+
+    var sourceLength: Int64? { source.length }
+
+    /// 播放源最近的实际下载速度；本地源为 0。
+    var downloadBytesPerSecond: Double {
+        (source as? NetworkSpeedProviding)?.downloadBytesPerSecond ?? 0
+    }
+
     init(source: any ByteSource, windowSize: Int = 4 << 20) throws {
         self.source = source
         self.windowSize = windowSize

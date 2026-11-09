@@ -243,6 +243,25 @@ public final class VideoRenderer: @unchecked Sendable {
         return CMTimebaseGetTime(timebase).seconds - clock.currentTime
     }
 
+    /// 显示层是否已绑定；未绑定时播放泵不能等待视频水位。
+    public var isBound: Bool {
+        lock.withLock { layer != nil }
+    }
+
+    /// 未绑定时缓存的待发帧数（仅用于起播判断）。
+    public var pendingCount: Int {
+        lock.withLock { pending.count }
+    }
+
+    /// 未绑定时待发帧相对时钟的领先量，避免播放泵把缓存帧冲掉。
+    public var pendingAhead: Double {
+        lock.withLock {
+            guard let last = pending.last else { return 0 }
+            let pts = CMSampleBufferGetPresentationTimeStamp(last).seconds
+            return max(0, pts - clock.currentTime)
+        }
+    }
+
     /// 已排入数据相对当前时钟的领先量，用于限速。
     public var bufferedAhead: Double {
         lock.withLock {

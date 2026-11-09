@@ -14,6 +14,16 @@ public protocol ByteSource: Sendable {
     func close() async
 }
 
+/// 可选的预读指标：报告当前读位置之后已经缓存了多少字节，供进度条画缓冲区间。
+public protocol BufferMetricsProviding: Sendable {
+    var bufferedAheadBytes: Int64 { get }
+}
+
+/// 可选网络指标：报告播放源最近的实际下载速度，供播放器状态栏展示。
+public protocol NetworkSpeedProviding: Sendable {
+    var downloadBytesPerSecond: Double { get }
+}
+
 public enum ByteSourceError: LocalizedError, Sendable {
     case closed
     case outOfRange(offset: Int64, count: Int)

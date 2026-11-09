@@ -18,6 +18,8 @@ struct PlayerScreen: View {
     let selectedSubtitle: SubtitleTrack?
     let subtitleScript: String?
     let subtitleFonts: [SubtitleFont]
+    let subtitleLoading: Bool
+    let subtitleError: String?
     let subtitleFontSize: Double
     let subtitleBottomPadding: Double
     let subtitleOffset: Double
@@ -44,6 +46,8 @@ struct PlayerScreen: View {
         selectedSubtitle: SubtitleTrack? = nil,
         subtitleScript: String? = nil,
         subtitleFonts: [SubtitleFont] = [],
+        subtitleLoading: Bool = false,
+        subtitleError: String? = nil,
         subtitleFontSize: Double = 22,
         subtitleBottomPadding: Double = 130,
         subtitleOffset: Double = 0,
@@ -65,6 +69,8 @@ struct PlayerScreen: View {
         self.selectedSubtitle = selectedSubtitle
         self.subtitleScript = subtitleScript
         self.subtitleFonts = subtitleFonts
+        self.subtitleLoading = subtitleLoading
+        self.subtitleError = subtitleError
         self.subtitleFontSize = subtitleFontSize
         self.subtitleBottomPadding = subtitleBottomPadding
         self.subtitleOffset = subtitleOffset
@@ -92,6 +98,8 @@ struct PlayerScreen: View {
             selectedSubtitle: selectedSubtitle,
             subtitleScript: subtitleScript,
             subtitleFonts: subtitleFonts,
+            subtitleLoading: subtitleLoading,
+            subtitleError: subtitleError,
             subtitleFontSize: subtitleFontSize,
             subtitleBottomPadding: subtitleBottomPadding,
             subtitleOffset: subtitleOffset,
@@ -107,6 +115,7 @@ struct PlayerScreen: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.surface")
         .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
             pip.onStateChange = { active in
                 pipActive = active
             }
@@ -118,6 +127,7 @@ struct PlayerScreen: View {
             )
         }
         .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
             if let commandToken {
                 PlayerCommands.shared.detach(token: commandToken)
             }
@@ -140,6 +150,8 @@ private struct PlayerSurface: View {
     let selectedSubtitle: SubtitleTrack?
     let subtitleScript: String?
     let subtitleFonts: [SubtitleFont]
+    let subtitleLoading: Bool
+    let subtitleError: String?
     let subtitleFontSize: Double
     let subtitleBottomPadding: Double
     let subtitleOffset: Double
@@ -154,6 +166,10 @@ private struct PlayerSurface: View {
     @State private var showSubtitlePanel = false
     @State private var lastInteractionAt = ProcessInfo.processInfo.systemUptime
     @State private var autoHideTask: Task<Void, Never>?
+
+    private var isPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -172,6 +188,44 @@ private struct PlayerSurface: View {
             BufferingOverlay(engine: engine)
             PlaybackFailureOverlay(engine: engine, onClose: onClose)
 
+            if isFullscreen {
+                VStack {
+                    HStack(spacing: 10) {
+                        Button {
+                            onClose?()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 15, weight: .bold))
+                                .frame(width: 34, height: 34)
+                                .background(.black.opacity(0.55))
+                                .clipShape(Circle())
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("返回")
+                        .accessibilityIdentifier("player.back")
+                        Text(label)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(isPad ? 2 : 1)
+                            .truncationMode(isPad ? .tail : .head)
+                            .frame(maxWidth: isPad ? 640 : nil, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.55))
+                            .clipShape(Capsule())
+                            .accessibilityIdentifier("player.title")
+                        Spacer(minLength: 56)
+                    }
+                    Spacer()
+                }
+                .padding(.top, 12)
+                .padding(.horizontal, 14)
+                .opacity(controlsVisible ? 1 : 0)
+                .allowsHitTesting(controlsVisible)
+                .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+            }
+
             if let subtitle {
                 SubtitleOverlayView(
                     engine: engine,
@@ -182,6 +236,54 @@ private struct PlayerSurface: View {
                     bottomPadding: subtitleBottomPadding,
                     offset: subtitleOffset
                 )
+            }
+
+            if subtitleLoading, subtitle == nil {
+                VStack {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                        Text("字幕加载中…")
+                            .font(.caption.weight(.medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.65))
+                    .clipShape(Capsule())
+                    .foregroundStyle(.white)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("subtitle.loading")
+                    Spacer()
+                }
+                .padding(.top, isFullscreen ? 56 : 16)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .allowsHitTesting(false)
+            }
+
+            if let subtitleError, !subtitleLoading {
+                VStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text(subtitleError)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .foregroundStyle(.white)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("subtitle.error")
+                    Spacer()
+                }
+                .padding(.top, isFullscreen ? 56 : 16)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .allowsHitTesting(false)
             }
 
             VStack(spacing: 0) {
@@ -206,14 +308,19 @@ private struct PlayerSurface: View {
                 Text("\(label)  \(engine.videoCodecName) / \(engine.audioCodecName)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+                    .truncationMode(.head)
                     .padding(10)
                     .allowsHitTesting(false)
             }
 
             if let onClose {
                 VStack {
-                    HStack {
+                    HStack(spacing: 12) {
                         Spacer()
+                        if isPad {
+                            PlayerStatusBadge(engine: engine)
+                        }
                         Button {
                             onClose()
                         } label: {
@@ -226,10 +333,14 @@ private struct PlayerSurface: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("关闭播放")
+                        .accessibilityIdentifier("player.close")
                     }
                     Spacer()
                 }
                 .padding(14)
+                .opacity(controlsVisible ? 1 : 0)
+                .allowsHitTesting(controlsVisible)
+                .animation(.easeInOut(duration: 0.2), value: controlsVisible)
             }
 
             if let resumeNotice {
@@ -250,7 +361,7 @@ private struct PlayerSurface: View {
                     .padding(.vertical, 8)
                     .background(.black.opacity(0.72))
                     .clipShape(Capsule())
-                    .padding(.top, 14)
+                    .padding(.top, isFullscreen ? 56 : 14)
                     Spacer()
                 }
             }
@@ -295,6 +406,8 @@ private struct PlayerSurface: View {
     }
 
     private func startAutoHideLoop() {
+        // 验收脚本用：保持控件常显，避免长等待后测试点击到隐藏按钮的坐标。
+        if ProcessInfo.processInfo.arguments.contains("-keepControlsVisible") { return }
         autoHideTask?.cancel()
         autoHideTask = Task { @MainActor in
             while !Task.isCancelled {
@@ -639,5 +752,80 @@ private struct SubtitlePanel: View {
                 .tint(.white)
             Spacer(minLength: 0)
         }
+    }
+}
+
+/// iPad 全屏播放器右上角状态：实时下载速度 + 电量。
+private struct PlayerStatusBadge: View {
+    let engine: PlaybackEngine
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let speed = engine.downloadBytesPerSecond
+            let battery = BatteryStatus.current
+            HStack(spacing: 9) {
+                Image(systemName: "wifi")
+                    .font(.caption2)
+                Text(speedLabel(speed))
+                    .monospacedDigit()
+                Rectangle()
+                    .fill(.white.opacity(0.25))
+                    .frame(width: 1, height: 12)
+                Image(systemName: battery.symbol)
+                    .font(.caption)
+                    .foregroundStyle(battery.low ? .red : .white)
+                Text(battery.label)
+                    .monospacedDigit()
+                    .foregroundStyle(battery.low ? .red : .white)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(.black.opacity(0.55))
+            .clipShape(Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("player.status")
+            .accessibilityLabel("\(speedLabel(speed))，电量 \(battery.label)")
+        }
+    }
+
+    private func speedLabel(_ bytesPerSecond: Double) -> String {
+        if bytesPerSecond >= 1_048_576 {
+            return String(format: "%.1f MB/s", bytesPerSecond / 1_048_576)
+        }
+        if bytesPerSecond >= 1024 {
+            return String(format: "%.0f KB/s", bytesPerSecond / 1024)
+        }
+        return "0 KB/s"
+    }
+}
+
+private struct BatteryStatus {
+    let label: String
+    let symbol: String
+    let low: Bool
+
+    static var current: BatteryStatus {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let level = UIDevice.current.batteryLevel
+        let state = UIDevice.current.batteryState
+        guard level >= 0 else {
+            return BatteryStatus(label: "--%", symbol: "battery.0", low: false)
+        }
+        let percent = Int((level * 100).rounded())
+        let symbol: String
+        switch percent {
+        case 76...: symbol = "battery.100"
+        case 51...: symbol = "battery.75"
+        case 26...: symbol = "battery.50"
+        default: symbol = "battery.25"
+        }
+        let charging = state == .charging || state == .full
+        return BatteryStatus(
+            label: charging ? "\(percent)% ⚡" : "\(percent)%",
+            symbol: symbol,
+            low: percent <= 20 && !charging
+        )
     }
 }

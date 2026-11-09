@@ -346,21 +346,11 @@ struct RootView: View {
     }
 
     private func requestOrientation(landscape: Bool) {
-        Task { @MainActor in
-            // 等场景完成激活后再请求，否则 headless 模拟器会忽略这次几何更新。
-            try? await Task.sleep(for: .milliseconds(1200))
-            guard let scene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first else {
-                Log.error(.app, "旋转失败：没有可用场景")
-                return
-            }
-            let orientations: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
-            Log.info(.app, "请求旋转 landscape=\(landscape)")
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { error in
-                Log.error(.app, "旋转失败 \(error.localizedDescription)")
-            }
-        }
+        AppOrientation.request(
+            landscape ? .landscape : .portrait,
+            delay: .milliseconds(1200),
+            phoneOnly: false
+        )
     }
 
     private func openLibrary(_ connection: LibraryConnection) {
@@ -376,7 +366,7 @@ struct RootView: View {
 
     private func installLibrary(source: any LibrarySource, initialPath: String) {
         let arguments = ProcessInfo.processInfo.arguments
-        let limitMB = value(for: "-thumbnailCacheLimitMB", in: arguments).flatMap(Int64.init) ?? 200
+        let limitMB = value(for: "-thumbnailCacheLimitMB", in: arguments).flatMap(Int64.init) ?? 150
         do {
             let store = try LibraryStore(
                 source: source,

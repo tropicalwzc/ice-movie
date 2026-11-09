@@ -18,6 +18,7 @@ public enum SubtitleParser {
         switch format {
         case .srt: parseSRT(text)
         case .ass: parseASS(text)
+        case .bitmap: []
         case .other: parseSRT(text)
         }
     }

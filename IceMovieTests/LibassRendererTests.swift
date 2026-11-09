@@ -35,6 +35,30 @@ final class LibassRendererTests: XCTestCase {
         Log.info(.subtitle, "libass 测试渲染完成，输出 /private/tmp/libass-dialogue-7s.png 与 /private/tmp/libass-op-76s.png")
     }
 
+    func testFrameSizeClampIsConsistent() throws {
+        let path = subtitleDirectory + "/Kaze ga Tsuyoku Fuiteiru 01.cht.ass"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("ASS 样本缺失")
+        }
+        let script = try String(contentsOfFile: path, encoding: .utf8)
+        let renderer = try XCTUnwrap(
+            LibassSubtitleRenderer(
+                script: script,
+                fonts: [],
+                fontScale: 1,
+                bottomMargin: 0,
+                frameWidth: 100,
+                frameHeight: 50
+            )
+        )
+        // 小于下限的入参必须钳制到同一尺寸，否则 libass 渲染尺寸与合成位图尺寸会不一致。
+        XCTAssertEqual(renderer.frameWidth, 320)
+        XCTAssertEqual(renderer.frameHeight, 180)
+        let image = try XCTUnwrap(renderer.image(at: 7))
+        XCTAssertEqual(image.width, 320)
+        XCTAssertEqual(image.height, 180)
+    }
+
     func testContainerFontAttachments() throws {
         let path = "/private/tmp/animi/强风吹拂/[Kamigami] Kaze ga Tsuyoku Fuiteiru - 01 [BD 1080p x265 Ma10p AAC].mkv"
         guard FileManager.default.fileExists(atPath: path) else {

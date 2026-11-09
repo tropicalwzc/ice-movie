@@ -6,9 +6,13 @@ import SMBSession
 import ThumbnailKit
 
 /// 媒体库数据源：目录列举、缩略图字节源与播放字节源共用同一条会话。
-protocol LibrarySource: LibraryDirectoryLoading, ThumbnailByteSourceProvider {
+protocol LibrarySource: LibraryDirectoryLoading, ThumbnailByteSourceProvider, Sendable {
     var hostName: String { get }
     var shareName: String { get }
+
+    /// 缓存命名空间：必须能区分不同主机/共享/本地根目录，
+    /// 否则相同相对路径、大小与修改时间会在切换数据源后错误命中。
+    var cacheNamespace: String { get }
 
     /// 当前主机上可切换的共享。本地示例只有当前目录。
     func availableShares() async throws -> [String]
@@ -17,6 +21,9 @@ protocol LibrarySource: LibraryDirectoryLoading, ThumbnailByteSourceProvider {
 
     /// 列出目录中的全部条目（含字幕等非媒体文件），供字幕发现使用。
     func listAllEntries(path: String) async throws -> [MediaEntry]
+
+    /// 字幕读取使用的字节源。SMB 实现用较低优先级，避免整文件扫描拖慢播放。
+    func openSubtitleByteSource(path: String) async throws -> any ByteSource
 
     /// 仅用于诊断：模拟会话掉线，验证心跳与退避重连。
     func simulateDropForTesting() async
@@ -35,11 +42,15 @@ enum LibrarySourceError: LocalizedError {
 }
 
 extension LibrarySource {
+    var cacheNamespace: String { "\(hostName)|\(shareName)" }
     func simulateDropForTesting() async {}
     func setReadLimitForTesting(kbps: Int) async {}
     func availableShares() async throws -> [String] { [shareName] }
     func changeShare(_ share: String) async throws {
         throw LibrarySourceError.unsupportedShareSwitch
+    }
+    func openSubtitleByteSource(path: String) async throws -> any ByteSource {
+        try await openByteSource(path: path)
     }
 }
 
@@ -135,6 +146,12 @@ actor SMBLibrarySource: LibrarySource {
         return try await client.openByteSource(path: path, priority: .playback)
     }
 
+    func openSubtitleByteSource(path: String) async throws -> any ByteSource {
+        try await ensureConnected()
+        // 字幕窗口优先于播放预读，避免首屏字幕排在 24MB 预读之后。
+        return try await client.openByteSource(path: path, priority: .subtitle)
+    }
+
     func openThumbnailByteSource(path: String) async throws -> any ByteSource {
         try await ensureConnected()
         return try await client.openByteSource(path: path, priority: .thumbnail)
@@ -174,6 +191,8 @@ actor LocalLibrarySource: LibrarySource {
 
     nonisolated var hostName: String { hostNameValue }
     nonisolated var shareName: String { shareNameValue }
+    /// 本地源用绝对根路径，避免两个同名目录（如都叫“媒体库”）共用缓存。
+    nonisolated var cacheNamespace: String { "local|\(rootURL.path)" }
 
     init(rootURL: URL) {
         self.rootURL = rootURL

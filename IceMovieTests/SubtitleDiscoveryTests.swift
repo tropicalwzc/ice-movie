@@ -50,6 +50,29 @@ final class SubtitleDiscoveryTests: XCTestCase {
             SubtitleDiscovery.order(.japanese)
         )
     }
+
+    func testEmbeddedBitmapCodecsAreMarkedBitmap() {
+        let tracks = SubtitleDiscovery.embedded([
+            .init(streamIndex: 1, codec: "hdmv_pgs_subtitle", title: "PGS"),
+            .init(streamIndex: 2, codec: "dvd_subtitle", title: "VobSub"),
+            .init(streamIndex: 3, codec: "subrip", title: "SRT"),
+            .init(streamIndex: 4, codec: "ass", title: "ASS"),
+            .init(streamIndex: 5, codec: "mov_text", title: "MOV"),
+        ])
+        XCTAssertEqual(tracks.first { $0.source == .embedded(streamIndex: 1) }?.format, .bitmap)
+        XCTAssertEqual(tracks.first { $0.source == .embedded(streamIndex: 2) }?.format, .bitmap)
+        XCTAssertEqual(tracks.first { $0.source == .embedded(streamIndex: 3) }?.format, .srt)
+        XCTAssertEqual(tracks.first { $0.source == .embedded(streamIndex: 4) }?.format, .ass)
+        XCTAssertEqual(tracks.first { $0.source == .embedded(streamIndex: 5) }?.format, .other)
+    }
+
+    func testExternalSupIsMarkedBitmap() {
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: "movie.mkv",
+            siblings: ["movie.chs.sup"]
+        )
+        XCTAssertEqual(tracks.first?.format, .bitmap)
+    }
 }
 
 /// 7.1b：真实库结构（字幕在 `- Sub` 子目录、文件名与视频不同）。

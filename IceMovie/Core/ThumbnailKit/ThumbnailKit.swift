@@ -177,8 +177,19 @@ public actor ThumbnailService {
         self.maxConcurrent = max(1, maxConcurrent)
     }
 
-    public func isKnownFailure(
-        path: String,
+    /// 清空磁盘缩略图与失败记录，供设置页释放空间。
+    public func removeAll() async {
+        await store.removeAll()
+        failedKeys.removeAll()
+        Log.info(.thumbnail, "缩略图缓存已清空")
+    }
+
+    /// 启动时按当前上限立即修剪一次，避免调低上限后旧缓存继续占盘。
+    public func trimToCapacity() async {
+        await store.evictIfNeeded()
+    }
+
+    public func isKnownFailure(        path: String,
         size: Int64,
         modified: Date?,
         namespace: String = ""

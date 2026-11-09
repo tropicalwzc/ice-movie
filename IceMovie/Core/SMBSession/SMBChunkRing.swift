@@ -50,6 +50,23 @@ public final class SMBChunkRing: @unchecked Sendable {
         return chunks[start] != nil
     }
 
+    /// 从 `offset` 所在的块开始，返回连续缓存到的最高偏移。
+    public func contiguousEnd(from offset: Int64) -> Int64 {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !chunks.isEmpty else { return offset }
+        var start = (offset / Int64(chunkSize)) * Int64(chunkSize)
+        var end = offset
+        while let chunk = chunks[start] {
+            let chunkEnd = start + Int64(chunk.count)
+            if end < start { end = start }
+            if chunkEnd > end { end = chunkEnd }
+            if chunk.count < chunkSize { break }
+            start += Int64(chunkSize)
+        }
+        return end
+    }
+
     public func chunk(at start: Int64) -> Data? {
         lock.lock()
         defer { lock.unlock() }

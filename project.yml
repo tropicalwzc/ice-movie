@@ -361,6 +361,18 @@ targets:
         TEST_TARGET_NAME: IceMovie
 
 schemes:
+  IceMovie:
+    build:
+      targets:
+        IceMovie: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - IceMovieTests
+    archive:
+      config: Release
   IceMovieTests:
     build:
       targets:

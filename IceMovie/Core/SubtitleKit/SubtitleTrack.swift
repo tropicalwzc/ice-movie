@@ -42,6 +42,8 @@ public enum SubtitleLanguage: String, Sendable, CaseIterable {
 public enum SubtitleFormat: String, Sendable {
     case ass
     case srt
+    /// PGS/DVD/DVB 等位图字幕：当前只支持文本字幕渲染。
+    case bitmap
     case other
 }
 
@@ -103,6 +105,7 @@ public enum SubtitleDiscovery {
                 let format: SubtitleFormat = switch source.codec {
                 case "ass", "ssa": .ass
                 case "subrip", "srt": .srt
+                case "hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub": .bitmap
                 default: .other
                 }
                 return SubtitleTrack(
@@ -146,7 +149,12 @@ public enum SubtitleDiscovery {
                 if let a = parsed.episode, let b = video.episode, a != b { continue }
 
                 let language = SubtitleLanguage.detect(from: languageToken(of: name))
-                let format: SubtitleFormat = ext == "ass" || ext == "ssa" ? .ass : (ext == "srt" ? .srt : .other)
+                let format: SubtitleFormat = switch ext {
+                case "ass", "ssa": .ass
+                case "srt": .srt
+                case "sup": .bitmap
+                default: .other
+                }
                 let shown = directory.isEmpty ? name : "\(directory)/\(name)"
                 tracks.append(
                     SubtitleTrack(

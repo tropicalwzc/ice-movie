@@ -131,6 +131,16 @@ public enum MediaTitleParser {
         return MediaTitle(title: title, season: season, episode: episode)
     }
 
+    /// 播放页标题：集数追加在末尾，长标题从头部截断时仍能保留「第几集」。
+    public static func playbackTitle(for rawName: String) -> String {
+        let parsed = parse(rawName)
+        guard let episode = parsed.episode else { return parsed.title }
+        let formatted = episode.rounded() == episode
+            ? String(Int(episode))
+            : String(format: "%.1f", episode)
+        return "\(parsed.title) · 第 \(formatted) 集"
+    }
+
     /// 目录路径的展示清理：逐级去掉发布组与元信息标签。
     public static func directoryPathDisplay(_ path: String) -> String {
         path.split(separator: "/", omittingEmptySubsequences: true)

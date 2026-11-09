@@ -41,6 +41,8 @@ public final class AudioOutput: @unchecked Sendable {
     private var anchorContentTime: Double?
     /// 已排入数据的媒体结束时间。
     private var scheduledEnd: Double?
+    /// 最近一次能从 playerTime 读到的播放位置；暂停/重置后 playerTime 可能失效。
+    private var lastPlayedContentTime: Double?
     private var stats = Metrics()
     private var started = false
 
@@ -162,6 +164,7 @@ public final class AudioOutput: @unchecked Sendable {
         lock.withLock {
             anchorContentTime = nil
             scheduledEnd = nil
+            lastPlayedContentTime = nil
             stats.firstSampleTime = 0
         }
     }
@@ -193,7 +196,9 @@ public final class AudioOutput: @unchecked Sendable {
         if stats.firstSampleTime == 0, playerTime.sampleTime != 0 {
             stats.firstSampleTime = playerTime.sampleTime
         }
-        return anchor + Double(max(0, playerTime.sampleTime)) / playerTime.sampleRate
+        let played = anchor + Double(max(0, playerTime.sampleTime)) / playerTime.sampleRate
+        lastPlayedContentTime = played
+        return played
     }
 
     /// 尚有多少秒数据排在播放位置之后。
@@ -201,7 +206,8 @@ public final class AudioOutput: @unchecked Sendable {
         let played = currentPlayedContentTime()
         return lock.withLock {
             guard let end = scheduledEnd else { return 0 }
-            return max(0, end - (played ?? (anchorContentTime ?? 0)))
+            let position = played ?? lastPlayedContentTime ?? anchorContentTime ?? 0
+            return max(0, end - position)
         }
     }
 

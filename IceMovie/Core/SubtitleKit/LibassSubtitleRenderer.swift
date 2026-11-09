@@ -33,6 +33,9 @@ public final class LibassSubtitleRenderer {
     public static let frameWidth = 1280
     public static let frameHeight = 720
 
+    public let frameWidth: Int
+    public let frameHeight: Int
+
     private let library: OpaquePointer
     private let renderer: OpaquePointer
     private let track: UnsafeMutablePointer<ASS_Track>
@@ -45,8 +48,12 @@ public final class LibassSubtitleRenderer {
         script: String,
         fonts: [SubtitleFont],
         fontScale: Double = 1,
-        bottomMargin: Int = 0
+        bottomMargin: Int = 0,
+        frameWidth: Int = LibassSubtitleRenderer.frameWidth,
+        frameHeight: Int = LibassSubtitleRenderer.frameHeight
     ) {
+        self.frameWidth = max(320, frameWidth)
+        self.frameHeight = max(180, frameHeight)
         guard let library = ass_library_init() else { return nil }
         self.library = library
 
@@ -86,7 +93,7 @@ public final class LibassSubtitleRenderer {
         }
         self.renderer = renderer
 
-        ass_set_frame_size(renderer, Int32(Self.frameWidth), Int32(Self.frameHeight))
+        ass_set_frame_size(renderer, Int32(self.frameWidth), Int32(self.frameHeight))
         ass_set_fonts(
             renderer,
             nil,
@@ -141,7 +148,7 @@ public final class LibassSubtitleRenderer {
         let start = ProcessInfo.processInfo.systemUptime
         let list = ass_render_frame(renderer, track, Int64(clamped * 1000), &detect)
         cachedDetect = detect
-        cachedImage = Self.compose(list)
+        cachedImage = Self.compose(list, width: frameWidth, height: frameHeight)
         let elapsed = (ProcessInfo.processInfo.systemUptime - start) * 1000
         if elapsed > 8 {
             Log.debug(.subtitle, "libass 渲染耗时 \(Int(elapsed))ms 时间=\(String(format: "%.2f", clamped))s")
@@ -149,10 +156,12 @@ public final class LibassSubtitleRenderer {
         return cachedImage
     }
 
-    private static func compose(_ list: UnsafeMutablePointer<ASS_Image>?) -> CGImage? {
+    private static func compose(
+        _ list: UnsafeMutablePointer<ASS_Image>?,
+        width: Int,
+        height: Int
+    ) -> CGImage? {
         guard let list else { return nil }
-        let width = frameWidth
-        let height = frameHeight
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
 
         var image: UnsafeMutablePointer<ASS_Image>? = list

@@ -4,7 +4,14 @@ import SwiftUI
 
 @main
 struct IceMovieApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
+        // iPhone 媒体库固定竖屏；播放时由 AppOrientation 切到横屏。
+        AppDelegate.orientationMask = UIDevice.current.userInterfaceIdiom == .phone
+            ? .portrait
+            : .all
+
         // 便于排查：以 -logDebug 启动即把日志级别下调到 debug。
         if ProcessInfo.processInfo.arguments.contains("-logDebug") {
             Log.minimumLevel = .debug

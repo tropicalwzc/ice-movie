@@ -5,6 +5,24 @@ final class PlaybackControlsUITests: XCTestCase {
     private let videoPath =
         "/private/tmp/animi/[www.domp4.com]大逃杀.2000.DC.BD1080p.中文字幕.mp4"
 
+    /// 控件会自动隐藏；需要点击顶部返回/关闭或字幕按钮前先轻点画面唤出。
+    private func revealPlayerControls(_ app: XCUIApplication) {
+        let close = app.buttons["player.close"]
+        if !close.isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+            _ = waitUntilHittable(close, timeout: 3)
+        }
+    }
+
+    private func waitUntilHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.isHittable { return true }
+            usleep(100_000)
+        }
+        return element.isHittable
+    }
+
     func testPausePlayScrubAndAutoHide() {        let app = XCUIApplication()
         app.launchArguments = [
             "-videoTest", videoPath,
@@ -149,10 +167,19 @@ final class PlaybackControlsUITests: XCTestCase {
             .max() ?? 0
         XCTAssertGreaterThan(duration, 60)
 
-        for fraction in [0.25, 0.5, 0.75] {
+        let trackInset: CGFloat = 10
+
+        func tapTrack(_ fraction: CGFloat) {
+            let frame = progress.frame
+            let usable = max(1, frame.width - trackInset * 2)
+            let normalized = (trackInset + usable * fraction) / frame.width
             progress.coordinate(
-                withNormalizedOffset: CGVector(dx: fraction, dy: 0.5)
+                withNormalizedOffset: CGVector(dx: normalized, dy: 0.5)
             ).tap()
+        }
+
+        for fraction in [0.25, 0.5, 0.75] {
+            tapTrack(fraction)
             sleep(1)
             let ratio = seconds(from: time.label) / duration
             print("PROGRESS-TAP fraction=\(fraction) ratio=\(ratio) time=\(time.label)")
@@ -165,8 +192,12 @@ final class PlaybackControlsUITests: XCTestCase {
         }
 
         // 连续拖动到 80%，落点也应对应手指所在位置。
-        let start = progress.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
-        let end = progress.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        let frame = progress.frame
+        let usable = max(1, frame.width - trackInset * 2)
+        let startX = (trackInset + usable * 0.2) / frame.width
+        let endX = (trackInset + usable * 0.8) / frame.width
+        let start = progress.coordinate(withNormalizedOffset: CGVector(dx: startX, dy: 0.5))
+        let end = progress.coordinate(withNormalizedOffset: CGVector(dx: endX, dy: 0.5))
         start.press(forDuration: 0.2, thenDragTo: end)
         sleep(1)
         let draggedRatio = seconds(from: time.label) / duration
@@ -390,6 +421,7 @@ final class PlaybackControlsUITests: XCTestCase {
             "-libraryLocal", "/private/tmp/animi",
             "-libraryPath", "强风吹拂",
             "-resetPlaybackProgress",
+            "-keepControlsVisible",
             "-debugLog",
         ]
         app.launch()
@@ -400,24 +432,23 @@ final class PlaybackControlsUITests: XCTestCase {
         XCTAssertTrue(episode.waitForExistence(timeout: 10), "应出现第 1 集")
         episode.tap()
 
-        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 12), "应开始播放")
+        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 20), "应开始播放")
         let time = app.staticTexts["player.time"]
-        XCTAssertTrue(time.waitForExistence(timeout: 3), "时间标签应可访问")
+        XCTAssertTrue(time.waitForExistence(timeout: 10), "时间标签应可访问")
 
         // 播放超过 5 秒续播阈值后关闭，确保进度被记录。
-        let deadline = Date().addingTimeInterval(25)
-        while seconds(from: time.label) < 8, Date() < deadline {
-            sleep(1)
-        }
+        // iPhone 进入/退出横屏时 XCUITest 的快照会短暂变慢，用固定等待避免反复查询。
+        sleep(9)
         let beforeClose = seconds(from: time.label)
         XCTAssertGreaterThanOrEqual(beforeClose, 8, "应播放到 8 秒以上")
 
-        app.buttons["关闭播放"].tap()
-        XCTAssertTrue(episode.waitForExistence(timeout: 6), "应回到目录")
+        revealPlayerControls(app)
+        app.buttons["player.close"].tap()
+        XCTAssertTrue(waitUntilHittable(episode, timeout: 15), "应回到目录且可点击")
         episode.tap()
 
         let notice = app.staticTexts["resume.text"]
-        XCTAssertTrue(notice.waitForExistence(timeout: 6), "重开应提示已续播")
+        XCTAssertTrue(notice.waitForExistence(timeout: 20), "重开应提示已续播")
         XCTAssertTrue(notice.label.contains("已续播"), "提示文案应说明已续播，实际=\(notice.label)")
 
         let resumedDeadline = Date().addingTimeInterval(6)
@@ -478,6 +509,42 @@ final class PlaybackControlsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["暂停"].exists, "下一集应处于播放状态")
     }
 
+    func testOpenFromSearchPresentsPlayer() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-libraryLocal", "/private/tmp/animi",
+            "-libraryPath", "re0 s3",
+            "-resetPlaybackProgress",
+            "-debugLog",
+        ]
+        app.launch()
+
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 15), "搜索框应出现")
+        search.tap()
+        search.typeText("Re-Zero")
+        sleep(2)
+
+        let result = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS %@", "Re-Zero"))
+            .firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10), "搜索结果应出现")
+        result.tap()
+
+        // 搜索结果是“定位到目录”，进入目录后再点视频，模拟真实使用路径。
+        let video = app.buttons
+            .matching(NSPredicate(format: "label CONTAINS %@", "Re-Zero"))
+            .firstMatch
+        XCTAssertTrue(video.waitForExistence(timeout: 10), "目录中的视频应出现")
+        video.tap()
+
+        // 键盘仍在收起动画中时，全屏播放器也必须真正出现。
+        XCTAssertTrue(
+            app.buttons["暂停"].waitForExistence(timeout: 15),
+            "从搜索结果打开视频应进入播放器"
+        )
+    }
+
     func testSwitchShareWithoutDisconnect() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-debugLog"]
@@ -513,13 +580,15 @@ final class PlaybackControlsUITests: XCTestCase {
             "-libraryPath", "强风吹拂",
             "-resetSubtitlePreferences",
             "-resetPlaybackProgress",
+            "-keepControlsVisible",
             "-debugLog",
         ]
         app.launch()
 
         func openSubtitleMenu() {
+            revealPlayerControls(app)
             let button = app.buttons["字幕"]
-            XCTAssertTrue(button.waitForExistence(timeout: 3))
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
             button.tap()
             let panel = app.descendants(matching: .any)
                 .matching(identifier: "subtitle.panel")

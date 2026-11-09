@@ -19,6 +19,62 @@ final class EmbeddedSubtitleExtractionTests: XCTestCase {
         ),
     ]
 
+    func testShardedReadStopsAtWindow() throws {
+        let path = "/private/tmp/recentw/四月/[Haruhana] Shigatsu wa Kimi no Uso [02][HEVC-10bit FLAC][CHS_CHT_JPN].mkv"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("四月第二集未挂载")
+        }
+        let reader = try MediaReader.open(path: path)
+        guard let stream = reader.info.streams.first(where: { $0.kind == .subtitle }) else {
+            reader.close()
+            return XCTFail("应有内封字幕轨")
+        }
+        let began = CFAbsoluteTimeGetCurrent()
+        let events = try reader.readSubtitleEvents(
+            streamIndex: stream.index,
+            from: 290,
+            to: 360
+        )
+        let elapsed = CFAbsoluteTimeGetCurrent() - began
+        reader.close()
+        XCTAssertFalse(events.isEmpty)
+        XCTAssertLessThan(elapsed, 5, "分片读取不应扫描完整 1GB 文件")
+        XCTAssertTrue(events.allSatisfy { $0.start <= 361.0 })
+        Log.info(.subtitle, "分片读取 290-360s 事件=\(events.count) 耗时=\(String(format: "%.2f", elapsed))s")
+    }
+
+    func testEmbeddedSRTTextHasNoASSFieldPrefix() throws {
+        let path = "/private/tmp/animi/[LoliHouse] Kono Kaisha ni Suki na Hito ga Imasu [01-12][WebRip 1080p HEVC-10bit AAC]/[LoliHouse] Kono Kaisha ni Suki na Hito ga Imasu - 01 [WebRip 1080p HEVC-10bit AAC SRTx2].mkv"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("内封 SRT 样本未挂载")
+        }
+        let reader = try MediaReader.open(path: path)
+        defer { reader.close() }
+        guard let stream = reader.info.streams.first(where: { $0.kind == .subtitle }) else {
+            return XCTFail("应有内封字幕轨")
+        }
+
+        // 文本型解码器会通过 rect.ass 返回 "ReadOrder,Layer,Style,...,Text"，
+        // 提取时必须拆字段，不能把 "0,0,Default,,0,0,0,," 当作对白正文。
+        let document = try reader.readSubtitleScript(streamIndex: stream.index)
+        XCTAssertFalse(
+            document.contains("Default,,0,0,0,,0,0,"),
+            "整段提取不应把 ASS 事件字段写进正文"
+        )
+
+        let events = try reader.readSubtitleEvents(streamIndex: stream.index, from: 0, to: 120)
+        XCTAssertFalse(events.isEmpty, "前两分钟应有对白")
+        for event in events {
+            XCTAssertFalse(event.text.hasPrefix("0,0,"), "事件正文不应带 ASS 字段前缀：\(event.text)")
+            guard let plain = ASSScriptSanitizer.plainText(event.text) else {
+                return XCTFail("清理后不应为空：\(event.text)")
+            }
+            XCTAssertFalse(plain.isEmpty)
+            XCTAssertFalse(plain.hasPrefix("0,0,"))
+        }
+        Log.info(.subtitle, "内封 SRT 解析 事件=\(events.count) 首条=\(events[0].text.prefix(40))")
+    }
+
     func testEmbeddedASSFieldsAndDuration() throws {
         var ran = 0
         for (name, path, stream) in samples where FileManager.default.fileExists(atPath: path) {

@@ -136,18 +136,58 @@ struct PlayerControlsView: View {
     }
 
     private func progress(width: CGFloat) -> some View {
+        let inset: CGFloat = 10
+        let trackWidth = max(1, width - inset * 2)
         let fraction = engine.duration > 0 ? min(max(time / engine.duration, 0), 1) : 0
-        let knobX = scrubX.map { min(max($0, 0), width) } ?? width * fraction
-        return ZStack(alignment: .leading) {
-            Capsule().fill(.white.opacity(0.25))
-                .frame(height: 4)
-            Capsule().fill(.white)
-                .frame(width: max(0, knobX), height: 4)
-            Circle()
-                .fill(.white)
-                .frame(width: 13, height: 13)
-                .offset(x: max(0, knobX - 6.5))
-                .scaleEffect(isScrubbing ? 1.25 : 1)
+        let knobX = scrubX.map {
+            min(max($0, inset), width - inset)
+        } ?? (inset + trackWidth * fraction)
+        let bufferedEnd = min(engine.duration, time + engine.bufferedAheadSeconds)
+        let bufferedX = inset + trackWidth
+            * (engine.duration > 0 ? min(max(bufferedEnd / engine.duration, 0), 1) : 0)
+        return Canvas { context, size in
+            let midY = size.height / 2
+            let track = CGRect(x: inset, y: midY - 2, width: trackWidth, height: 4)
+            context.fill(
+                Path(roundedRect: track, cornerRadius: 2),
+                with: .color(.white.opacity(0.25))
+            )
+            // 已缓冲区间：浅绿色从当前播放点延伸到预读窗口末端。
+            if bufferedX > knobX + 0.5 {
+                let buffer = CGRect(
+                    x: knobX,
+                    y: midY - 2,
+                    width: min(bufferedX, width - inset) - knobX,
+                    height: 4
+                )
+                context.fill(
+                    Path(roundedRect: buffer, cornerRadius: 2),
+                    with: .color(
+                        Color(red: 0.55, green: 0.92, blue: 0.65).opacity(0.65)
+                    )
+                )
+            }
+            if knobX > inset {
+                let fill = CGRect(
+                    x: inset,
+                    y: midY - 2,
+                    width: min(knobX - inset, trackWidth),
+                    height: 4
+                )
+                context.fill(
+                    Path(roundedRect: fill, cornerRadius: 2),
+                    with: .color(.white)
+                )
+            }
+            // 圆心与填充终点共用同一个 knobX；两侧留出半径，0% 时圆圈也不会被裁掉。
+            let radius: CGFloat = isScrubbing ? 8.125 : 6.5
+            let knob = CGRect(
+                x: knobX - radius,
+                y: midY - radius,
+                width: radius * 2,
+                height: radius * 2
+            )
+            context.fill(Path(ellipseIn: knob), with: .color(.white))
         }
         .frame(width: width, height: 22)
         .contentShape(Rectangle())
@@ -155,11 +195,13 @@ struct PlayerControlsView: View {
         .accessibilityElement()
         .accessibilityIdentifier("player.progress")
         .accessibilityLabel("播放进度")
-        .accessibilityValue(format(time))
+        .accessibilityValue(
+            "\(format(time))，已缓冲 \(Int(max(0, engine.bufferedAheadSeconds))) 秒"
+        )
         .gesture(
-            DragGesture(minimumDistance: 0)
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .updating($scrubX) { value, state, _ in
-                    state = min(max(value.location.x, 0), width)
+                    state = min(max(value.location.x, inset), width - inset)
                 }
                 .onChanged { value in
                     if !isScrubbing {
@@ -171,14 +213,14 @@ struct PlayerControlsView: View {
                     }
                     isScrubbing = true
                     onInteraction()
-                    let ratio = min(max(value.location.x / max(width, 1), 0), 1)
+                    let ratio = min(max((value.location.x - inset) / trackWidth, 0), 1)
                     scrubTarget = ratio * engine.duration
                     previewIfNeeded()
                 }
                 .onEnded { value in
                     isScrubbing = false
                     onInteraction()
-                    let ratio = min(max(value.location.x / max(width, 1), 0), 1)
+                    let ratio = min(max((value.location.x - inset) / trackWidth, 0), 1)
                     scrubTarget = ratio * engine.duration
                     let releaseAt = ProcessInfo.processInfo.systemUptime
                     let id = engine.seek(to: scrubTarget, requestedAt: dragStartedAt ?? releaseAt)

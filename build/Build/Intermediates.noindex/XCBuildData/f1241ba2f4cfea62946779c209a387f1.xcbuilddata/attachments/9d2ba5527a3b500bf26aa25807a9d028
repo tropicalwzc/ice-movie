@@ -1,3 +1,0 @@
-framework module RenderKit {
-  header "RenderKit-Swift.h"
-}

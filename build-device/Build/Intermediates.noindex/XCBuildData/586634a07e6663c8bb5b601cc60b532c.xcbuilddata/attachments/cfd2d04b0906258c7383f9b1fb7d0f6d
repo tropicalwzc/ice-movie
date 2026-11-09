@@ -1,3 +1,0 @@
-framework module PersistenceKit {
-  header "PersistenceKit-Swift.h"
-}

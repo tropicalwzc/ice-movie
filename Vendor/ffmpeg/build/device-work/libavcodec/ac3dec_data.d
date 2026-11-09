@@ -1,3 +1,0 @@
-libavcodec/ac3dec_data.o: \
-  /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.2.sdk/SDKSettings.json \
-  src/libavcodec/ac3dec_data.c src/libavcodec/ac3dec_data.h

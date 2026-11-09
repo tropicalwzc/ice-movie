@@ -1,3 +1,0 @@
-framework module IceCore {
-  header "IceCore-Swift.h"
-}

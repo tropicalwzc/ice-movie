@@ -1,3 +1,0 @@
-framework module MediaLibraryKit {
-  header "MediaLibraryKit-Swift.h"
-}

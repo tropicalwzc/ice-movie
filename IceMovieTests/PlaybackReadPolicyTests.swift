@@ -31,6 +31,30 @@ final class PlaybackReadPolicyTests: XCTestCase {
         XCTAssertTrue(PlaybackEngine.isReadAheadEnough(audioAhead: 15.1, videoAhead: nil))
     }
 
+    func testDelayedRefreshRequiresPendingKeyframeAndCurrentGeneration() {
+        XCTAssertTrue(
+            VideoRenderer.shouldPerformDelayedRefresh(
+                needsKeyframe: true,
+                currentGeneration: 3,
+                capturedGeneration: 3
+            )
+        )
+        XCTAssertFalse(
+            VideoRenderer.shouldPerformDelayedRefresh(
+                needsKeyframe: false,
+                currentGeneration: 3,
+                capturedGeneration: 3
+            )
+        )
+        XCTAssertFalse(
+            VideoRenderer.shouldPerformDelayedRefresh(
+                needsKeyframe: true,
+                currentGeneration: 4,
+                capturedGeneration: 3
+            )
+        )
+    }
+
     func testAudioClockSubtractsPostSeekSampleBaseline() {
         // 节点 sampleTime 从 26s 继续，不能把 26s 加到锚点上。
         XCTAssertEqual(

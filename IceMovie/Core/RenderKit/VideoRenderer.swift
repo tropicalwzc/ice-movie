@@ -179,6 +179,15 @@ public final class VideoRenderer: @unchecked Sendable {
         return true
     }
 
+    /// 延迟刷新是否仍然必要：关键帧可能已经到达，或期间发生了新的 seek/刷新。
+    static func shouldPerformDelayedRefresh(
+        needsKeyframe: Bool,
+        currentGeneration: Int,
+        capturedGeneration: Int
+    ) -> Bool {
+        needsKeyframe && currentGeneration == capturedGeneration
+    }
+
     @MainActor
     private func refreshOrRetry(reason: String) {
         refreshRetryTask?.cancel()
@@ -199,8 +208,15 @@ public final class VideoRenderer: @unchecked Sendable {
         let expectedLayer = layer
         refreshRetryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled, let self,
-                  self.lock.withLock({ self.needsKeyframe && self.refreshGeneration == generation }),
+            guard !Task.isCancelled, let self else { return }
+            let shouldRefresh = self.lock.withLock {
+                Self.shouldPerformDelayedRefresh(
+                    needsKeyframe: self.needsKeyframe,
+                    currentGeneration: self.refreshGeneration,
+                    capturedGeneration: generation
+                )
+            }
+            guard shouldRefresh,
                   let current = self.layer, current === expectedLayer else { return }
             self.refreshRetryTask = nil
             _ = self.refreshFromCurrentPosition(reason: reason + "（延迟重试）")

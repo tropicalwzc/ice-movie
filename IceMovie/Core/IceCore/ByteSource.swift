@@ -24,6 +24,40 @@ public protocol NetworkSpeedProviding: Sendable {
     var downloadBytesPerSecond: Double { get }
 }
 
+/// 可选预读取消：切换视频/停止播放时，旧文件的预读任务必须立即退出，不能继续抢带宽。
+public protocol PrefetchCancelling: AnyObject, Sendable {
+    func cancelPrefetch()
+}
+
+/// 可选供给反馈：音频低于安全水位时暂停后台预读，把 SMB 带宽让给播放读。
+public protocol BufferSupplyProviding: AnyObject, Sendable {
+    func setSupply(audioAhead: Double, videoAhead: Double)
+}
+
+/// 可选 seek 缓存指标：播放引擎写入播放头，并读取从播放头起算的连续缓冲。
+public protocol SeekCacheProviding: AnyObject, Sendable {
+    func setPlayhead(byteOffset: Int64)
+    func bufferedBytes(from offset: Int64) -> Int64
+    var ringResetCount: Int { get }
+    var seekCacheHits: Int { get }
+    var seekCacheMisses: Int { get }
+    var lastSeekCacheHit: Bool { get }
+    var playheadByteOffset: Int64 { get }
+    var readHeadByteOffset: Int64 { get }
+    var prefetchHeadByteOffset: Int64 { get }
+}
+
+/// 可选 seek 通知：解封装层发生跳转时，缓存可以立刻丢掉旧窗口并从新位置预读。
+public protocol SeekAwareByteSource: AnyObject, Sendable {
+    /// 同步调用，不能阻塞；实现方负责取消旧预读并启动新位置的预读。
+    func seekWillChange(to offset: Int64)
+}
+
+/// 可选缓存保留策略：只保留当前读位置之前少量回看数据，其余内存让给未来窗口。
+public protocol BufferRetentionProviding: AnyObject {
+    func setRetainBackBytes(_ bytes: Int64)
+}
+
 public enum ByteSourceError: LocalizedError, Sendable {
     case closed
     case outOfRange(offset: Int64, count: Int)

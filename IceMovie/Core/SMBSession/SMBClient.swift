@@ -420,6 +420,15 @@ public actor SMBClient {
         }
     }
 
+    /// 读取启动参数里的整数调优值，缺省用 fallback。
+    private func tuningInt(_ flag: String, fallback: Int) -> Int {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: flag),
+              arguments.indices.contains(index + 1),
+              let value = Int(arguments[index + 1]) else { return fallback }
+        return value
+    }
+
     private func openSource(path: String, priority: SMBReadPriority) throws -> any ByteSource {
         guard let manager, let client = manager.client else {
             throw SMBConnectionError.notConnected
@@ -435,8 +444,9 @@ public actor SMBClient {
                 .smb,
                 "已打开文件 \(Log.shortPath(path)) 大小=\(size ?? -1) 优先级=\(priority.label)"
             )
-            // 播放用 4MB 块 + 512MB 预读环：8GB 设备内存充足，提前把更多内容读进内存；
-            // 只占内存、不扩硬盘缓存。字幕/抽帧仍用小块，避免长时间占用读线程。
+            // 播放默认 1MB 块 + 约 512MB 预读环：小块 seek 后恢复更快，
+            // 大窗口仍靠多条预读填满；只占内存、不扩硬盘缓存。
+            // 可用启动参数 -smbChunkMB / -smbRingMB 做 A/B。
             let chunkSize: Int
             let ringCapacity: Int
             switch priority {
@@ -444,12 +454,18 @@ public actor SMBClient {
                 chunkSize = 256 * 1024
                 ringCapacity = 8
             case .playback:
-                chunkSize = 4 * 1024 * 1024
-                ringCapacity = 128
+                let chunkMB = max(1, tuningInt("-smbChunkMB", fallback: 1))
+                let ringMB = max(32, tuningInt("-smbRingMB", fallback: 512))
+                chunkSize = chunkMB * 1024 * 1024
+                ringCapacity = max(8, ringMB * 1024 * 1024 / chunkSize)
             default:
                 chunkSize = 1 << 20
                 ringCapacity = 24
             }
+            Log.info(
+                .smb,
+                "播放读块 \(chunkSize / 1024)KB × \(ringCapacity) = \(chunkSize * ringCapacity / 1024 / 1024)MB"
+            )
             return SMBFileByteSource(
                 handle: handle,
                 length: size,

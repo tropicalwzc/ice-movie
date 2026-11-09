@@ -190,6 +190,37 @@ public final class MediaReader: @unchecked Sendable {
     /// 播放源最近的实际下载速度；本地源为 0。
     public var downloadBytesPerSecond: Double { bridge?.downloadBytesPerSecond ?? 0 }
 
+    /// 设置已播放区域保留的回看字节数；其余预读内存留给未来窗口。
+    public func setRetainBackBytes(_ bytes: Int64) {
+        bridge?.setRetainBackBytes(bytes)
+    }
+
+    /// 从指定字节偏移起连续可用的缓冲；包含解封装已读和预读环。
+    public func bufferedBytes(from offset: Int64) -> Int64 {
+        bridge?.bufferedBytes(from: offset) ?? 0
+    }
+
+    public func cancelPrefetch() {
+        bridge?.cancelPrefetch()
+    }
+
+    public func setSupply(audioAhead: Double, videoAhead: Double) {
+        bridge?.setSupply(audioAhead: audioAhead, videoAhead: videoAhead)
+    }
+
+    /// 播放引擎定期写入播放头，供回看窗口和淘汰策略使用。
+    public func setPlayhead(byteOffset: Int64) {
+        bridge?.setPlayhead(byteOffset: byteOffset)
+    }
+
+    public var ringResetCount: Int { bridge?.ringResetCount ?? 0 }
+    public var seekCacheHits: Int { bridge?.seekCacheHits ?? 0 }
+    public var seekCacheMisses: Int { bridge?.seekCacheMisses ?? 0 }
+    public var lastSeekCacheHit: Bool { bridge?.lastSeekCacheHit ?? false }
+    public var playheadByteOffset: Int64 { bridge?.playheadByteOffset ?? 0 }
+    public var readHeadByteOffset: Int64 { bridge?.readHeadByteOffset ?? 0 }
+    public var prefetchHeadByteOffset: Int64 { bridge?.prefetchHeadByteOffset ?? 0 }
+
     // MARK: - 读取
 
     public func read(into packet: UnsafeMutablePointer<AVPacket>) -> ReadResult {

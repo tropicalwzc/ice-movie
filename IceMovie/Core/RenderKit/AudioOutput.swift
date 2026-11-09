@@ -45,6 +45,8 @@ public final class AudioOutput: @unchecked Sendable {
     private var lastPlayedContentTime: Double?
     private var stats = Metrics()
     private var started = false
+    /// 当前播放锚点下的 sampleTime 基线；seek/stop 后会重置。
+    private var sampleBaselineSet = false
 
     public init() throws {
         guard let format = AVAudioFormat(
@@ -165,6 +167,7 @@ public final class AudioOutput: @unchecked Sendable {
             anchorContentTime = nil
             scheduledEnd = nil
             lastPlayedContentTime = nil
+            sampleBaselineSet = false
             stats.firstSampleTime = 0
         }
     }
@@ -182,6 +185,17 @@ public final class AudioOutput: @unchecked Sendable {
         currentPlayedContentTime()
     }
 
+    /// 音频时钟换算；`baseline` 是当前锚点下 player node 的首个 sampleTime。
+    static func playedTime(
+        anchor: Double,
+        sampleTime: Int64,
+        baseline: Int64,
+        sampleRate: Double
+    ) -> Double {
+        guard sampleRate > 0 else { return anchor }
+        return anchor + Double(max(0, sampleTime - baseline)) / sampleRate
+    }
+
     /// 注意：必须在**不持有** `lock` 的情况下调用。
     /// `AVAudioPlayerNode` 的方法会取引擎内部的锁，而重置路径是「先引擎锁、后本对象锁」，
     /// 若这里持锁调用就会形成锁序反转，之前正是它让拉流线程卡死在跳转里。
@@ -193,10 +207,19 @@ public final class AudioOutput: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let anchor = anchorContentTime else { return nil }
-        if stats.firstSampleTime == 0, playerTime.sampleTime != 0 {
+        // playerTime.sampleTime 是节点自开始以来的绝对采样数；seek 后
+        // stop/play 不一定把它清零。必须减去当前锚点的第一帧基线，
+        // 否则一次 seek 会把音频时钟直接跳前几十秒，视频跟着主时钟一起错位。
+        if !sampleBaselineSet {
+            sampleBaselineSet = true
             stats.firstSampleTime = playerTime.sampleTime
         }
-        let played = anchor + Double(max(0, playerTime.sampleTime)) / playerTime.sampleRate
+        let played = Self.playedTime(
+            anchor: anchor,
+            sampleTime: playerTime.sampleTime,
+            baseline: stats.firstSampleTime,
+            sampleRate: playerTime.sampleRate
+        )
         lastPlayedContentTime = played
         return played
     }

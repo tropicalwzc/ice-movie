@@ -5,6 +5,7 @@ import Observation
 import PersistenceKit
 import RenderKit
 import SubtitleKit
+import SwiftData
 import SwiftUI
 import UIKit
 
@@ -400,6 +401,7 @@ struct LibraryView: View {
     @State private var autoAdvanceTask: Task<Void, Never>?
     @State private var resumeNotice: String?
     @State private var resumeNoticeTask: Task<Void, Never>?
+    @State private var stressTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -427,6 +429,7 @@ struct LibraryView: View {
                     }
                     applyLaunchSearchIfNeeded()
                     openLaunchPlaybackIfNeeded()
+                    startStressTestIfRequested()
                 }
             }
 
@@ -652,6 +655,9 @@ struct LibraryView: View {
     }
 
     private func openPlayback(_ entry: MediaEntry, fullscreen: Bool = true) {
+        if let playback {
+            writeAcceptanceReport(playback, reason: "replaced")
+        }
         // 从搜索框直接点视频时键盘仍在退场，iPhone 上全屏覆盖层可能被系统丢弃，
         // 表现为只有声音、没有播放器界面；先把第一响应者收起来。
         UIApplication.shared.sendAction(
@@ -705,6 +711,7 @@ struct LibraryView: View {
                 prepared.engine.seek(to: resume)
                 showResumeNotice(position: resume)
             }
+            scheduleLaunchRewindIfNeeded(session)
             startProgressTimer()
             startThroughputReportIfRequested()
             applyLaunchSeekIfNeeded()
@@ -946,6 +953,557 @@ struct LibraryView: View {
         playback?.engine.setRate(rate)
     }
 
+    /// 随机抽样压力测试：从共享根目录递归抽取视频，每条约 1 分钟起播，
+    /// 起播 4 秒后立刻 seek 到 50%，记录黑屏/解码恢复/缓冲/字幕指标。
+    /// 发现严重问题或达到时间上限自动停止。
+    private func startStressTestIfRequested() {
+        let arguments = ProcessInfo.processInfo.arguments
+        stressLog("进入 startStressTestIfRequested args=\(arguments.joined(separator: " "))")
+        guard arguments.contains("-stressRandom") else { return }
+        stressLog("已确认 -stressRandom")
+        stressTask?.cancel()
+        stressTask = Task { @MainActor in
+            let root = argumentValue("-stressRootPath") ?? ""
+            let count = Int(argumentValue("-stressCount") ?? "16") ?? 16
+            let playSeconds = Double(argumentValue("-stressPlaySeconds") ?? "60") ?? 60
+            let seekAfter = Double(argumentValue("-stressSeekAfter") ?? "4") ?? 4
+            let seekFraction = Double(argumentValue("-stressSeekFraction") ?? "0.5") ?? 0.5
+            let seekBackFraction = Double(argumentValue("-stressSeekBackFraction") ?? "") ?? -1
+            let seekBackSeconds = Double(argumentValue("-stressSeekBackSeconds") ?? "") ?? 0
+            let seekBackRepeats = max(1, Int(argumentValue("-stressSeekBackRepeats") ?? "1") ?? 1)
+            let seekForwardSeconds = Double(argumentValue("-stressSeekForwardSeconds") ?? "") ?? 0
+            let timeLimit = Double(argumentValue("-stressTimeLimit") ?? "1800") ?? 1800
+            let hdFirst = arguments.contains("-stressHDFirst")
+            let tolerateBuffer = arguments.contains("-stressTolerateBufferStalls")
+            let began = ProcessInfo.processInfo.systemUptime
+
+            var waited = 0.0
+            while store.isLoading && waited < 20 {
+                try? await Task.sleep(for: .milliseconds(500))
+                waited += 0.5
+            }
+            stressLog("开始抽样")
+            let all = await collectStressVideos(root: root)
+            let picks = selectStressVideos(all, count: count, hdFirst: hdFirst)
+            stressLog("抽样完成 候选=\(all.count) 选中=\(picks.count)")
+            for pick in picks.prefix(20) {
+                stressLog("样本 \(pick.path) size=\(pick.size)")
+            }
+            Log.notice(
+                .app,
+                "压力测试开始 共享文件=\(all.count) 选中=\(picks.count) "
+                    + "每条=\(Int(playSeconds))s 中间点=\(Int(seekFraction * 100))%"
+            )
+            guard !picks.isEmpty else {
+                Log.error(.app, "压力测试没有找到视频")
+                writeStressPlan(all: all, picks: picks)
+                writeStressSummary(completed: 0, serious: false, reason: "no-videos")
+                return
+            }
+            writeStressPlan(all: all, picks: picks)
+
+            var completed = 0
+            var foundSerious = false
+            var stopReason = "completed"
+            var bufferExceptions = 0
+            for (index, entry) in picks.enumerated() {
+                if Task.isCancelled { return }
+                let elapsed = ProcessInfo.processInfo.systemUptime - began
+                if elapsed >= timeLimit {
+                    Log.notice(.app, "压力测试达到时间上限 \(Int(timeLimit))s，停止")
+                    stopReason = "time-limit"
+                    break
+                }
+
+                let key = PlaybackProgressPolicy.key(
+                    path: entry.path,
+                    size: entry.size,
+                    modified: entry.modified
+                )
+                PlaybackProgressStore(context: modelContext).clear(key: key)
+                openPlayback(entry, fullscreen: true)
+
+                stressLog("打开 \(entry.path)")
+                let readyDeadline = Date().addingTimeInterval(90)
+                while playback?.entry.id != entry.id, Date() < readyDeadline {
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+                guard let session = playback, session.entry.id == entry.id else {
+                    stressLog("打开失败 \(entry.path)")
+                    Log.error(.app, "压力测试打开失败 \(Log.shortPath(entry.path))")
+                    try? appendAcceptanceReport([
+                        "reason": "stress-open-failed",
+                        "stressIndex": index + 1,
+                        "path": entry.path,
+                        "fileSizeBytes": entry.size,
+                        "capturedAt": ISO8601DateFormatter().string(from: Date()),
+                    ])
+                    closePlayback(report: false)
+                    continue
+                }
+
+                stressLog("会话就绪 \(entry.path)")
+                Log.notice(
+                    .app,
+                    "压力测试 [\(index + 1)/\(picks.count)] \(Log.shortPath(entry.path)) "
+                        + "大小=\(entry.size / 1024 / 1024)MB"
+                )
+                try? await Task.sleep(for: .seconds(seekAfter))
+                let target = session.engine.duration * seekFraction
+                session.engine.seek(to: target)
+                Log.notice(
+                    .app,
+                    "压力测试 seek 目标=\(String(format: "%.1f", target))s"
+                )
+                let remain = max(1, playSeconds - seekAfter)
+                let until = Date().addingTimeInterval(remain)
+                var tick = 0
+                while Date() < until, !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(5))
+                    tick += 1
+                    let backStep = tick - 4
+                    if backStep >= 0, backStep % 2 == 0, backStep / 2 < seekBackRepeats,
+                       seekBackFraction >= 0 || seekBackSeconds > 0 {
+                        let backTarget = seekBackSeconds > 0
+                            ? max(0, session.engine.clock.currentTime - seekBackSeconds)
+                            : session.engine.duration * seekBackFraction
+                        session.engine.seek(to: backTarget)
+                        stressLog("连续 seek 回退 第\(backStep / 2 + 1)次 目标=\(String(format: "%.1f", backTarget))s")
+                    }
+                    if tick == 8, seekForwardSeconds > 0 {
+                        let forwardTarget = session.engine.clock.currentTime + seekForwardSeconds
+                        session.engine.seek(to: forwardTarget)
+                        stressLog("二次 seek 前进 \(Int(seekForwardSeconds))s 目标=\(String(format: "%.1f", forwardTarget))s")
+                    }
+                    let s = session.engine.statistics
+                    stressLog(
+                        "采样 t=\(tick * 5)s 位置=\(String(format: "%.1f", session.engine.clock.currentTime))s "
+                            + "下载=\(String(format: "%.1f", session.engine.downloadBytesPerSecond / 1_048_576))MB/s "
+                            + "预读=\(String(format: "%.1f", session.engine.bufferedAheadSeconds))s "
+                            + "音频领先=\(String(format: "%.1f", session.engine.bufferedAhead))s "
+                            + "视频领先=\(String(format: "%.1f", session.renderer.bufferedAhead))s "
+                            + "待消费=\(session.renderer.metrics.pendingDispatch) "
+                            + "队列=\(s.videoQueueDepth)/丢\(s.videoQueueDropped)/\(s.videoQueueBytes / 1024 / 1024)MB "
+                            + "包=\(s.packetsRead)/\(s.packetsDecoded) 视频包=\(s.videoPackets) 解码=\(String(format: "%.1f", s.decodedSeconds))s "
+                            + "音频排入=\(session.engine.audioOutputMetrics?.scheduledBuffers ?? 0)/\(session.engine.audioOutputMetrics?.playedBuffers ?? 0) "
+                            + "断层=\(session.engine.audioOutputMetrics?.contentGaps ?? 0) 滞后=\(session.engine.audioOutputMetrics?.lateSchedules ?? 0) "
+                            + "字节头=\(session.engine.sourcePlayheadByteOffset)/\(session.engine.sourceReadHeadByteOffset)/\(session.engine.sourcePrefetchHeadByteOffset) "
+                            + "缓冲=\(s.bufferStalls)次/\(String(format: "%.1f", s.bufferSeconds))s "
+                            + "帧=\(session.renderer.metrics.enqueued) "
+                            + "reset=\(session.engine.ringResetCount) "
+                            + "命中=\(session.engine.lastSeekCacheHit) "
+                            + "seek=\(s.lastSeekLatencyMilliseconds)ms"
+                    )
+                }
+
+                let stats = session.engine.statistics
+                let video = session.renderer.metrics
+                stressLog(
+                    "结果 首帧=\(stats.firstVideoMilliseconds)ms 视频=\(video.enqueued) "
+                        + "恢复=\(video.recoveries) 缓冲=\(stats.bufferStalls)/\(stats.maxBufferStallsPerMinute) "
+                        + "状态=\(session.renderer.statusDescription)"
+                )
+                let noVideo = stats.firstVideoMilliseconds == 0 || video.enqueued == 0
+                let decodeFault = video.recoveries > 0
+                let buffering = stats.maxBufferStallsPerMinute >= 6
+                    || stats.bufferStalls >= 6
+                let failed = stats.failure != nil
+                let statusFailed = session.renderer.statusDescription.contains("failed")
+                // 过热/服务器掉速只记录，不当作代码严重问题中断整轮验收。
+                let bufferException = buffering && tolerateBuffer
+                let serious = noVideo || decodeFault || failed || statusFailed
+                    || (buffering && !tolerateBuffer)
+                if bufferException { bufferExceptions += 1 }
+
+                var reasons: [String] = []
+                if noVideo { reasons.append("无视频帧") }
+                if decodeFault { reasons.append("显示层恢复\(video.recoveries)次") }
+                if buffering {
+                    reasons.append(
+                        bufferException
+                            ? "缓冲\(stats.bufferStalls)次/峰值\(stats.maxBufferStallsPerMinute)（环境掉速，已记录）"
+                            : "缓冲\(stats.bufferStalls)次/峰值\(stats.maxBufferStallsPerMinute)"
+                    )
+                }
+                if failed { reasons.append("失败:\(stats.failure ?? "")") }
+                if statusFailed { reasons.append("层状态:\(session.renderer.statusDescription)") }
+                let reason = reasons.isEmpty ? "正常" : reasons.joined(separator: "；")
+
+                Log.notice(
+                    .app,
+                    "压力测试结果 严重=\(serious) 原因=\(reason) "
+                        + "首帧=\(stats.firstVideoMilliseconds)ms "
+                        + "视频帧=\(video.enqueued) 缓冲=\(stats.bufferStalls)次 "
+                        + "seek=\(stats.lastSeekLatencyMilliseconds)ms/\(String(format: "%.2f", stats.lastSeekDrift))s"
+                )
+
+                writeAcceptanceReport(
+                    session,
+                    reason: "stress",
+                    extraReportFields: [
+                        "stressIndex": index + 1,
+                        "stressTotal": picks.count,
+                        "stressSeriousBug": serious,
+                        "stressBufferException": bufferException,
+                        "stressReason": reason,
+                        "stressSeekTarget": target,
+                    ]
+                )
+                closePlayback(report: false)
+                completed += 1
+                if serious {
+                    foundSerious = true
+                    stopReason = "serious-bug"
+                    Log.error(.app, "压力测试发现严重问题，自动停止：\(reason)")
+                    break
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+            writeStressSummary(
+                completed: completed,
+                serious: foundSerious,
+                reason: stopReason,
+                bufferExceptions: bufferExceptions
+            )
+            Log.notice(.app, "压力测试结束 完成=\(completed) 条")
+        }
+    }
+
+    /// 压力测试文件日志：真机没有可用的系统日志通道，写到 Documents 便于回传。
+    private func stressLog(_ message: String) {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(stamp)] \(message)\n"
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ice-stress.log")
+        if let handle = try? FileHandle(forWritingTo: url) {
+            try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(line.utf8))
+            try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: url, options: .atomic)
+        }
+    }
+
+    private func writeStressPlan(all: [MediaEntry], picks: [MediaEntry]) {
+        guard ProcessInfo.processInfo.arguments.contains("-acceptanceReport") else { return }
+        try? appendAcceptanceReport([
+            "reason": "stress-plan",
+            "stressAllCount": all.count,
+            "stressPickCount": picks.count,
+            "stressPicks": picks.map { ["path": $0.path, "size": $0.size] },
+            "capturedAt": ISO8601DateFormatter().string(from: Date()),
+        ])
+    }
+
+    private func collectStressVideos(root: String) async -> [MediaEntry] {
+        _ = root
+        var result: [MediaEntry] = []
+        var seen = Set<String>()
+        func add(_ entry: MediaEntry) {
+            // 过滤网站广告占位文件（几百 KB，伪装成 MP4/MKV）和花絮小片段。
+            guard entry.isPlayableMedia, entry.size >= 100_000_000,
+                  seen.insert(entry.id).inserted else { return }
+            result.append(entry)
+        }
+        for entry in stressEntriesFromHistory() { add(entry) }
+        let historyCount = result.count
+        for entry in store.currentEntries { add(entry) }
+        let currentCount = result.count - historyCount
+
+        // 共享接近 10TB，绝不递归；只列指定起始目录、根目录关键词命中和启动参数目录。
+        let deadline = Date().addingTimeInterval(20)
+        let startRoot = root.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !startRoot.isEmpty {
+            let startEntries = (try? await store.source.listAllEntries(path: startRoot)) ?? []
+            for entry in startEntries { add(entry) }
+            var listedStartDirs = 0
+            for directory in startEntries.filter(\.isDirectory).prefix(8) {
+                if Task.isCancelled || Date() > deadline { break }
+                let entries = (try? await store.source.listAllEntries(path: directory.path)) ?? []
+                if !entries.isEmpty { listedStartDirs += 1 }
+                for entry in entries { add(entry) }
+            }
+            stressLog("起始目录 \(startRoot) 条目=\(startEntries.count) 子目录=\(listedStartDirs)")
+        }
+        var listed = 0
+        var paths = (argumentValue("-stressPaths") ?? "")
+            .split(separator: "|")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        let keywords = ["Solo Leveling", "Transformers", "变形金刚", "American", "无职转生", "K-ON", "KON"]
+        var rootEntries = store.currentEntries
+        if !rootEntries.contains(where: \.isDirectory) {
+            rootEntries = (try? await store.source.listAllEntries(path: "")) ?? []
+        }
+        stressLog("根目录 \(rootEntries.count) 条：" + rootEntries.prefix(40).map(\.name).joined(separator: " / "))
+        for entry in rootEntries where entry.isDirectory {
+            if keywords.contains(where: { entry.name.localizedCaseInsensitiveContains($0) }) {
+                paths.append(entry.path)
+            }
+        }
+        // 根目录里已经带 4K/UHD 标记的电影目录，最多再列 4 个，避免扫全盘。
+        let hdMarkers = ["2160p", "4k", "uhd", "hdr"]
+        let hdDirectories = rootEntries.filter { entry in
+            entry.isDirectory && hdMarkers.contains { marker in
+                entry.name.lowercased().contains(marker)
+            }
+        }.shuffled().prefix(4)
+        for directory in hdDirectories {
+            paths.append(directory.path)
+        }
+        var seenPaths = Set<String>()
+        paths = paths.filter { seenPaths.insert($0).inserted }
+        for path in paths.prefix(12) {
+            if Task.isCancelled || Date() > deadline { break }
+            let entries = (try? await store.source.listAllEntries(path: path)) ?? []
+            if !entries.isEmpty { listed += 1 }
+            for entry in entries { add(entry) }
+        }
+        if let filter = argumentValue("-stressFilter"), !filter.isEmpty {
+            result = result.filter { $0.path.localizedCaseInsensitiveContains(filter) }
+        }
+        Log.notice(
+            .app,
+            "压力测试抽样 历史=\(historyCount) 当前目录=\(currentCount) "
+                + "指定目录=\(listed)/\(paths.count) 合计=\(result.count)"
+        )
+        stressLog("抽样明细 历史=\(historyCount) 当前=\(currentCount) 指定=\(listed)/\(paths.count) 合计=\(result.count)")
+        return result
+    }
+
+    /// 从 SwiftData 续播历史构造样本：共享近 10TB，绝不能靠枚举，
+    /// 历史里已有播放过的 1080p / 4K / 长片，直接复用路径和大小。
+    private func stressEntriesFromHistory() -> [MediaEntry] {
+        var descriptor = FetchDescriptor<PlaybackProgressRecord>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 40
+        let records = (try? modelContext.fetch(descriptor)) ?? []
+        return records.compactMap { record in
+            let parts = record.key.split(separator: "|", omittingEmptySubsequences: false)
+            guard parts.count >= 3 else { return nil }
+            let size = Int64(parts[parts.count - 2]) ?? 0
+            guard size > 0 else { return nil }
+            let stamp = Int64(parts[parts.count - 1]) ?? 0
+            let modified = stamp > 0 ? Date(timeIntervalSince1970: TimeInterval(stamp)) : nil
+            let name = (record.path as NSString).lastPathComponent
+            guard !name.isEmpty else { return nil }
+            return MediaEntry(
+                path: record.path,
+                name: name,
+                isDirectory: false,
+                size: size,
+                modified: modified
+            )
+        }
+    }
+
+    private func selectStressVideos(
+        _ videos: [MediaEntry],
+        count: Int,
+        hdFirst: Bool
+    ) -> [MediaEntry] {
+        var picks: [MediaEntry] = []
+        var used = Set<String>()
+        var perDirectory: [String: Int] = [:]
+        let maxPerDirectory = 3
+        func add(_ entry: MediaEntry?) {
+            guard picks.count < count, let entry, used.insert(entry.id).inserted else { return }
+            let directory = entry.directoryPath
+            guard (perDirectory[directory] ?? 0) < maxPerDirectory else { return }
+            perDirectory[directory, default: 0] += 1
+            picks.append(entry)
+        }
+        let lower: (MediaEntry) -> String = { $0.path.lowercased() }
+        let is4K: (MediaEntry) -> Bool = {
+            $0.fileExtension == "mkv"
+                && (lower($0).contains("2160p") || lower($0).contains("4k"))
+        }
+        // 第一条小 MP4 让画面尽快出来；随后保证 1080p、4K、长片都有覆盖。
+        add(videos.filter { $0.fileExtension == "mp4" && $0.size < 1_500_000_000 }.randomElement())
+        if hdFirst {
+            // 验收用：最大 4K HDR 优先，避免服务器连续读大文件后冷读掉速影响判定。
+            for entry in videos.filter(is4K).sorted(by: { $0.size > $1.size }).prefix(3) {
+                add(entry)
+            }
+        } else {
+            add(videos.filter {
+                $0.fileExtension == "mkv"
+                    && !lower($0).contains("2160p")
+                    && !lower($0).contains("4k")
+            }.randomElement())
+            add(videos.filter(is4K).randomElement())
+            add(videos.filter(is4K).randomElement())
+            add(videos.filter(is4K).randomElement())
+        }
+        add(videos.filter { $0.size > 5_000_000_000 }.randomElement())
+        add(videos.filter { $0.size > 2_000_000_000 }.randomElement())
+        add(videos.filter { $0.fileExtension == "mp4" }.randomElement())
+        for entry in videos.shuffled() where picks.count < count {
+            add(entry)
+        }
+        return picks
+    }
+
+    private func argumentValue(_ flag: String) -> String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: flag),
+              arguments.indices.contains(index + 1) else { return nil }
+        return arguments[index + 1]
+    }
+
+    /// 验收脚本：每集播到 `-libraryRewindAt` 后回退到 `-libraryRewindTo`，用于长片压力验收。
+    private func scheduleLaunchRewindIfNeeded(_ session: LibraryPlaybackSession) {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let atIndex = arguments.firstIndex(of: "-libraryRewindAt"),
+              arguments.indices.contains(atIndex + 1),
+              let at = Double(arguments[atIndex + 1]),
+              let toIndex = arguments.firstIndex(of: "-libraryRewindTo"),
+              arguments.indices.contains(toIndex + 1),
+              let target = Double(arguments[toIndex + 1]),
+              at > target, target >= 0 else { return }
+        Task { @MainActor [weak session] in
+            guard let session else { return }
+            while !Task.isCancelled {
+                guard playback === session else { return }
+                if session.engine.clock.currentTime >= at {
+                    session.engine.seek(to: target)
+                    Log.notice(
+                        .app,
+                        "验收脚本：回退 \(String(format: "%.0f", at))s → "
+                            + "\(String(format: "%.0f", target))s"
+                    )
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+        }
+    }
+
+    /// 验收脚本：`-acceptanceReport` 时把每集结束时的缓冲/字幕指标追加到 Documents/ice-acceptance.json。
+    private func writeAcceptanceReport(
+        _ session: LibraryPlaybackSession,
+        reason: String,
+        extraReportFields: [String: Any]? = nil
+    ) {
+        guard ProcessInfo.processInfo.arguments.contains("-acceptanceReport") else { return }
+        let stats = session.engine.statistics
+        let size = session.entry.size
+        let duration = session.engine.duration
+        let bitrate = size > 0 && duration > 0
+            ? Double(size) * 8 / duration / 1_000_000
+            : 0
+        let video = session.renderer.metrics
+        var report: [String: Any] = [
+            "path": session.entry.path,
+            "reason": reason,
+            "fileSizeBytes": size,
+            "durationSeconds": duration,
+            "audioCodec": session.engine.audioCodecName,
+            "videoCodec": session.engine.videoCodecName,
+            "averageBitrateMbps": bitrate,
+            "positionSeconds": session.engine.clock.currentTime,
+            "startupMilliseconds": stats.startupMilliseconds,
+            "firstVideoMilliseconds": stats.firstVideoMilliseconds,
+            "videoEnqueued": video.enqueued,
+            "videoRecoveries": video.recoveries,
+            "videoLastRecovery": video.lastRecoveryReason ?? "",
+            "videoDroppedWhileUnbound": video.droppedWhileUnbound,
+            "videoBufferedAhead": session.renderer.bufferedAhead,
+            "videoStatus": session.renderer.statusDescription,
+            "videoQueueDepth": stats.videoQueueDepth,
+            "videoQueueDropped": stats.videoQueueDropped,
+            "videoQueueBytes": stats.videoQueueBytes,
+            "downloadBytesPerSecond": session.engine.downloadBytesPerSecond,
+            "bufferedAheadSeconds": session.engine.bufferedAheadSeconds,
+            "seekCacheHit": session.engine.lastSeekCacheHit,
+            "seekCacheHits": session.engine.seekCacheHits,
+            "seekCacheMisses": session.engine.seekCacheMisses,
+            "ringResetCount": session.engine.ringResetCount,
+            "bytesRead": stats.bytesRead,
+            "packetsRead": stats.packetsRead,
+            "bufferStalls": stats.bufferStalls,
+            "bufferSeconds": stats.bufferSeconds,
+            "maxBufferStallsPerMinute": stats.maxBufferStallsPerMinute,
+            "underruns": stats.underruns,
+            "maxDrift": stats.maxDrift,
+            "maxDriftPosition": stats.maxDriftPosition,
+            "maxDriftAudioTime": stats.maxDriftAudioTime,
+            "maxDriftClockTime": stats.maxDriftClockTime,
+            "clockJumpCount": stats.clockJumpCount,
+            "maxVideoOffset": stats.maxVideoOffset,
+            "seekCount": stats.seekCount,
+            "lastSeekLatencyMilliseconds": stats.lastSeekLatencyMilliseconds,
+            "lastSeekDrift": stats.lastSeekDrift,
+            "lastSeekPrerollFrames": stats.lastSeekPrerollFrames,
+            "subtitleTrack": session.selectedTrack?.title ?? "",
+            "subtitleCues": session.timeline?.cues.count ?? 0,
+            "subtitleError": session.subtitleError ?? "",
+            "capturedAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        if let extra = extraReportFields {
+            report.merge(extra) { _, new in new }
+        }
+        do {
+            try appendAcceptanceReport(report)
+            Log.notice(
+                .app,
+                "验收报告已追加 \(Log.shortPath(session.entry.path)) "
+                    + "缓冲=\(stats.bufferStalls)次/\(String(format: "%.1f", stats.bufferSeconds))s "
+                    + "峰值=\(stats.maxBufferStallsPerMinute)/min "
+                    + "字幕=\(session.timeline?.cues.count ?? 0)条"
+            )
+        } catch {
+            Log.error(.app, "验收报告写入失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func appendAcceptanceReport(_ report: [String: Any]) throws {
+        let url = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        )[0].appendingPathComponent("ice-acceptance.json")
+        var items: [[String: Any]] = []
+        if let data = try? Data(contentsOf: url),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            items = existing
+        }
+        items.append(report)
+        let data = try JSONSerialization.data(
+            withJSONObject: items,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: url, options: .atomic)
+    }
+
+    private func writeStressSummary(
+        completed: Int,
+        serious: Bool,
+        reason: String,
+        bufferExceptions: Int = 0
+    ) {
+        guard ProcessInfo.processInfo.arguments.contains("-acceptanceReport") else { return }
+        let summary: [String: Any] = [
+            "reason": "stress-summary",
+            "stressDone": true,
+            "stressCompleted": completed,
+            "stressSeriousFound": serious,
+            "stressBufferExceptions": bufferExceptions,
+            "stressStopReason": reason,
+            "capturedAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        do {
+            try appendAcceptanceReport(summary)
+            Log.notice(
+                .app,
+                "压力测试总结已写入 完成=\(completed) 严重=\(serious) 原因=\(reason)"
+            )
+        } catch {
+            Log.error(.app, "压力测试总结写入失败：\(error.localizedDescription)")
+        }
+    }
+
     /// 验收脚本：`-libraryCloseAfter <秒>` 在起播后若干秒关闭播放，用于验证续播。
     private func scheduleLaunchCloseIfNeeded() {
         guard !appliedLaunchClose else { return }
@@ -961,7 +1519,10 @@ struct LibraryView: View {
         }
     }
 
-    private func closePlayback() {
+    private func closePlayback(report: Bool = true) {
+        if report, let playback {
+            writeAcceptanceReport(playback, reason: "closed")
+        }
         playbackTask?.cancel()
         progressTask?.cancel()
         throughputTask?.cancel()

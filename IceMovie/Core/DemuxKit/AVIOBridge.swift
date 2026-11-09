@@ -25,6 +25,56 @@ final class AVIOBridge {
 
     var sourceLength: Int64? { source.length }
 
+    func setRetainBackBytes(_ bytes: Int64) {
+        (source as? BufferRetentionProviding)?.setRetainBackBytes(bytes)
+    }
+
+    /// 从指定字节偏移起连续可用的缓冲；包含解封装已读和预读环。
+    func bufferedBytes(from offset: Int64) -> Int64 {
+        (source as? SeekCacheProviding)?.bufferedBytes(from: offset) ?? 0
+    }
+
+    func cancelPrefetch() {
+        (source as? PrefetchCancelling)?.cancelPrefetch()
+    }
+
+    func setSupply(audioAhead: Double, videoAhead: Double) {
+        (source as? BufferSupplyProviding)?.setSupply(audioAhead: audioAhead, videoAhead: videoAhead)
+    }
+
+    /// 播放引擎定期写入播放头，供回看窗口和淘汰策略使用。
+    func setPlayhead(byteOffset: Int64) {
+        (source as? SeekCacheProviding)?.setPlayhead(byteOffset: byteOffset)
+    }
+
+    var ringResetCount: Int {
+        (source as? SeekCacheProviding)?.ringResetCount ?? 0
+    }
+
+    var seekCacheHits: Int {
+        (source as? SeekCacheProviding)?.seekCacheHits ?? 0
+    }
+
+    var seekCacheMisses: Int {
+        (source as? SeekCacheProviding)?.seekCacheMisses ?? 0
+    }
+
+    var lastSeekCacheHit: Bool {
+        (source as? SeekCacheProviding)?.lastSeekCacheHit ?? false
+    }
+
+    var playheadByteOffset: Int64 {
+        (source as? SeekCacheProviding)?.playheadByteOffset ?? 0
+    }
+
+    var readHeadByteOffset: Int64 {
+        (source as? SeekCacheProviding)?.readHeadByteOffset ?? 0
+    }
+
+    var prefetchHeadByteOffset: Int64 {
+        (source as? SeekCacheProviding)?.prefetchHeadByteOffset ?? 0
+    }
+
     /// 播放源最近的实际下载速度；本地源为 0。
     var downloadBytesPerSecond: Double {
         (source as? NetworkSpeedProviding)?.downloadBytesPerSecond ?? 0
@@ -93,6 +143,7 @@ final class AVIOBridge {
     }
 
     fileprivate func seek(offset: Int64, whence: Int32) -> Int64 {
+        let previous = position
         switch whence {
         case SEEK_SET:
             position = offset
@@ -105,6 +156,11 @@ final class AVIOBridge {
             return source.length ?? -1
         default:
             return -1
+        }
+        // 显式通知缓存层：seek 后旧窗口作废，立刻从新位置预读。
+        if position != previous, position >= 0,
+           let seekable = source as? any SeekAwareByteSource {
+            seekable.seekWillChange(to: position)
         }
         return position
     }

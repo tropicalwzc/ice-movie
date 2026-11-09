@@ -10,9 +10,12 @@ public final class SMBChunkRing: @unchecked Sendable {
 
     private let lock = NSLock()
     private var chunks: [Int64: Data] = [:]
-    private var order: [Int64] = []
     private var hits = 0
     private var misses = 0
+    /// 保留窗口：窗口外的块优先淘汰，窗口内按离 focus 的距离淘汰。
+    private var retentionStart: Int64 = 0
+    private var retentionFocus: Int64 = 0
+    private var retentionEnd: Int64 = .max
 
     public init(chunkSize: Int = 1 << 20, capacity: Int = 24) {
         self.chunkSize = max(1, chunkSize)
@@ -40,7 +43,6 @@ public final class SMBChunkRing: @unchecked Sendable {
     public func reset() {
         lock.lock()
         chunks.removeAll()
-        order.removeAll()
         lock.unlock()
     }
 
@@ -48,6 +50,34 @@ public final class SMBChunkRing: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return chunks[start] != nil
+    }
+
+    /// `[offset, offset + length)` 是否全部连续缓存；length <= 0 视为命中。
+    public func hasContiguousBytes(from offset: Int64, length: Int64) -> Bool {
+        guard length > 0 else { return true }
+        return contiguousEnd(from: offset) >= offset + length
+    }
+
+    /// 设置保留窗口。窗口外的块优先被淘汰，窗口内优先保留离 focus 近的数据。
+    public func setRetentionWindow(start: Int64, focus: Int64, end: Int64) {
+        lock.lock()
+        retentionStart = start
+        retentionFocus = focus
+        retentionEnd = max(start, end)
+        lock.unlock()
+    }
+
+    /// 只保留与 `[keepFrom, keepTo)` 有交集的块；部分重叠的块整块保留。
+    public func trim(keepFrom: Int64, keepTo: Int64) {
+        lock.lock()
+        let victims = chunks.compactMap { start, data -> Int64? in
+            let end = start + Int64(data.count)
+            return end <= keepFrom || start >= keepTo ? start : nil
+        }
+        for start in victims {
+            chunks.removeValue(forKey: start)
+        }
+        lock.unlock()
     }
 
     /// 从 `offset` 所在的块开始，返回连续缓存到的最高偏移。
@@ -75,7 +105,6 @@ public final class SMBChunkRing: @unchecked Sendable {
             return nil
         }
         hits += 1
-        touchLocked(start)
         return data
     }
 
@@ -94,7 +123,6 @@ public final class SMBChunkRing: @unchecked Sendable {
             let start = (position / Int64(chunkSize)) * Int64(chunkSize)
             guard let chunk = chunks[start] else { break }
             sawChunk = true
-            touchLocked(start)
 
             let inside = Int(position - start)
             guard inside < chunk.count else { break }
@@ -131,18 +159,66 @@ public final class SMBChunkRing: @unchecked Sendable {
         guard !data.isEmpty else { return }
         lock.lock()
         chunks[start] = data
-        touchLocked(start)
-        while order.count > capacity {
-            let evicted = order.removeFirst()
-            chunks.removeValue(forKey: evicted)
+        while chunks.count > capacity, let victim = evictionCandidateLocked() {
+            chunks.removeValue(forKey: victim)
         }
         lock.unlock()
     }
 
-    private func touchLocked(_ start: Int64) {
-        if let index = order.firstIndex(of: start) {
-            order.remove(at: index)
+    /// 主动丢掉读位置之前的块；保留少量回看余量。
+    public func trim(before offset: Int64) {
+        guard offset > 0 else { return }
+        trim(keepFrom: offset, keepTo: .max)
+    }
+
+    /// 淘汰顺序：先丢回看窗口之外的远端块，再丢前向窗口之外的远端块，
+    /// 最后丢窗口内离 focus 最远的回看块，避免把刚预读的未来数据挤掉。
+    private func evictionCandidateLocked() -> Int64? {
+        var outsideBack: Int64?
+        var outsideForward: Int64?
+        var back: Int64?
+        for (start, data) in chunks {
+            let end = start + Int64(data.count)
+            if end <= retentionStart {
+                if outsideBack == nil || start < outsideBack! { outsideBack = start }
+            } else if start >= retentionEnd {
+                if outsideForward == nil || start > outsideForward! { outsideForward = start }
+            } else if start < retentionFocus {
+                if back == nil || start < back! { back = start }
+            }
         }
-        order.append(start)
+        return outsideBack ?? outsideForward ?? back ?? chunks.keys.min()
+    }
+}
+
+
+/// seek 命中分类。
+public enum SMBSeekKind: Equatable, Sendable {
+    /// 目标位置本身已在连续缓存中，可直接复用。
+    case cacheHit
+    /// 目标在回看/预读窗口附近，但目标块缺失，需要保留重叠段并补读。
+    case backWindow
+    /// 目标完全在窗口外，需要丢弃前向窗口。
+    case miss
+}
+
+public enum SMBSeekClassifier {
+    /// - Parameters:
+    ///   - target: seek 目标字节偏移。
+    ///   - cachedEnd: 从 target 起连续缓存的末尾；等于 target 表示目标块缺失。
+    ///   - windowStart: 回看窗口起点。
+    ///   - windowEnd: 允许保留的窗口末端（读头/预读头再加少量余量）。
+    ///   - chunkSize: 预读块大小，用于给窗口末端留余量。
+    public static func classify(
+        target: Int64,
+        cachedEnd: Int64,
+        windowStart: Int64,
+        windowEnd: Int64,
+        chunkSize: Int
+    ) -> SMBSeekKind {
+        if cachedEnd > target { return .cacheHit }
+        let margin = Int64(max(1, chunkSize)) * 8
+        if target >= windowStart, target <= windowEnd + margin { return .backWindow }
+        return .miss
     }
 }

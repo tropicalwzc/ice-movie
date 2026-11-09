@@ -21,6 +21,10 @@ public final class PlaybackEngine: @unchecked Sendable {
         public var decodedSeconds: Double = 0
         public var underruns = 0
         public var maxDrift: Double = 0
+        public var maxDriftPosition: Double = 0
+        public var maxDriftAudioTime: Double = 0
+        public var maxDriftClockTime: Double = 0
+        public var clockJumpCount = 0
         public var clockCorrections = 0
         public var startupMilliseconds = 0
         public var firstVideoMilliseconds = 0
@@ -38,6 +42,9 @@ public final class PlaybackEngine: @unchecked Sendable {
         /// 全部数据都已播完（区别于「读到文件结尾」）。
         public var drained = false
         public var failure: String?
+        public var videoQueueDepth = 0
+        public var videoQueueDropped = 0
+        public var videoQueueBytes = 0
     }
 
     /// 起播前先垫这么多秒的音频。
@@ -67,6 +74,13 @@ public final class PlaybackEngine: @unchecked Sendable {
     private let videoStreamIndex: Int?
     private let lock = NSLock()
     private let condition = NSCondition()
+    private var videoPipeline: VideoPacketPipeline?
+    private var audioTimeBase = AVRational(num: 0, den: 1)
+    private var videoTimeBase = AVRational(num: 0, den: 1)
+    private var lastAudioPacketPos: Int64 = -1
+    private var lastAudioPacketPTS: Double = -1
+    private var lastVideoPacketPos: Int64 = -1
+    private var lastVideoPacketPTS: Double = -1
 
     private var stats = Statistics()
     private var wantsPlay = false
@@ -100,6 +114,11 @@ public final class PlaybackEngine: @unchecked Sendable {
         self.clock = clock
         self.reader = reader
         duration = reader.duration
+        if let length = reader.byteLength, reader.duration > 0 {
+            // 已看区域只留 20 秒，最多 64MB；剩下的预读内存全部留给未来。
+            let back = Int64(Double(length) / reader.duration * 20)
+            reader.setRetainBackBytes(min(64 * 1024 * 1024, max(0, back)))
+        }
 
         var audioDecoder: AudioDecoder?
         var audioOutput: AudioOutput?
@@ -108,6 +127,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             audioDecoder = try AudioDecoder(stream: stream)
             audioOutput = try AudioOutput()
             audioIndex = track.index
+            audioTimeBase = stream.pointee.time_base
         }
 
         var builder: SampleBufferBuilder?
@@ -115,6 +135,7 @@ public final class PlaybackEngine: @unchecked Sendable {
         if let track = reader.videoTrack, let stream = reader.stream(at: track.index) {
             builder = try SampleBufferBuilder(stream: stream)
             videoIndex = track.index
+            videoTimeBase = stream.pointee.time_base
         }
 
         guard audioDecoder != nil || builder != nil else {
@@ -135,10 +156,25 @@ public final class PlaybackEngine: @unchecked Sendable {
             "播放器就绪 音频=\(audioCodecName) 视频=\(videoCodecName) "
                 + "时长=\(String(format: "%.1f", duration))s"
         )
+        videoRenderer?.onNeedsRefresh = { [weak self] position in
+            self?.seek(to: position)
+        }
+        if builder != nil {
+            let pipeline = VideoPacketPipeline { [weak self] packet, generation in
+                self?.processVideoPacket(packet, generation: generation)
+            }
+            pipeline.onOverflow = { [weak self] in
+                DispatchQueue.main.async {
+                    self?.videoRenderer?.invalidateForPacketDrop()
+                }
+            }
+            videoPipeline = pipeline
+        }
     }
 
     deinit {
         stopSyncTimer()
+        videoPipeline?.stop()
         condition.lock()
         stopped = true
         wantsPlay = false
@@ -292,6 +328,8 @@ public final class PlaybackEngine: @unchecked Sendable {
         condition.broadcast()
         condition.unlock()
         stopSyncTimer()
+        reader.cancelPrefetch()
+        videoPipeline?.stop()
         output?.pause()
         output?.reset()
         clock.pause()
@@ -323,7 +361,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     /// 播放源最近的实际下载速度。
     public var downloadBytesPerSecond: Double { reader.downloadBytesPerSecond }
 
-    /// 当前播放点之后已缓冲的秒数（解码缓冲 + SMB 预读环换算）。
+    /// 当前播放点之后已缓冲的秒数（从播放头到预读最远点）。
     public var bufferedAheadSeconds: Double {
         let avAhead = max(output?.bufferedAhead ?? 0, videoRenderer?.bufferedAhead ?? 0)
         let bytesPerSecond: Double
@@ -332,15 +370,46 @@ public final class PlaybackEngine: @unchecked Sendable {
         } else {
             bytesPerSecond = 0
         }
-        let ringAhead = bytesPerSecond > 0
-            ? Double(reader.bufferedAheadBytes) / bytesPerSecond
-            : 0
-        return max(0, avAhead + ringAhead)
+        guard bytesPerSecond > 0 else { return max(0, avAhead) }
+        let ring = Double(reader.bufferedBytes(from: playheadByteOffset)) / bytesPerSecond
+        return max(0, max(avAhead, ring))
     }
+
+    /// 当前播放位置对应的字节偏移。优先用最近音视频包的真实 pos/pts 推算，
+    /// VBR 文件上比「平均码率 × 时间」准确得多；没有包位置时退回平均估算。
+    public var playheadByteOffset: Int64 {
+        guard let length = reader.byteLength, length > 0, duration > 0 else { return 0 }
+        let position = min(max(clock.currentTime, 0), duration)
+        let packet = lock.withLock { () -> (pos: Int64, pts: Double) in
+            if lastAudioPacketPos >= 0 { return (lastAudioPacketPos, lastAudioPacketPTS) }
+            return (lastVideoPacketPos, lastVideoPacketPTS)
+        }
+        if packet.pos >= 0, packet.pts >= 0 {
+            let bytesPerSecond = Double(length) / duration
+            let estimate = Double(packet.pos) + (position - packet.pts) * bytesPerSecond
+            let readHead = reader.readHeadByteOffset
+            let upper = readHead >= 0 ? min(length, readHead) : length
+            return min(upper, max(0, Int64(estimate)))
+        }
+        return Int64((position / duration) * Double(length))
+    }
+
+    public var ringResetCount: Int { reader.ringResetCount }
+    public var seekCacheHits: Int { reader.seekCacheHits }
+    public var seekCacheMisses: Int { reader.seekCacheMisses }
+    public var lastSeekCacheHit: Bool { reader.lastSeekCacheHit }
+    public var sourcePlayheadByteOffset: Int64 { reader.playheadByteOffset }
+    public var sourceReadHeadByteOffset: Int64 { reader.readHeadByteOffset }
+    public var sourcePrefetchHeadByteOffset: Int64 { reader.prefetchHeadByteOffset }
 
     public var statistics: Statistics {
         lock.withLock {
             var snapshot = stats
+            if let metrics = videoPipeline?.metrics {
+                snapshot.videoQueueDepth = metrics.queueDepth
+                snapshot.videoQueueDropped = metrics.dropped
+                snapshot.videoQueueBytes = metrics.queueBytes
+            }
             snapshot.clockCorrections = clock.correctionCount
             snapshot.maxDrift = max(snapshot.maxDrift, abs(clock.lastSyncDrift))
             return snapshot
@@ -348,6 +417,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     public var bufferedAhead: Double { output?.bufferedAhead ?? 0 }
+    public var audioOutputMetrics: AudioOutput.Metrics? { output?.metrics }
 
     /// 播放中供给不足：音频缓冲低于阈值时暂停主时钟，避免声音恢复后落后于画面。
     public var isBuffering: Bool {
@@ -538,6 +608,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             markEnded()
         case .packet:
             let index = Int(packet.pointee.stream_index)
+            var packetTransferred = false
             lock.withLock {
                 stats.bytesRead += Int64(max(0, packet.pointee.size))
             }
@@ -556,11 +627,20 @@ public final class PlaybackEngine: @unchecked Sendable {
                     callback(events)
                 }
             } else if index == audioStreamIndex {
+                recordPacketPosition(packet, timeBase: audioTimeBase, audio: true)
                 decodeAudio(packet)
             } else if index == videoStreamIndex {
-                enqueueVideo(packet)
+                recordPacketPosition(packet, timeBase: videoTimeBase, audio: false)
+                if let videoPipeline {
+                    videoPipeline.enqueue(packet)
+                    packetTransferred = true
+                } else {
+                    processVideoPacket(packet, generation: 0)
+                }
             }
-            av_packet_unref(packet)
+            if !packetTransferred {
+                av_packet_unref(packet)
+            }
         }
     }
 
@@ -589,6 +669,25 @@ public final class PlaybackEngine: @unchecked Sendable {
         return videoAhead >= Self.videoAheadSeconds
     }
 
+    private func recordPacketPosition(
+        _ packet: UnsafeMutablePointer<AVPacket>,
+        timeBase: AVRational,
+        audio: Bool
+    ) {
+        guard packet.pointee.pos >= 0, packet.pointee.pts != Int64.min else { return }
+        let pts = Double(packet.pointee.pts) * Double(timeBase.num) / Double(timeBase.den)
+        guard pts >= 0 else { return }
+        lock.withLock {
+            if audio {
+                lastAudioPacketPos = packet.pointee.pos
+                lastAudioPacketPTS = pts
+            } else {
+                lastVideoPacketPos = packet.pointee.pos
+                lastVideoPacketPTS = pts
+            }
+        }
+    }
+
     private func decodeAudio(_ packet: UnsafeMutablePointer<AVPacket>) {
         guard let decoder, let output else { return }
         lock.withLock { stats.packetsRead += 1 }
@@ -606,7 +705,11 @@ public final class PlaybackEngine: @unchecked Sendable {
         }
     }
 
-    private func enqueueVideo(_ packet: UnsafeMutablePointer<AVPacket>) {
+    private func processVideoPacket(
+        _ packet: UnsafeMutablePointer<AVPacket>,
+        generation: Int
+    ) {
+        guard videoPipeline?.isCurrent(generation) ?? true else { return }
         guard let sampleBuilder, let videoRenderer else { return }
         guard let sample = sampleBuilder.makeSample(from: packet) else {
             Log.error(.render, "视频封装失败 pts=\(packet.pointee.pts)")
@@ -617,29 +720,37 @@ public final class PlaybackEngine: @unchecked Sendable {
         let presentation = CMSampleBufferGetPresentationTimeStamp(sample)
         let seconds = presentation.isValid ? presentation.seconds : 0
         let duration = CMSampleBufferGetDuration(sample).seconds
-        if let target = videoSeekTarget {
+        let target = lock.withLock { videoSeekTarget }
+        if let target {
             if seconds + max(duration, 0) <= target {
-                seekPrerollFrames += 1
+                lock.withLock { seekPrerollFrames += 1 }
             } else {
                 let latency = Int((ProcessInfo.processInfo.systemUptime - seekRequestedAt) * 1000)
                 let drift = seconds - target
-                videoSeekTarget = nil
-                lock.withLock {
+                let info = lock.withLock { () -> (id: Int?, preroll: Int) in
+                    videoSeekTarget = nil
                     stats.lastSeekLatencyMilliseconds = latency
                     stats.lastSeekPrerollFrames = seekPrerollFrames
                     stats.lastSeekDrift = drift
+                    return (activeSeekID, seekPrerollFrames)
                 }
                 Log.info(
                     .render,
-                    "seek 出画 id=\(activeSeekID ?? -1) 目标=\(fmt(target))s 首帧=\(fmt(seconds))s 偏差=\(fmt(drift))s "
-                        + "预滚帧=\(seekPrerollFrames) 松手到出画=\(latency)ms"
+                    "seek 出画 id=\(info.id ?? -1) 目标=\(fmt(target))s 首帧=\(fmt(seconds))s 偏差=\(fmt(drift))s "
+                        + "预滚帧=\(info.preroll) 松手到出画=\(latency)ms"
                 )
             }
         }
 
-        videoRenderer.enqueue(sample)
+        // seek 可能在封装期间发生；旧 generation 不能再进入新画面。
+        guard videoPipeline?.isCurrent(generation) ?? true else { return }
+        videoRenderer.enqueue(
+            sample,
+            isKeyframe: packet.pointee.flags & AV_PKT_FLAG_KEY != 0
+        )
 
-        if stats.firstVideoMilliseconds == 0, let playStartedAt {
+        let needsFirst = lock.withLock { stats.firstVideoMilliseconds == 0 }
+        if needsFirst, let playStartedAt {
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - playStartedAt) * 1000)
             lock.withLock {
                 if stats.firstVideoMilliseconds == 0 {
@@ -695,21 +806,29 @@ public final class PlaybackEngine: @unchecked Sendable {
             return
         }
         resetBufferStallState()
+        videoPipeline?.flush()
         lock.withLock { subtitleDecoder }?.reset()
         decoder?.reset(to: target)
         output?.reset()
-        // reset 会把播放器停掉；如果本来就在播，立刻重新挂上，否则跳转后只剩画面没有声音。
-        if wantsPlay { output?.play() }
+        // 只有主时钟本来就在播放时才立刻恢复音频；起播缓冲阶段时钟是暂停的，
+        // 先 play 会让音频独自跑出十几秒，随后主时钟再追音频造成音画不同步。
+        if wantsPlay, clock.isPlaying { output?.play() }
         videoRenderer?.reset(to: target)
         clock.seek(to: target)
 
         audioSeekTarget = output == nil ? nil : target
         // 视频不做丢弃：显示层需要从关键帧开始的所有参考帧才能解出目标帧，
         // 早于目标时间的帧由它按时间基自动丢弃。
-        videoSeekTarget = videoRenderer == nil ? nil : target
-        seekRequestedAt = requestedAt
-        activeSeekID = id
-        seekPrerollFrames = 0
+        lock.withLock {
+            videoSeekTarget = videoRenderer == nil ? nil : target
+            seekRequestedAt = requestedAt
+            activeSeekID = id
+            seekPrerollFrames = 0
+            lastAudioPacketPos = -1
+            lastAudioPacketPTS = -1
+            lastVideoPacketPos = -1
+            lastVideoPacketPTS = -1
+        }
 
         lock.withLock {
             ended = false
@@ -753,6 +872,9 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func tick() {
+        reader.setPlayhead(byteOffset: playheadByteOffset)
+        let audioSupply = output?.bufferedAhead ?? Self.audioAheadSeconds
+        reader.setSupply(audioAhead: audioSupply, videoAhead: videoRenderer?.bufferedAhead ?? 0)
         videoRenderer?.syncTimebase()
         if let renderer = videoRenderer {
             let offset = abs(renderer.timebaseOffset)
@@ -779,7 +901,21 @@ public final class PlaybackEngine: @unchecked Sendable {
         clock.sync(to: audioTime)
 
         lock.withLock {
-            stats.maxDrift = max(stats.maxDrift, abs(clock.lastSyncDrift))
+            let drift = abs(clock.lastSyncDrift)
+            if drift > stats.maxDrift {
+                stats.maxDrift = drift
+                stats.maxDriftPosition = clock.currentTime
+                stats.maxDriftAudioTime = audioTime
+                stats.maxDriftClockTime = clock.currentTime
+            }
+            if drift > 1.0 {
+                stats.clockJumpCount += 1
+                Log.notice(
+                    .render,
+                    "时钟大偏差 \(String(format: "%.2f", drift))s 音频=\(fmt(audioTime))s "
+                        + "主时钟=\(fmt(clock.currentTime))s 位置=\(fmt(clock.currentTime))s"
+                )
+            }
             if stats.startupMilliseconds == 0, audioTime > 0.1, let playStartedAt {
                 stats.startupMilliseconds = Int(
                     (ProcessInfo.processInfo.systemUptime - playStartedAt) * 1000

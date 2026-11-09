@@ -66,6 +66,8 @@ ASS/SSA 走 libass 位图渲染（保留定位、颜色、描边与 OP 特效）
 
 - 特效脚本超过 4MB 或 5000 事件时自动降级为对白，避免 OP/ED 逐字动画拖垮主线程。
 - ≥800MB 的大文件内封文本字幕（ASS/SRT/mov_text）直接复用播放泵读到的字幕包，边播边解析，字幕与音画共用同一读流，不再为字幕二次扫描 SMB；45 秒内没有任何字幕包时才回退到分片加载（4s→16s→60s 递增窗口 + 后台预取）。分片读取使用独立的 `subtitle` 优先级，避免被播放预读拖住；窗口顶到片尾时停止预取，读取失败按 2–8 秒退避。这类文件用系统文字层显示对白。
+- SMB 短读不再当作 EOF：每块循环续读直到补满或真正到文件末尾，修复小 MP4 播不出和 4K 视频中途黑屏/截断。
+- 旋转、重建视频层或显示层解码恢复时，从当前位置重新解出一段关键帧，而不是把旧帧硬塞进新层；避免新层从非关键帧起解导致的黑屏和恢复刷屏。
 - 内封 SRT/mov_text/webvtt 由 FFmpeg 放在 `rect.ass` 里（`ReadOrder,Layer,Style,...,Text`），提取时按字段拆分，界面只显示正文；字幕脚本缓存命中时会重新注册容器字体附件。
 - PGS/DVD/DVB 等位图内封字幕暂无文本渲染路径，发现时直接跳过，不参与默认选轨。
 - 大文件分片字幕连续失败时会回退到后续字幕候选，并在播放器顶部显示错误提示。
@@ -134,6 +136,20 @@ xcodebuild -project IceMovie.xcodeproj -scheme IceMovieUITests \
 - `-librarySeekTo <秒>`：起播 3 秒后执行一次跳转
 - `-librarySeekBackTo <秒>`：首次跳转 3 秒后再回跳，用于验收
 - `-libraryCloseAfter <秒>`：播放若干秒后关闭，验证续播
+- `-libraryRewindAt <秒> -libraryRewindTo <秒>`：每集播到指定秒后自动回退，用于长片压力验收
+- `-acceptanceReport`：每集结束/切换时把缓冲、字幕、偏差指标追加到 `Documents/ice-acceptance.json`
+- `-resetAcceptanceReport`：启动时清空逐集验收报告
+- `-keepControlsVisible`：验收时让控件常显（仅测试）
+- `-stressRandom`：随机抽样压力测试开关；配合 `-stressRootPath <相对路径>`（默认共享根）
+- `-stressCount <条数>`、`-stressPlaySeconds <秒>`、`-stressSeekAfter <秒>`、`-stressSeekFraction <0–1>`
+- `-stressTimeLimit <秒>`：压力测试时间上限（默认 1800）；发现无视频帧、显示层解码恢复、单分钟缓冲 ≥6 次、播放失败或显示层 failed 时自动停止
+- `-stressFilter <子串>`：只测路径包含该子串的视频，用于单文件复现
+- `-stressHDFirst`：验收时把最大的 4K 排在小 MP4 之后，优先覆盖高码率片
+- `-stressTolerateBufferStalls`：把缓冲超标记录为环境异常（`stressBufferException`）并继续，只有无视频帧/解码恢复/播放失败才中断
+- `-stressSeekBackSeconds <秒>` / `-stressSeekBackFraction <0–1>`：播放中段再回退指定秒数或比例，用于验证回退命中缓存
+- `-stressSeekForwardSeconds <秒>`：播放后段再前进指定秒数，用于验证邻近前跳命中
+- `-smbChunkMB <MB>` / `-smbRingMB <MB>`：SMB 播放读块与预读窗口（默认 1MB / 512MB）
+- `-smbSeekCache 0`：关闭新的 seek 缓存复用，回退到旧的“seek 清空预读环”行为
 - `-playbackRate <倍速>`：加速长片回归（0.5–2.0）
 - `-throughputReport <秒>`：播放指定秒数后把吞吐/跳转统计写入 `Documents/ice-throughput.json`
 - `-shardedThresholdMB <MB>`：自检时降低分片字幕阈值（默认 800MB）
@@ -153,8 +169,14 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 | 内封字幕 `Caches/SubtitleScripts` | 50 MB | LRU，按文件修改时间 | 只存降级后的 ASS 文本（通常 60 KB–1 MB），不缓存字体与视频 |
 
 - 内存中的封面另有 64 MB `NSCache`，退出即释放。
-- 播放预读：SMB 播放块 4 MB、内存环 512 MB（128 块）；音频/视频各补到 15 秒，起播先垫 3 秒音频 + 2 秒视频。局域网带宽足够时提前读、提前解码，网络抖动不再立刻触发“缓冲中”；该缓冲只占内存，不写硬盘。
-- 预读是持续的后台任务：环形窗口填满后不会停死，播放消耗后从新的读位置继续补下一段，不会等到缓冲耗尽才加载。
+- 播放预读：SMB 播放块默认 1 MB、内存环约 512 MB（512 块，可用 `-smbChunkMB` / `-smbRingMB` 调整）；音频/视频各补到 15 秒，起播先垫 3 秒音频 + 2 秒视频。局域网带宽足够时提前读、提前解码，网络抖动不再立刻触发“缓冲中”；该缓冲只占内存，不写硬盘。
+- 预读是持续的后台任务：环形窗口填满后不会停死，播放消耗后从新的读位置继续补下一段。
+- 视频包封装/投递在独立有界队列和线程完成，播放泵只做读包与音频/字幕处理；音频低于 1 秒时暂停后台预读，把 SMB 带宽让给播放读，避免高码率 4K 反复缓冲。
+- 关闭视频或切换文件时会立即取消旧文件的预读任务并递增 generation，旧任务最多完成手头一个 1MB 读就退出，不会在后台继续下载抢下一部的带宽。
+- 视频队列默认上限 96 包 / 96MB，满时优先丢最老非关键帧；seek 时清空队列并用 generation 隔离旧包。
+- seek 先查连续缓存：回退或邻近跳转命中时不重置预读环、不重新下载；未命中时只丢弃前向窗口，先读目标位置第一块，再从解封装读头向前预读。
+- 读窗口显式区分播放头、解封装读头和预读最远点：缓冲区间从播放头算到预读最远点，包含已解封装但尚未播放的数据；进度条不会只显示读头之后的一小段。
+- 回看窗口默认约 20 秒、最多 64 MB，其余内存留给未来窗口；淘汰先丢回看窗口外的远端块，再丢前向窗口外和窗口内离播放头最远的数据。
 - 播放器 HUD：iPad 右上角在控件可见时显示实时下载速度和电量；返回/关闭按钮与状态栏随控件一起淡入淡出；标题在 iPad 允许两行。进度条用浅绿色显示当前播放点到预读窗口末端的已缓冲区间。
 - 缩略图与字幕脚本的缓存键都带数据源命名空间（SMB 为主机 + 共享，本地源为根目录绝对路径），切换共享或根目录不会串用。
 - 字幕脚本缓存键还带格式版本；解析或降级逻辑升级后，旧缓存会自动失效。
@@ -192,6 +214,18 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 - 全屏播放器在紧凑布局改用根视图覆盖层（不再使用 `fullScreenCover`），避免系统弹层的视图控制器只支持竖屏导致 `requestGeometryUpdate` 失败，也避免键盘退场动画期间覆盖层被丢弃。
 - 播放 350MB H.264 MP4：横屏画面、进度条、±10 秒、画中画与字幕按钮正常；退出播放回到竖屏媒体库。
 - 搜索定位后再点视频（键盘仍在退场）也能正常进入播放器，`testOpenFromSearchPresentsPlayer` 覆盖该路径。
+
+### 随机起播 / 中间跳转压力验收
+
+使用 `-stressRandom -stressRootPath "" -stressCount 16 -stressPlaySeconds 60 -stressSeekAfter 4 -stressSeekFraction 0.5 -stressTimeLimit 1800`：
+
+- 不递归扫共享：样本来自 SwiftData 播放历史 + 当前目录 + 根目录里关键词命中的已知目录（Solo / American / 无职 / K-ON!）和名字带 2160p/4K/UHD/HDR 的电影目录，目录列举总预算 20 秒。
+- 过滤小于 100MB 的广告占位文件与花絮；每个目录最多取 3 条，保证多样性。
+- 第一条优先小 MP4（<1.5GB）让画面尽快出现，随后保证 1080p MKV、至少 3 条 4K MKV、超过 5GB 的长片都有覆盖。
+- 每条起播 4 秒后跳到 50%，播放约 1 分钟。
+- 逐条写 `Documents/ice-acceptance.json`：首帧耗时、视频入队/恢复次数、显示层状态、视频队列深度/丢包、缓冲次数/分钟、累计缓冲、seek 时延/偏差、`seekCacheHit`、`seekCacheHits`/`seekCacheMisses`、`ringResetCount`、字幕条数与错误。
+- 无视频帧、显示层解码恢复、播放失败或显示层 failed 会自动停止；单分钟缓冲 ≥6 次默认也停止，加 `-stressTolerateBufferStalls` 时改为记录 `stressBufferException` 并继续，适合区分代码问题与服务器/过热掉速。最多 30 分钟。
+- 总结条目包含 `stressCompleted`、`stressSeriousFound`、`stressBufferExceptions`、`stressStopReason`。
 
 ## 真机人工验证清单
 

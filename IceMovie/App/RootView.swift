@@ -98,6 +98,7 @@ struct RootView: View {
         }
 
         let arguments = ProcessInfo.processInfo.arguments
+        writeLaunchSnapshot(arguments)
         if arguments.contains("-resetSubtitlePreferences") {
             SubtitlePreferences.reset()
             Log.info(.subtitle, "字幕偏好已重置（自检）")
@@ -105,6 +106,14 @@ struct RootView: View {
         if arguments.contains("-resetPlaybackProgress") {
             PlaybackProgressStore(context: modelContext).removeAll()
             Log.info(.app, "续播记录已重置（自检）")
+        }
+        if arguments.contains("-resetAcceptanceReport") {
+            let url = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            )[0].appendingPathComponent("ice-acceptance.json")
+            try? FileManager.default.removeItem(at: url)
+            Log.info(.app, "验收报告已清空")
         }
         if arguments.contains("-debugLog") {
             Log.minimumLevel = .debug
@@ -245,6 +254,25 @@ struct RootView: View {
         } catch {
             Log.error(.app, "测试主机记录写入失败 \(error.localizedDescription)")
         }
+    }
+
+    /// 自动化排查：把本次启动参数写进 Documents，确认新包与参数是否生效。
+    private func writeLaunchSnapshot(_ arguments: [String]) {
+        // 启动参数可能包含 -seedPassword 等敏感值；快照只保留参数名，值做脱敏。
+        var safeArguments = arguments
+        for index in safeArguments.indices.dropLast()
+        where safeArguments[index].lowercased().contains("password") {
+            safeArguments[index + 1] = "<redacted>"
+        }
+        let info: [String: Any] = [
+            "arguments": safeArguments,
+            "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+            "capturedAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted]) else { return }
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ice-launch.json")
+        try? data.write(to: url, options: .atomic)
     }
 
     /// 自检用：删除记录与凭据，等价于连接页的「忘记此主机」。

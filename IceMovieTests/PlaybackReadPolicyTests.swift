@@ -31,6 +31,46 @@ final class PlaybackReadPolicyTests: XCTestCase {
         XCTAssertTrue(PlaybackEngine.isReadAheadEnough(audioAhead: 15.1, videoAhead: nil))
     }
 
+    func testAudioClockSubtractsPostSeekSampleBaseline() {
+        // 节点 sampleTime 从 26s 继续，不能把 26s 加到锚点上。
+        XCTAssertEqual(
+            AudioOutput.playedTime(
+                anchor: 100,
+                sampleTime: 1_296_000,
+                baseline: 1_248_000,
+                sampleRate: 48_000
+            ),
+            101,
+            accuracy: 0.0001
+        )
+    }
+
+    func testAudioClockBaselineStartsAtZero() {
+        XCTAssertEqual(
+            AudioOutput.playedTime(
+                anchor: 200,
+                sampleTime: 48_000,
+                baseline: 0,
+                sampleRate: 48_000
+            ),
+            201,
+            accuracy: 0.0001
+        )
+    }
+
+    func testAudioClockClampsBeforeBaseline() {
+        XCTAssertEqual(
+            AudioOutput.playedTime(
+                anchor: 300,
+                sampleTime: 100,
+                baseline: 200,
+                sampleRate: 48_000
+            ),
+            300,
+            accuracy: 0.0001
+        )
+    }
+
     func testPureVideoUsesVideoTarget() {
         XCTAssertFalse(PlaybackEngine.isReadAheadEnough(audioAhead: nil, videoAhead: 14.9))
         XCTAssertTrue(PlaybackEngine.isReadAheadEnough(audioAhead: nil, videoAhead: 15.1))

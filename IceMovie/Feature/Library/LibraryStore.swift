@@ -14,6 +14,12 @@ struct PreparedPlayback {
     let selectedTrack: SubtitleTrack?
     let timeline: SubtitleTimeline?
     let loader: SubtitleLoader
+    let sourceOpenMilliseconds: Int
+    let probeMilliseconds: Int
+    let subtitleMilliseconds: Int
+    let engineMilliseconds: Int
+    let openInputMilliseconds: Int
+    let streamInfoMilliseconds: Int
 }
 
 /// 媒体库视图模型。
@@ -32,6 +38,9 @@ final class LibraryStore {
     private(set) var errorMessage: String?
     private(set) var playbackFailure: PlaybackFailure?
     private(set) var lastUpdated: Date?
+    /// 正在准备起播的条目。对应的媒体库单元格据此显示加载态，
+    /// 让用户知道点击已经生效、播放器正在拉起。
+    private(set) var preparingPlaybackID: String?
 
     var searchText = ""
     private(set) var searchHits: [LibrarySearchHit] = []
@@ -50,6 +59,7 @@ final class LibraryStore {
     private var loadGeneration = 0
     private var indexTask: Task<Void, Never>?
     private var playbackTask: Task<Void, Never>?
+    private var preparationGeneration = 0
 
     var currentPath: String { presentation.navigation.currentPath }
     var canGoBack: Bool { presentation.navigation.canGoBack }
@@ -243,6 +253,9 @@ final class LibraryStore {
     func activate(_ entry: MediaEntry) {
         if entry.isDirectory {
             enter(entry)
+        } else if preparingPlaybackID == entry.id {
+            // 起播准备中，忽略同一个条目的重复点按，避免重复打开 SMB 文件。
+            Log.debug(.app, "起播准备中，忽略重复点按 \(Log.shortPath(entry.path))")
         } else if let onPlaybackRequested {
             onPlaybackRequested(entry)
         } else {
@@ -376,12 +389,48 @@ final class LibraryStore {
 
     /// 为媒体库内联播放创建引擎，并完成字幕轨发现与默认轨加载。
     func preparePlayback(_ entry: MediaEntry) async -> PreparedPlayback? {
+        preparationGeneration += 1
+        let generation = preparationGeneration
+        preparingPlaybackID = entry.id
+        defer {
+            // 连续切换条目时，先结束的旧请求不能清掉新条目的加载态。
+            if generation == preparationGeneration {
+                preparingPlaybackID = nil
+            }
+        }
         do {
-            let byteSource = try await self.source.openByteSource(path: entry.path)
-            let reader = try MediaReader.open(source: byteSource, label: entry.path)
+            let source = self.source
+            let path = entry.path
+            let began = ProcessInfo.processInfo.systemUptime
+            let byteSource = try await source.openByteSource(path: path)
+            let sourceOpenMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - began) * 1000
+            )
+            // FFmpeg 的自定义 AVIO 读回调会同步等待 SMB 网络读取（每次预读 4MB），
+            // 而等待期间它还要把真正的读操作投递到 Swift 并发池。这里必须用独立线程：
+            // 如果占着并发池线程等信号量，读任务可能抢不到线程，大文件时容易卡住。
+            let probeBegan = ProcessInfo.processInfo.systemUptime
+            let opened = try await Self.openReader(
+                byteSource: byteSource,
+                path: path,
+                fastProbe: true
+            )
+            let probeMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - probeBegan) * 1000
+            )
+            let openMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - began) * 1000
+            )
+            Log.info(
+                .app,
+                "播放容器就绪 \(Log.shortPath(entry.path)) 打开探测耗时=\(openMilliseconds)ms "
+                    + "SMB打开=\(sourceOpenMilliseconds)ms 探测=\(probeMilliseconds)ms "
+                    + "流=\(opened.streams.count)"
+            )
+            guard !Task.isCancelled else { return nil }
 
             let embedded = SubtitleDiscovery.embedded(
-                reader.info.streams
+                opened.streams
                     .filter { $0.kind == .subtitle }
                     .map {
                         SubtitleDiscovery.EmbeddedSource(
@@ -392,6 +441,7 @@ final class LibraryStore {
                         )
                     }
             )
+            let subtitleBegan = ProcessInfo.processInfo.systemUptime
             let external = await discoverExternalSubtitles(for: entry)
             // 位图字幕（PGS/DVD/DVB）当前没有可用的文本渲染路径，直接排除，
             // 避免默认选轨或用户手选后“已选中但始终不显示”。
@@ -414,13 +464,33 @@ final class LibraryStore {
                     + "首选=\(candidates.first?.title ?? "无")（异步加载）"
             )
 
-            let engine = try PlaybackEngine(reader: reader)
+            let subtitleMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - subtitleBegan) * 1000
+            )
+            // 引擎仍在主线程创建，保持 AVAudioEngine/渲染器的原有线程语义。
+            let engineBegan = ProcessInfo.processInfo.systemUptime
+            let engine = try PlaybackEngine(reader: opened.reader)
+            let engineMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - engineBegan) * 1000
+            )
+            Log.info(
+                .app,
+                "播放准备拆分 \(Log.shortPath(entry.path)) "
+                    + "SMB=\(sourceOpenMilliseconds)ms 探测=\(probeMilliseconds)ms "
+                    + "字幕=\(subtitleMilliseconds)ms 引擎=\(engineMilliseconds)ms"
+            )
             return PreparedPlayback(
                 engine: engine,
                 tracks: tracks,
                 selectedTrack: nil,
                 timeline: nil,
-                loader: loader
+                loader: loader,
+                sourceOpenMilliseconds: sourceOpenMilliseconds,
+                probeMilliseconds: probeMilliseconds,
+                subtitleMilliseconds: subtitleMilliseconds,
+                engineMilliseconds: engineMilliseconds,
+                openInputMilliseconds: opened.reader.openInputMilliseconds,
+                streamInfoMilliseconds: opened.reader.streamInfoMilliseconds
             )
         } catch {
             playbackFailure = PlaybackFailure.classify(error)
@@ -430,6 +500,48 @@ final class LibraryStore {
                     + error.localizedDescription
             )
             return nil
+        }
+    }
+
+    private struct OpenedMediaReader: Sendable {
+        let reader: MediaReader
+        let streams: [MediaStreamInfo]
+    }
+
+    /// 在独立线程上打开容器并读取流信息。
+    ///
+    /// `MediaReader.open` 是同步调用，内部的 `AVIOBridge` 会用信号量等待 SMB 读结果；
+    /// 等待期间读任务本身还要投递到 Swift 并发池。若打开动作直接跑在 `Task.detached`
+    /// 上，就会占住并发池线程和读任务抢线程，大文件偶尔会长时间卡住甚至死等。
+    /// 因此和播放泵一样，给这段同步阻塞准备一条专用线程。
+    private nonisolated static func openReader(
+        byteSource: any ByteSource,
+        path: String,
+        fastProbe: Bool
+    ) async throws -> OpenedMediaReader {
+        try await withCheckedThrowingContinuation { continuation in
+            let thread = Thread {
+                autoreleasepool {
+                    do {
+                        let reader = try MediaReader.open(
+                            source: byteSource,
+                            label: path,
+                            fastProbe: fastProbe
+                        )
+                        continuation.resume(
+                            returning: OpenedMediaReader(
+                                reader: reader,
+                                streams: reader.info.streams
+                            )
+                        )
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+            thread.name = "icemovie.library.open"
+            thread.qualityOfService = .userInitiated
+            thread.start()
         }
     }
 

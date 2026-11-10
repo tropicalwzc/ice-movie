@@ -23,7 +23,7 @@ struct SMBHandleProvider: @unchecked Sendable {
 /// - 句柄失效时重开一次并重试同一偏移。
 final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedProviding,
     BufferRetentionProviding, SeekAwareByteSource, SeekCacheProviding, BufferSupplyProviding,
-    PrefetchCancelling, @unchecked Sendable {
+    PrefetchCancelling, PrefetchControlling, @unchecked Sendable {
     private let scheduler: SMBReadScheduler
     private let priority: SMBReadPriority
     private let reopen: SMBHandleProvider?
@@ -53,6 +53,8 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
     private let seekCacheEnabled: Bool
 
     private var reachedEOF = false
+    /// 起播前关闭后台预读，避免容器探测/首帧阶段先填 512MB。
+    private var prefetchEnabled = false
     /// 音频/视频供给低于安全水位时暂停预读，避免预读和播放读抢 SMB 带宽。
     private var supplyLow = false
     private var speedSamples: [(time: Double, bytes: Int)] = []
@@ -80,6 +82,15 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
     var playheadByteOffset: Int64 { lock.withLock { playhead } }
     var readHeadByteOffset: Int64 { lock.withLock { readHead } }
     var prefetchHeadByteOffset: Int64 { lock.withLock { prefetchHead } }
+
+    func setPrefetchEnabled(_ enabled: Bool) {
+        lock.withLock { prefetchEnabled = enabled }
+        guard enabled else { return }
+        let end = lock.withLock { readHead >= 0 ? max(readHead, playhead) : -1 }
+        guard end >= 0 else { return }
+        schedulePrefetch(after: end)
+        diag("prefetch enabled from=\(end)")
+    }
 
     /// 停止播放/切换文件时立即让旧预读退出；最多再完成一个在途 1MB 读。
     func cancelPrefetch() {
@@ -398,7 +409,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
 
     private func schedulePrefetch(after end: Int64) {
         guard priority == .playback else { return }
-        guard !lock.withLock({ closed || reachedEOF }) else { return }
+        guard !lock.withLock({ closed || reachedEOF || !prefetchEnabled }) else { return }
 
         var previous: Task<Void, Never>?
         var generation = 0

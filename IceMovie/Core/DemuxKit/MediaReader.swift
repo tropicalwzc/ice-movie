@@ -75,6 +75,8 @@ public final class MediaReader: @unchecked Sendable {
 
     /// 最近一次 seek 的现场，用于在读到第一个包时补一条「落点」日志。
     private var pendingSeek: (target: Double, startedAt: Double)?
+    public private(set) var openInputMilliseconds = 0
+    public private(set) var streamInfoMilliseconds = 0
 
     private init(format: UnsafeMutablePointer<AVFormatContext>?, bridge: AVIOBridge?, info: MediaInfo) {
         self.format = format
@@ -104,7 +106,11 @@ public final class MediaReader: @unchecked Sendable {
         }
     }
 
-    public static func open(source: any ByteSource, label: String) throws -> MediaReader {
+    public static func open(
+        source: any ByteSource,
+        label: String,
+        fastProbe: Bool = false
+    ) throws -> MediaReader {
         let bridge = try AVIOBridge(source: source)
         guard let context = avformat_alloc_context() else {
             bridge.releaseContext()
@@ -113,9 +119,26 @@ public final class MediaReader: @unchecked Sendable {
         context.pointee.pb = bridge.context
         // 自定义 IO 由我们自己的 bridge 释放。
         context.pointee.flags |= AVFMT_FLAG_CUSTOM_IO
+        if fastProbe {
+            // 播放首开只探测必要流信息，避免 avformat_find_stream_info 在
+            // 多轨 4K MKV 上顺序读几十 MB，拖慢点击到起播。
+            context.pointee.probesize = 8 * 1024 * 1024
+            context.pointee.max_analyze_duration = Int64(2) * Int64(AV_TIME_BASE)
+            Log.info(.demux, "快速探测 文件=\(Log.shortPath(label)) 上限=8MB/2s")
+        }
 
         var opened: UnsafeMutablePointer<AVFormatContext>? = context
-        let result = avformat_open_input(&opened, nil, nil, nil)
+        var options: OpaquePointer?
+        if fastProbe {
+            av_dict_set(&options, "probesize", "8388608", 0)
+            av_dict_set(&options, "analyzeduration", "2000000", 0)
+        }
+        let inputBegan = ProcessInfo.processInfo.systemUptime
+        let result = avformat_open_input(&opened, nil, nil, &options)
+        let openInputMilliseconds = Int(
+            (ProcessInfo.processInfo.systemUptime - inputBegan) * 1000
+        )
+        av_dict_free(&options)
         guard result >= 0, let opened else {
             // avformat_open_input 失败时会自行释放 context，这里只释放我们自己创建的 AVIO。
             bridge.releaseContext()
@@ -123,14 +146,50 @@ public final class MediaReader: @unchecked Sendable {
         }
 
         do {
-            let info = try loadInfo(format: opened, label: label)
-            return MediaReader(format: opened, bridge: bridge, info: info)
+            let infoBegan = ProcessInfo.processInfo.systemUptime
+            let info: MediaInfo
+            if fastProbe, Self.canUseHeaderInfo(format: opened) {
+                info = try DemuxProbe.readInfo(format: opened, probeStreams: false)
+                Log.info(.demux, "播放首开使用容器头流信息 文件=\(Log.shortPath(label))")
+            } else {
+                info = try loadInfo(format: opened, label: label)
+            }
+            let streamInfoMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - infoBegan) * 1000
+            )
+            let reader = MediaReader(format: opened, bridge: bridge, info: info)
+            reader.openInputMilliseconds = openInputMilliseconds
+            reader.streamInfoMilliseconds = streamInfoMilliseconds
+            return reader
         } catch {
             var failed: UnsafeMutablePointer<AVFormatContext>? = opened
             avformat_close_input(&failed)
             bridge.releaseContext()
             throw error
         }
+    }
+
+    /// 容器头是否已包含播放所需的基本流参数，可跳过全量流探测。
+    private static func canUseHeaderInfo(format: UnsafeMutablePointer<AVFormatContext>) -> Bool {
+        guard format.pointee.duration > 0, format.pointee.nb_streams > 0 else { return false }
+        var hasPlayable = false
+        for index in 0..<Int(format.pointee.nb_streams) {
+            guard let stream = format.pointee.streams?[index],
+                  let params = stream.pointee.codecpar else { continue }
+            switch params.pointee.codec_type {
+            case AVMEDIA_TYPE_VIDEO:
+                hasPlayable = true
+                if params.pointee.codec_id == AV_CODEC_ID_H264
+                    || params.pointee.codec_id == AV_CODEC_ID_HEVC {
+                    guard params.pointee.extradata_size > 0 else { return false }
+                }
+            case AVMEDIA_TYPE_AUDIO:
+                hasPlayable = true
+            default:
+                continue
+            }
+        }
+        return hasPlayable
     }
 
     public func close() {
@@ -202,6 +261,10 @@ public final class MediaReader: @unchecked Sendable {
 
     public func cancelPrefetch() {
         bridge?.cancelPrefetch()
+    }
+
+    public func setPrefetchEnabled(_ enabled: Bool) {
+        bridge?.setPrefetchEnabled(enabled)
     }
 
     public func setSupply(audioAhead: Double, videoAhead: Double) {

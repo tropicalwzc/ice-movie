@@ -18,6 +18,14 @@ final class LibraryPlaybackSession: Identifiable {
     let label: String
     let entry: MediaEntry
     let tracks: [SubtitleTrack]
+    /// 从点击到容器探测、字幕发现和引擎创建完成的时间。
+    let prepareMilliseconds: Int
+    let sourceOpenMilliseconds: Int
+    let probeMilliseconds: Int
+    let subtitleMilliseconds: Int
+    let engineMilliseconds: Int
+    let openInputMilliseconds: Int
+    let streamInfoMilliseconds: Int
     var selectedTrack: SubtitleTrack?
     var timeline: SubtitleTimeline?
     var subtitleScript: String?
@@ -53,6 +61,13 @@ final class LibraryPlaybackSession: Identifiable {
         label: String,
         entry: MediaEntry,
         tracks: [SubtitleTrack],
+        prepareMilliseconds: Int,
+        sourceOpenMilliseconds: Int,
+        probeMilliseconds: Int,
+        subtitleMilliseconds: Int,
+        engineMilliseconds: Int,
+        openInputMilliseconds: Int,
+        streamInfoMilliseconds: Int,
         selectedTrack: SubtitleTrack?,
         timeline: SubtitleTimeline?,
         loader: SubtitleLoader
@@ -62,6 +77,13 @@ final class LibraryPlaybackSession: Identifiable {
         self.label = label
         self.entry = entry
         self.tracks = tracks
+        self.prepareMilliseconds = prepareMilliseconds
+        self.sourceOpenMilliseconds = sourceOpenMilliseconds
+        self.probeMilliseconds = probeMilliseconds
+        self.subtitleMilliseconds = subtitleMilliseconds
+        self.engineMilliseconds = engineMilliseconds
+        self.openInputMilliseconds = openInputMilliseconds
+        self.streamInfoMilliseconds = streamInfoMilliseconds
         self.selectedTrack = selectedTrack
         self.timeline = timeline
         self.loader = loader
@@ -532,7 +554,6 @@ struct LibraryView: View {
         NavigationStack {
             LibraryContentPage(
                 store: store,
-                showsBackButton: true,
                 showDiagnostics: $showDiagnostics,
                 onDisconnect: disconnectAction
             )
@@ -587,7 +608,6 @@ struct LibraryView: View {
                     NavigationStack {
                         LibraryContentPage(
                             store: store,
-                            showsBackButton: false,
                             showDiagnostics: $showDiagnostics,
                             onDisconnect: disconnectAction
                         )
@@ -673,9 +693,13 @@ struct LibraryView: View {
         autoAdvanceTask?.cancel()
         resumeNoticeTask?.cancel()
         resumeNotice = nil
+        let requestedAt = ProcessInfo.processInfo.systemUptime
         playbackTask = Task { @MainActor in
             guard let prepared = await store.preparePlayback(entry),
                   let renderer = prepared.engine.videoRenderer else { return }
+            let prepareMilliseconds = Int(
+                (ProcessInfo.processInfo.systemUptime - requestedAt) * 1000
+            )
             if let old = playback {
                 old.stopSubtitles()
                 NowPlayingCenter.shared.detach(engine: old.engine)
@@ -687,6 +711,13 @@ struct LibraryView: View {
                 label: store.playbackTitle(for: entry),
                 entry: entry,
                 tracks: prepared.tracks,
+                prepareMilliseconds: prepareMilliseconds,
+                sourceOpenMilliseconds: prepared.sourceOpenMilliseconds,
+                probeMilliseconds: prepared.probeMilliseconds,
+                subtitleMilliseconds: prepared.subtitleMilliseconds,
+                engineMilliseconds: prepared.engineMilliseconds,
+                openInputMilliseconds: prepared.openInputMilliseconds,
+                streamInfoMilliseconds: prepared.streamInfoMilliseconds,
                 selectedTrack: prepared.selectedTrack,
                 timeline: prepared.timeline,
                 loader: prepared.loader
@@ -975,6 +1006,9 @@ struct LibraryView: View {
             let timeLimit = Double(argumentValue("-stressTimeLimit") ?? "1800") ?? 1800
             let hdFirst = arguments.contains("-stressHDFirst")
             let tolerateBuffer = arguments.contains("-stressTolerateBufferStalls")
+            let rootFolders = max(0, Int(argumentValue("-stressRootFolders") ?? "0") ?? 0)
+            let perDirectoryLimit = max(1, Int(argumentValue("-stressPerDirectoryLimit") ?? "3") ?? 3)
+            let tolerateFileErrors = arguments.contains("-stressTolerateFileErrors")
             let began = ProcessInfo.processInfo.systemUptime
 
             var waited = 0.0
@@ -983,8 +1017,13 @@ struct LibraryView: View {
                 waited += 0.5
             }
             stressLog("开始抽样")
-            let all = await collectStressVideos(root: root)
-            let picks = selectStressVideos(all, count: count, hdFirst: hdFirst)
+            let all = await collectStressVideos(root: root, rootFolders: rootFolders)
+            let picks = selectStressVideos(
+                all,
+                count: count,
+                hdFirst: hdFirst,
+                perDirectoryLimit: perDirectoryLimit
+            )
             stressLog("抽样完成 候选=\(all.count) 选中=\(picks.count)")
             for pick in picks.prefix(20) {
                 stressLog("样本 \(pick.path) size=\(pick.size)")
@@ -1006,6 +1045,8 @@ struct LibraryView: View {
             var foundSerious = false
             var stopReason = "completed"
             var bufferExceptions = 0
+            var syncIssues = 0
+            var fileExceptions = 0
             for (index, entry) in picks.enumerated() {
                 if Task.isCancelled { return }
                 let elapsed = ProcessInfo.processInfo.systemUptime - began
@@ -1049,6 +1090,7 @@ struct LibraryView: View {
                         + "大小=\(entry.size / 1024 / 1024)MB"
                 )
                 try? await Task.sleep(for: .seconds(seekAfter))
+                let preSeek = session.engine.statistics
                 let target = session.engine.duration * seekFraction
                 session.engine.seek(to: target)
                 Log.notice(
@@ -1098,6 +1140,13 @@ struct LibraryView: View {
 
                 let stats = session.engine.statistics
                 let video = session.renderer.metrics
+                let postSeekBufferStalls = max(0, stats.bufferStalls - preSeek.bufferStalls)
+                let postSeekBufferSeconds = max(0, stats.bufferSeconds - preSeek.bufferSeconds)
+                let syncOK = stats.maxDrift < 0.5
+                    && stats.clockJumpCount == 0
+                    && abs(stats.lastSeekDrift) < 0.5
+                let syncIssue = !syncOK
+                if syncIssue { syncIssues += 1 }
                 stressLog(
                     "结果 首帧=\(stats.firstVideoMilliseconds)ms 视频=\(video.enqueued) "
                         + "恢复=\(video.recoveries) 缓冲=\(stats.bufferStalls)/\(stats.maxBufferStallsPerMinute) "
@@ -1111,13 +1160,24 @@ struct LibraryView: View {
                 let statusFailed = session.renderer.statusDescription.contains("failed")
                 // 过热/服务器掉速只记录，不当作代码严重问题中断整轮验收。
                 let bufferException = buffering && tolerateBuffer
-                let serious = noVideo || decodeFault || failed || statusFailed
+                let fileFault = noVideo || decodeFault || failed || statusFailed
+                let fileException = fileFault && tolerateFileErrors
+                let serious = (fileFault && !tolerateFileErrors)
                     || (buffering && !tolerateBuffer)
                 if bufferException { bufferExceptions += 1 }
+                if fileException { fileExceptions += 1 }
 
                 var reasons: [String] = []
-                if noVideo { reasons.append("无视频帧") }
-                if decodeFault { reasons.append("显示层恢复\(video.recoveries)次") }
+                if noVideo {
+                    reasons.append(fileException ? "无视频帧（内容异常，已记录）" : "无视频帧")
+                }
+                if decodeFault {
+                    reasons.append(
+                        fileException
+                            ? "显示层恢复\(video.recoveries)次（内容异常，已记录）"
+                            : "显示层恢复\(video.recoveries)次"
+                    )
+                }
                 if buffering {
                     reasons.append(
                         bufferException
@@ -1125,8 +1185,19 @@ struct LibraryView: View {
                             : "缓冲\(stats.bufferStalls)次/峰值\(stats.maxBufferStallsPerMinute)"
                     )
                 }
-                if failed { reasons.append("失败:\(stats.failure ?? "")") }
-                if statusFailed { reasons.append("层状态:\(session.renderer.statusDescription)") }
+                if failed {
+                    reasons.append(fileException ? "失败:\(stats.failure ?? "")（已记录）" : "失败:\(stats.failure ?? "")")
+                }
+                if statusFailed {
+                    reasons.append(fileException ? "层状态:\(session.renderer.statusDescription)（已记录）" : "层状态:\(session.renderer.statusDescription)")
+                }
+                if syncIssue {
+                    reasons.append(
+                        "音画偏差 max=\(String(format: "%.2f", stats.maxDrift))s "
+                            + "seek=\(String(format: "%.2f", stats.lastSeekDrift))s "
+                            + "跳变=\(stats.clockJumpCount)"
+                    )
+                }
                 let reason = reasons.isEmpty ? "正常" : reasons.joined(separator: "；")
 
                 Log.notice(
@@ -1145,6 +1216,12 @@ struct LibraryView: View {
                         "stressTotal": picks.count,
                         "stressSeriousBug": serious,
                         "stressBufferException": bufferException,
+                        "stressFileException": fileException,
+                        "stressSyncOK": syncOK,
+                        "preSeekBufferStalls": preSeek.bufferStalls,
+                        "preSeekBufferSeconds": preSeek.bufferSeconds,
+                        "postSeekBufferStalls": postSeekBufferStalls,
+                        "postSeekBufferSeconds": postSeekBufferSeconds,
                         "stressReason": reason,
                         "stressSeekTarget": target,
                     ]
@@ -1163,7 +1240,9 @@ struct LibraryView: View {
                 completed: completed,
                 serious: foundSerious,
                 reason: stopReason,
-                bufferExceptions: bufferExceptions
+                bufferExceptions: bufferExceptions,
+                syncIssues: syncIssues,
+                fileExceptions: fileExceptions
             )
             Log.notice(.app, "压力测试结束 完成=\(completed) 条")
         }
@@ -1195,8 +1274,10 @@ struct LibraryView: View {
         ])
     }
 
-    private func collectStressVideos(root: String) async -> [MediaEntry] {
-        _ = root
+    private func collectStressVideos(
+        root: String,
+        rootFolders: Int = 0
+    ) async -> [MediaEntry] {
         var result: [MediaEntry] = []
         var seen = Set<String>()
         func add(_ entry: MediaEntry) {
@@ -1211,7 +1292,7 @@ struct LibraryView: View {
         let currentCount = result.count - historyCount
 
         // 共享接近 10TB，绝不递归；只列指定起始目录、根目录关键词命中和启动参数目录。
-        let deadline = Date().addingTimeInterval(20)
+        let deadline = Date().addingTimeInterval(rootFolders > 0 ? 45 : 20)
         let startRoot = root.trimmingCharacters(in: .whitespacesAndNewlines)
         if !startRoot.isEmpty {
             let startEntries = (try? await store.source.listAllEntries(path: startRoot)) ?? []
@@ -1233,8 +1314,8 @@ struct LibraryView: View {
 
         let keywords = ["Solo Leveling", "Transformers", "变形金刚", "American", "无职转生", "K-ON", "KON"]
         var rootEntries = store.currentEntries
-        if !rootEntries.contains(where: \.isDirectory) {
-            rootEntries = (try? await store.source.listAllEntries(path: "")) ?? []
+        if rootFolders > 0 || !rootEntries.contains(where: \.isDirectory) {
+            rootEntries = (try? await store.source.listAllEntries(path: "")) ?? rootEntries
         }
         stressLog("根目录 \(rootEntries.count) 条：" + rootEntries.prefix(40).map(\.name).joined(separator: " / "))
         for entry in rootEntries where entry.isDirectory {
@@ -1259,6 +1340,31 @@ struct LibraryView: View {
             let entries = (try? await store.source.listAllEntries(path: path)) ?? []
             if !entries.isEmpty { listed += 1 }
             for entry in entries { add(entry) }
+        }
+        var randomRootListed = 0
+        if rootFolders > 0 {
+            let directories = rootEntries.filter(\.isDirectory).shuffled().prefix(rootFolders)
+            for directory in directories {
+                if Task.isCancelled || Date() > deadline { break }
+                let entries = (try? await store.source.listAllEntries(path: directory.path)) ?? []
+                randomRootListed += 1
+                for entry in entries { add(entry) }
+                for sub in entries.filter(\.isDirectory).prefix(3) {
+                    if Task.isCancelled || Date() > deadline { break }
+                    let children = (try? await store.source.listAllEntries(path: sub.path)) ?? []
+                    for entry in children { add(entry) }
+                }
+            }
+            stressLog("随机根目录 请求=\(rootFolders) 实际=\(randomRootListed) 候选=\(result.count)")
+        }
+        let excludes = (argumentValue("-stressExclude") ?? "")
+            .split(separator: "|")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !excludes.isEmpty {
+            result = result.filter { entry in
+                !excludes.contains { entry.path.localizedCaseInsensitiveContains($0) }
+            }
         }
         if let filter = argumentValue("-stressFilter"), !filter.isEmpty {
             result = result.filter { $0.path.localizedCaseInsensitiveContains(filter) }
@@ -1302,12 +1408,13 @@ struct LibraryView: View {
     private func selectStressVideos(
         _ videos: [MediaEntry],
         count: Int,
-        hdFirst: Bool
+        hdFirst: Bool,
+        perDirectoryLimit: Int = 3
     ) -> [MediaEntry] {
         var picks: [MediaEntry] = []
         var used = Set<String>()
         var perDirectory: [String: Int] = [:]
-        let maxPerDirectory = 3
+        let maxPerDirectory = max(1, perDirectoryLimit)
         func add(_ entry: MediaEntry?) {
             guard picks.count < count, let entry, used.insert(entry.id).inserted else { return }
             let directory = entry.directoryPath
@@ -1402,6 +1509,14 @@ struct LibraryView: View {
             "durationSeconds": duration,
             "audioCodec": session.engine.audioCodecName,
             "videoCodec": session.engine.videoCodecName,
+            "prepareMilliseconds": session.prepareMilliseconds,
+            "sourceOpenMilliseconds": session.sourceOpenMilliseconds,
+            "probeMilliseconds": session.probeMilliseconds,
+            "subtitleMilliseconds": session.subtitleMilliseconds,
+            "engineMilliseconds": session.engineMilliseconds,
+            "openInputMilliseconds": session.openInputMilliseconds,
+            "streamInfoMilliseconds": session.streamInfoMilliseconds,
+            "clickToFirstVideoMilliseconds": session.prepareMilliseconds + stats.firstVideoMilliseconds,
             "averageBitrateMbps": bitrate,
             "positionSeconds": session.engine.clock.currentTime,
             "startupMilliseconds": stats.startupMilliseconds,
@@ -1481,7 +1596,9 @@ struct LibraryView: View {
         completed: Int,
         serious: Bool,
         reason: String,
-        bufferExceptions: Int = 0
+        bufferExceptions: Int = 0,
+        syncIssues: Int = 0,
+        fileExceptions: Int = 0
     ) {
         guard ProcessInfo.processInfo.arguments.contains("-acceptanceReport") else { return }
         let summary: [String: Any] = [
@@ -1490,6 +1607,8 @@ struct LibraryView: View {
             "stressCompleted": completed,
             "stressSeriousFound": serious,
             "stressBufferExceptions": bufferExceptions,
+            "stressSyncIssues": syncIssues,
+            "stressFileExceptions": fileExceptions,
             "stressStopReason": reason,
             "capturedAt": ISO8601DateFormatter().string(from: Date()),
         ]
@@ -1580,9 +1699,9 @@ struct LibraryView: View {
 
 struct LibraryContentPage: View {
     @Bindable var store: LibraryStore
-    let showsBackButton: Bool
     @Binding var showDiagnostics: Bool
     var onDisconnect: (() -> Void)?
+    @State private var showSettings = false
 
     private var isSearching: Bool {
         !store.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1608,15 +1727,15 @@ struct LibraryContentPage: View {
             prompt: "搜索标题或目录"
         )
         .toolbar {
-            if showsBackButton, store.canGoBack {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        store.goBack()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .accessibilityLabel("返回上一级")
+            // 与右侧“更多”对称的左侧返回按钮；系统会自动套用玻璃按钮样式。
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    store.goBack()
+                } label: {
+                    Image(systemName: "chevron.left")
                 }
+                .disabled(!store.canGoBack)
+                .accessibilityLabel("返回上一级")
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -1634,25 +1753,13 @@ struct LibraryContentPage: View {
                     }
                     .disabled(store.currentPath.isEmpty)
 
-                    if store.availableShares.count > 1 {
-                        Section("切换共享") {
-                            ForEach(store.availableShares, id: \.self) { share in
-                                Button {
-                                    Task { await store.switchShare(share) }
-                                } label: {
-                                    Label(
-                                        share,
-                                        systemImage: share == store.source.shareName
-                                            ? "checkmark.circle.fill"
-                                            : "externaldrive"
-                                    )
-                                }
-                                .disabled(store.isSwitchingShare)
-                            }
-                        }
-                    }
-
                     Divider()
+
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Label("设置", systemImage: "gearshape")
+                    }
 
                     Button {
                         showDiagnostics = true
@@ -1674,11 +1781,34 @@ struct LibraryContentPage: View {
                             Label("断开并返回连接页", systemImage: "rectangle.portrait.and.arrow.right")
                         }
                     }
+
+                    if store.availableShares.count > 1 {
+                        Divider()
+                        Section("切换共享") {
+                            ForEach(store.availableShares, id: \.self) { share in
+                                Button {
+                                    Task { await store.switchShare(share) }
+                                } label: {
+                                    Label(
+                                        share,
+                                        systemImage: share == store.source.shareName
+                                            ? "checkmark.circle.fill"
+                                            : "externaldrive"
+                                    )
+                                }
+                                .disabled(store.isSwitchingShare)
+                            }
+                        }
+                    }
+
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .accessibilityLabel("更多")
             }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
         .task(id: store.currentPath) {
             await store.loadCurrent()
@@ -1690,6 +1820,38 @@ struct LibraryContentPage: View {
         }
         .refreshable {
             await store.refresh()
+        }
+    }
+}
+
+
+/// 播放相关设置。键值集中在这里，设置页和播放器共用。
+enum PlaybackPreferences {
+    static let pictureInPictureEnabledKey = "playback.pictureInPictureEnabled"
+}
+
+/// 设置页：目前只有画中画开关，默认关闭。
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(PlaybackPreferences.pictureInPictureEnabledKey) private var pipEnabled = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("画中画", isOn: $pipEnabled)
+                        .accessibilityIdentifier("settings.pictureInPicture")
+                } footer: {
+                    Text("默认关闭。开启后，离开 App 时可将正在播放的视频切到画中画；关闭会立即退出已开启的画中画。")
+                }
+            }
+            .navigationTitle("设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
         }
     }
 }

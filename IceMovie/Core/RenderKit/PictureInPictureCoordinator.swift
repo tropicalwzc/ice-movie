@@ -9,6 +9,7 @@ import IceCore
 @MainActor
 public final class PictureInPictureCoordinator: NSObject {
     public private(set) var isSupported: Bool
+    public private(set) var isEnabled = false
     public private(set) var isActive = false
     public private(set) var lastError: String?
     public var onStateChange: ((Bool) -> Void)?
@@ -30,7 +31,23 @@ public final class PictureInPictureCoordinator: NSObject {
         createControllerIfNeeded()
     }
 
+    /// 设置页开关：默认关闭；关闭时停止正在进行的画中画并禁止自动进入。
+    public func setEnabled(_ enabled: Bool) {
+        isEnabled = enabled
+        createControllerIfNeeded()
+        controller?.canStartPictureInPictureAutomaticallyFromInline = enabled
+        if !enabled, controller?.isPictureInPictureActive == true {
+            controller?.stopPictureInPicture()
+        }
+        Log.info(.render, "画中画开关=\(enabled ? "开" : "关")")
+    }
+
     public func toggle() {
+        guard isEnabled else {
+            lastError = "画中画已在设置中关闭"
+            Log.notice(.render, "画中画不可用：设置中未开启")
+            return
+        }
         createControllerIfNeeded()
         guard let controller else {
             lastError = isSupported ? "画中画控制器尚未就绪" : "当前设备不支持画中画"
@@ -61,9 +78,9 @@ public final class PictureInPictureCoordinator: NSObject {
         )
         let created = AVPictureInPictureController(contentSource: source)
         created.delegate = self
-        created.canStartPictureInPictureAutomaticallyFromInline = true
+        created.canStartPictureInPictureAutomaticallyFromInline = isEnabled
         controller = created
-        Log.info(.render, "画中画控制器已创建 自动进入=是")
+        Log.info(.render, "画中画控制器已创建 自动进入=\(isEnabled ? "是" : "否")")
     }
 }
 

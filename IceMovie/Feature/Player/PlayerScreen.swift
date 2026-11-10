@@ -31,8 +31,8 @@ struct PlayerScreen: View {
     let onRestartFromBeginning: (() -> Void)?
 
     @State private var pip: PictureInPictureCoordinator
-    @State private var pipActive = false
     @State private var commandToken: UUID?
+    @AppStorage(PlaybackPreferences.pictureInPictureEnabledKey) private var pipEnabled = false
 
     init(
         engine: PlaybackEngine,
@@ -91,7 +91,7 @@ struct PlayerScreen: View {
             subtitle: subtitle,
             isFullscreen: isFullscreen,
             pip: pip,
-            pipActive: pipActive,
+            pipEnabled: pipEnabled,
             onToggleFullscreen: onToggleFullscreen,
             onClose: onClose,
             subtitleTracks: subtitleTracks,
@@ -116,15 +116,14 @@ struct PlayerScreen: View {
         .accessibilityIdentifier("player.surface")
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            pip.onStateChange = { active in
-                pipActive = active
-            }
-            pipActive = pip.isActive
+            pip.setEnabled(pipEnabled)
             commandToken = PlayerCommands.shared.attach(
                 engine: engine,
-                toggleFullscreen: onToggleFullscreen,
-                togglePiP: { pip.toggle() }
+                toggleFullscreen: onToggleFullscreen
             )
+        }
+        .onChange(of: pipEnabled) { _, enabled in
+            pip.setEnabled(enabled)
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -143,7 +142,7 @@ private struct PlayerSurface: View {
     let subtitle: SubtitleTimeline?
     let isFullscreen: Bool
     let pip: PictureInPictureCoordinator
-    let pipActive: Bool
+    let pipEnabled: Bool
     let onToggleFullscreen: (() -> Void)?
     let onClose: (() -> Void)?
     let subtitleTracks: [SubtitleTrack]
@@ -175,6 +174,7 @@ private struct PlayerSurface: View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
             VideoSurface(renderer: renderer, onLayerReady: { layer in
+                pip.setEnabled(pipEnabled)
                 pip.bind(layer: layer)
             })
             .ignoresSafeArea()
@@ -294,9 +294,6 @@ private struct PlayerSurface: View {
                     onInteraction: noteInteraction,
                     onToggleFullscreen: onToggleFullscreen,
                     isFullscreen: isFullscreen,
-                    onTogglePiP: { pip.toggle() },
-                    isPiPActive: pipActive,
-                    isPiPSupported: pip.isSupported,
                     selectedSubtitle: selectedSubtitle,
                     onToggleSubtitlePanel: {
                         showSubtitlePanel.toggle()

@@ -120,10 +120,26 @@
 
 原始报告：`docs/acceptance-2026-11-10-mushoku-s02e02-sync-fix.json`
 
-## 五、结论
+## 五、延迟刷新重试修复
+
+审查发现的问题真实存在：`refreshOrRetry` 被限流后，重试唤醒时只校验显示层对象，没有检查 `needsKeyframe`；`reset(to:)` 也没有作废旧重试。两种场景会多发起一次 seek：
+
+- 关键帧在冷却期间已经到达并清掉 `needsKeyframe`，重试仍会 seek；
+- 用户在冷却期间手动 seek，`reset(to:)` 后旧重试仍会再 seek 一次。
+
+修复：
+
+- 重试唤醒时校验 `needsKeyframe == true`，并且 refresh generation 未变化；
+- `reset(to:)` 递增 refresh generation，旧重试自动作废；
+- 新增 `shouldPerformDelayedRefresh` 纯函数及单元测试。
+
+验证：130 个单元测试全部通过；Release 构建成功。
+
+## 六、结论
 
 - 9 条审查问题均已修复，其中 3 条做了模拟器/运行日志验证。
 - 30 分钟随机压力基准 14/14 完成，硬件严重问题为 0，环境缓冲异常 1 条（已记录），全部样本 `clockJumpCount=0`。
 - 无职转生 S02E05/E06 均通过 2 分钟 4K 播放 + 50% seek + 回退 10 秒测试。
 - S02E02 的 seek 音画不同步已修复，复测 `maxDrift` 从 26.69s 降到 0.023s，`clockJumpCount=0`。
+- 延迟刷新重试的多余 seek 问题已修复，重试会校验关键帧状态与 refresh generation。
 - 仍保留环境提示：服务器连续读取多部超大 4K 后可能出现冷读掉速，此时报告会通过 `stressBufferException` 记录，而不是误判为代码故障。

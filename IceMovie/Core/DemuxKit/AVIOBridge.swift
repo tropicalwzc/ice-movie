@@ -38,6 +38,10 @@ final class AVIOBridge {
         (source as? PrefetchCancelling)?.cancelPrefetch()
     }
 
+    func setPrefetchEnabled(_ enabled: Bool) {
+        (source as? PrefetchControlling)?.setPrefetchEnabled(enabled)
+    }
+
     func setSupply(audioAhead: Double, videoAhead: Double) {
         (source as? BufferSupplyProviding)?.setSupply(audioAhead: audioAhead, videoAhead: videoAhead)
     }

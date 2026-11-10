@@ -46,11 +46,6 @@ struct IceMovieApp: App {
                     PlayerCommands.shared.toggleFullscreen()
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
-
-                Button("切换画中画") {
-                    PlayerCommands.shared.togglePiP()
-                }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
             }
         }
     }

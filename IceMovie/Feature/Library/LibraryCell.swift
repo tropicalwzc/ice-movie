@@ -87,6 +87,12 @@ struct LibraryCell: View {
     let entry: MediaEntry
 
     @Environment(LibraryStore.self) private var store
+    @State private var showsPreparing = false
+
+    /// 当前点击的条目正在打开 SMB 文件、探测媒体信息，播放器还没出现。
+    private var isPreparing: Bool {
+        !entry.isDirectory && store.preparingPlaybackID == entry.id
+    }
 
     var body: some View {
         Button {
@@ -94,6 +100,7 @@ struct LibraryCell: View {
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 LibraryPoster(entry: entry)
+                    .overlay { preparingOverlay }
 
                 Text(store.displayTitle(for: entry))
                     .font(.footnote.weight(.medium))
@@ -113,5 +120,39 @@ struct LibraryCell: View {
         .hoverEffect(.highlight)
         .accessibilityLabel(entry.name)
         .accessibilityHint(entry.isDirectory ? "进入文件夹" : "开始播放")
+        .accessibilityValue(isPreparing ? Text("正在打开") : Text(""))
+        .task(id: isPreparing) {
+            guard isPreparing else {
+                withAnimation(.easeOut(duration: 0.15)) { showsPreparing = false }
+                return
+            }
+            // 起播很快时不必闪一下转圈，超过一小段等待再显示。
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.15)) { showsPreparing = true }
+        }
+    }
+
+    @ViewBuilder
+    private var preparingOverlay: some View {
+        if showsPreparing {
+            ZStack {
+                Color.black.opacity(0.32)
+
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.large)
+                        .tint(.white)
+
+                    Text("正在打开…")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .transition(.opacity)
+            .allowsHitTesting(false)
+        }
     }
 }

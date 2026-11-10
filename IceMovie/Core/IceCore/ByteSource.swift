@@ -24,6 +24,11 @@ public protocol NetworkSpeedProviding: Sendable {
     var downloadBytesPerSecond: Double { get }
 }
 
+/// 可选预读开关：起播前只读播放必需数据，第一帧开播后才启动后台填满预读环。
+public protocol PrefetchControlling: AnyObject, Sendable {
+    func setPrefetchEnabled(_ enabled: Bool)
+}
+
 /// 可选预读取消：切换视频/停止播放时，旧文件的预读任务必须立即退出，不能继续抢带宽。
 public protocol PrefetchCancelling: AnyObject, Sendable {
     func cancelPrefetch()

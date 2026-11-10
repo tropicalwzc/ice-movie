@@ -11,20 +11,17 @@ final class PlayerCommands {
     private var engine: PlaybackEngine?
     private var activeToken: UUID?
     private var toggleFullscreenHandler: (() -> Void)?
-    private var togglePiPHandler: (() -> Void)?
 
     var isAvailable: Bool { engine != nil }
 
     func attach(
         engine: PlaybackEngine,
-        toggleFullscreen: (() -> Void)?,
-        togglePiP: (() -> Void)?
+        toggleFullscreen: (() -> Void)?
     ) -> UUID {
         let token = UUID()
         activeToken = token
         self.engine = engine
         self.toggleFullscreenHandler = toggleFullscreen
-        self.togglePiPHandler = togglePiP
         return token
     }
 
@@ -33,7 +30,6 @@ final class PlayerCommands {
         activeToken = nil
         engine = nil
         toggleFullscreenHandler = nil
-        togglePiPHandler = nil
     }
 
     func togglePlayPause() {
@@ -58,9 +54,4 @@ final class PlayerCommands {
         Log.info(.app, "菜单/快捷键：切换全屏")
     }
 
-    func togglePiP() {
-        guard let togglePiPHandler else { return }
-        togglePiPHandler()
-        Log.info(.app, "菜单/快捷键：切换画中画")
-    }
 }

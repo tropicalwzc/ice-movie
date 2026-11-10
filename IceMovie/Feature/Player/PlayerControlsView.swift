@@ -13,9 +13,6 @@ struct PlayerControlsView: View {
     var onInteraction: () -> Void
     var onToggleFullscreen: (() -> Void)?
     var isFullscreen: Bool = false
-    var onTogglePiP: (() -> Void)?
-    var isPiPActive: Bool = false
-    var isPiPSupported: Bool = false
     var selectedSubtitle: SubtitleTrack?
     var onToggleSubtitlePanel: (() -> Void)?
 
@@ -61,16 +58,6 @@ struct PlayerControlsView: View {
                         ) {
                             onInteraction()
                             onToggleFullscreen()
-                        }
-                        .font(.system(size: 20))
-                    }
-                    if let onTogglePiP, isPiPSupported {
-                        button(
-                            isPiPActive ? "pip.exit" : "pip.enter",
-                            label: isPiPActive ? "退出画中画" : "画中画"
-                        ) {
-                            onInteraction()
-                            onTogglePiP()
                         }
                         .font(.system(size: 20))
                     }

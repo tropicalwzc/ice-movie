@@ -229,6 +229,8 @@ public final class PlaybackEngine: @unchecked Sendable {
         }
         output?.play()
         clock.play()
+        // 第一帧真正开始时才允许后台预读填满窗口，起播/探测阶段不抢带宽。
+        reader.setPrefetchEnabled(true)
         videoRenderer?.syncTimebase()
         startSyncTimer()
         Log.info(

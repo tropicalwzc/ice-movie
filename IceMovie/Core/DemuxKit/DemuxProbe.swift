@@ -84,9 +84,14 @@ public enum DemuxProbe {
         try MediaReader.open(source: source, label: label).info
     }
 
-    static func readInfo(format: UnsafeMutablePointer<AVFormatContext>) throws -> MediaInfo {
-        let info = avformat_find_stream_info(format, nil)
-        guard info >= 0 else { throw DemuxError.streamInfoFailed(info) }
+    static func readInfo(
+        format: UnsafeMutablePointer<AVFormatContext>,
+        probeStreams: Bool = true
+    ) throws -> MediaInfo {
+        if probeStreams {
+            let info = avformat_find_stream_info(format, nil)
+            guard info >= 0 else { throw DemuxError.streamInfoFailed(info) }
+        }
 
         let formatName = format.pointee.iformat.map { String(cString: $0.pointee.name) } ?? "unknown"
         let duration = format.pointee.duration > 0

@@ -9,6 +9,117 @@ import SwiftData
 import SwiftUI
 import UIKit
 
+/// 点击后立即出现、但引擎尚未就绪的播放页状态。
+/// 它只持有占位图与取消标记，真正的 SMB/解封装工作由 `preparePlayback` 异步完成。
+@MainActor
+@Observable
+final class PendingPlayback: Identifiable {
+    let id = UUID()
+    let entry: MediaEntry
+    let label: String
+    let poster: UIImage?
+    let requestedAt: Double
+    var presentedAt: Double?
+    var failure: PlaybackFailure?
+    var cancelled = false
+
+    init(entry: MediaEntry, label: String, poster: UIImage?, requestedAt: Double) {
+        self.entry = entry
+        self.label = label
+        self.poster = poster
+        self.requestedAt = requestedAt
+    }
+
+    var presentedMilliseconds: Int {
+        let end = presentedAt ?? ProcessInfo.processInfo.systemUptime
+        return max(0, Int((end - requestedAt) * 1000))
+    }
+}
+
+/// 播放页准备态：占位图 + 加载指示；失败时就地展示错误与返回入口。
+struct PendingPlayerScreen: View {
+    let pending: PendingPlayback
+    let isFullscreen: Bool
+    let onClose: () -> Void
+    let onPresented: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let poster = pending.poster {
+                Image(uiImage: poster)
+                    .resizable()
+                    .scaledToFit()
+                    .opacity(pending.failure == nil ? 0.55 : 0.25)
+                    .blur(radius: pending.failure == nil ? 1.5 : 4)
+            }
+            VStack(spacing: 14) {
+                if let failure = pending.failure {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(.orange)
+                    Text(failure.title)
+                        .font(.headline)
+                    Text(failure.message)
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(maxWidth: 420)
+                    Button("返回媒体库", action: onClose)
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, 4)
+                } else {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.white)
+                    Text(pending.label)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                    Text("正在准备播放…")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+            }
+            .padding(24)
+        }
+        .overlay(alignment: .topLeading) {
+            if isFullscreen {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .padding(10)
+                        .background(.black.opacity(0.45), in: Circle())
+                }
+                .tint(.white)
+                .padding(.top, 12)
+                .padding(.leading, 16)
+            }
+        }
+        .onAppear {
+            if pending.presentedAt == nil {
+                pending.presentedAt = ProcessInfo.processInfo.systemUptime
+            }
+            onPresented()
+        }
+    }
+}
+
+/// 内封轨在前、外挂轨在后，按 id 去重；位图字幕没有文本渲染路径，始终排除。
+func mergedSubtitleTracks(
+    existing: [SubtitleTrack],
+    incoming: [SubtitleTrack]
+) -> [SubtitleTrack] {
+    var ids = Set(existing.map(\.id))
+    var result = existing
+    for track in incoming where track.format != .bitmap {
+        guard !ids.contains(track.id) else { continue }
+        ids.insert(track.id)
+        result.append(track)
+    }
+    return result
+}
+
 @MainActor
 @Observable
 final class LibraryPlaybackSession: Identifiable {
@@ -17,7 +128,7 @@ final class LibraryPlaybackSession: Identifiable {
     let renderer: VideoRenderer
     let label: String
     let entry: MediaEntry
-    let tracks: [SubtitleTrack]
+    private(set) var tracks: [SubtitleTrack]
     /// 从点击到容器探测、字幕发现和引擎创建完成的时间。
     let prepareMilliseconds: Int
     let sourceOpenMilliseconds: Int
@@ -26,12 +137,16 @@ final class LibraryPlaybackSession: Identifiable {
     let engineMilliseconds: Int
     let openInputMilliseconds: Int
     let streamInfoMilliseconds: Int
+    var startup: StartupDiagnostics
     var selectedTrack: SubtitleTrack?
     var timeline: SubtitleTimeline?
     var subtitleScript: String?
     var subtitleFonts: [SubtitleFont] = []
     var subtitleError: String?
     var subtitleLoading = false
+    /// 从开始加载字幕到第一条 cue 可显示的时间；用于定位“字幕很久不出来”。
+    var subtitleFirstCueMilliseconds = 0
+    private var subtitleStartedAt: Double = 0
     var fontSize: Double = SubtitlePreferences.fontSize
     var bottomPadding: Double = SubtitlePreferences.bottomPadding
     var subtitleOffset: Double = SubtitlePreferences.offset
@@ -68,6 +183,7 @@ final class LibraryPlaybackSession: Identifiable {
         engineMilliseconds: Int,
         openInputMilliseconds: Int,
         streamInfoMilliseconds: Int,
+        startup: StartupDiagnostics,
         selectedTrack: SubtitleTrack?,
         timeline: SubtitleTimeline?,
         loader: SubtitleLoader
@@ -84,6 +200,7 @@ final class LibraryPlaybackSession: Identifiable {
         self.engineMilliseconds = engineMilliseconds
         self.openInputMilliseconds = openInputMilliseconds
         self.streamInfoMilliseconds = streamInfoMilliseconds
+        self.startup = startup
         self.selectedTrack = selectedTrack
         self.timeline = timeline
         self.loader = loader
@@ -97,7 +214,32 @@ final class LibraryPlaybackSession: Identifiable {
     func startSubtitles(at position: Double) {
         guard !subtitlesStarted else { return }
         subtitlesStarted = true
+        subtitleStartedAt = ProcessInfo.processInfo.systemUptime
         loadInitialSubtitle(startPosition: position)
+    }
+
+    private func markSubtitleCue() {
+        guard subtitleFirstCueMilliseconds == 0, subtitleStartedAt > 0 else { return }
+        subtitleFirstCueMilliseconds = Int(
+            (ProcessInfo.processInfo.systemUptime - subtitleStartedAt) * 1000
+        )
+    }
+
+    /// 外挂字幕在后台扫描完成后合并；不覆盖用户已手动选择的轨道。
+    func mergeExternalTracks(_ external: [SubtitleTrack]) {
+        let existingCount = tracks.count
+        let merged = mergedSubtitleTracks(existing: tracks, incoming: external)
+        guard merged.count > existingCount else { return }
+        tracks = merged
+        Log.info(
+            .subtitle,
+            "外挂字幕已合并 新增=\(merged.count - existingCount) 总数=\(tracks.count) "
+                + "当前选择=\(selectedTrack?.title ?? "无")"
+        )
+        // 之前没有内封轨、也没被用户手动关字幕时，补上默认外挂轨。
+        if selectedTrack == nil, timeline == nil, SubtitlePreferences.enabled {
+            loadInitialSubtitle(startPosition: engine.clock.currentTime)
+        }
     }
 
     func loadInitialSubtitle(startPosition: Double = 0) {
@@ -114,7 +256,7 @@ final class LibraryPlaybackSession: Identifiable {
         // 大文件 ASS 直接复用播放泵读到的字幕包：必须在 engine.play() 之前同步挂上，
         // 否则第一个 Cluster 的字幕包会被播放泵读掉而错过。
         if let first = candidates.first,
-           let index = largeEmbeddedIndex(first) {
+           let index = playbackCollectedIndex(first) {
             selectedTrack = first
             SubtitlePreferences.lastLanguage = first.language
             startCollected(
@@ -150,7 +292,7 @@ final class LibraryPlaybackSession: Identifiable {
     ) async {
         for (offset, candidate) in candidates.enumerated() {
             if Task.isCancelled { return }
-            if let index = largeEmbeddedIndex(candidate) {
+            if let index = playbackCollectedIndex(candidate) {
                 selectedTrack = candidate
                 SubtitlePreferences.lastLanguage = candidate.language
                 let fallback = Array(candidates.dropFirst(offset + 1))
@@ -173,6 +315,7 @@ final class LibraryPlaybackSession: Identifiable {
                 selectedTrack = candidate
                 timeline = loaded.timeline
                 subtitleScript = loaded.script
+                markSubtitleCue()
                 subtitleFonts = loaded.fonts
                 subtitleError = nil
                 subtitleLoading = false
@@ -221,7 +364,7 @@ final class LibraryPlaybackSession: Identifiable {
             Log.info(.subtitle, "字幕已关闭")
             return
         }
-        if let index = largeEmbeddedIndex(track) {
+        if let index = playbackCollectedIndex(track) {
             startCollected(track, streamIndex: index)
             return
         }
@@ -235,6 +378,7 @@ final class LibraryPlaybackSession: Identifiable {
                 guard !Task.isCancelled else { return }
                 timeline = loaded.timeline
                 subtitleScript = loaded.script
+                markSubtitleCue()
                 subtitleFonts = loaded.fonts
                 subtitleError = nil
                 let elapsed = Int((ProcessInfo.processInfo.systemUptime - began) * 1000)
@@ -252,15 +396,18 @@ final class LibraryPlaybackSession: Identifiable {
         }
     }
 
-    /// 大文件的内封字幕不再整集扫描，改为按播放位置分片加载。
-    private func largeEmbeddedIndex(_ track: SubtitleTrack) -> Int? {
+    /// 内封字幕加载策略：
+    /// - ≥800MB 或 SRT/VTT 等文本轨：复用播放泵，避免为字幕整集扫描 SMB；
+    /// - 小文件 ASS：保留完整脚本扫描，以维持 libass 样式。
+    private func playbackCollectedIndex(_ track: SubtitleTrack) -> Int? {
         guard case .embedded(let index) = track.source,
-              track.format != .bitmap,
-              entry.size >= shardedThresholdBytes else { return nil }
-        return index
+              track.format != .bitmap else { return nil }
+        if entry.size >= shardedThresholdBytes { return index }
+        if track.format != .ass { return index }
+        return nil
     }
 
-    /// 大文件 ASS：直接复用播放泵已读到的字幕包，不再为字幕单独扫 SMB。
+    /// 直接复用播放泵已读到的字幕包，不再为字幕单独扫 SMB。
     private func startCollected(
         _ track: SubtitleTrack,
         streamIndex: Int,
@@ -319,6 +466,7 @@ final class LibraryPlaybackSession: Identifiable {
         }
         timeline = SubtitleTimeline(cues: cues)
         subtitleLoading = false
+        markSubtitleCue()
     }
 
     private func startSharded(
@@ -414,6 +562,8 @@ struct LibraryView: View {
     @State private var appliedLaunchSeek = false
     @State private var appliedLaunchClose = false
     @State private var playback: LibraryPlaybackSession?
+    /// 点击后立即出现的准备态；与 `playback` 互斥，失败时保留并就地展示错误。
+    @State private var pendingPlayback: PendingPlayback?
     @State private var isPlayerFullscreen = false
     @State private var inlineGeneration = 0
     @State private var currentShell: LibraryShell = .compact
@@ -457,7 +607,9 @@ struct LibraryView: View {
 
             // iPhone / 紧凑布局直接用根视图内的全屏层，不经过 fullScreenCover：
             // 系统弹层的视图控制器只报告竖屏，会拒绝 requestGeometryUpdate 的横屏请求。
-            if currentShell == .compact, let playback, isPlayerFullscreen {
+            if currentShell == .compact,
+               playback != nil || pendingPlayback != nil,
+               isPlayerFullscreen {
                 fullscreenPlayer
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
@@ -476,7 +628,7 @@ struct LibraryView: View {
         .alert(
             store.playbackFailure?.title ?? "无法播放",
             isPresented: Binding(
-                get: { store.playbackFailure != nil },
+                get: { store.playbackFailure != nil && pendingPlayback == nil },
                 set: { if !$0 { store.dismissPlaybackFailure() } }
             ),
             presenting: store.playbackFailure
@@ -539,6 +691,16 @@ struct LibraryView: View {
                 onAdjustOffset: { playback.adjustSubtitleOffset($0) },
                 resumeNotice: resumeNotice,
                 onRestartFromBeginning: { restartPlayback() }
+            )
+        } else if let pendingPlayback {
+            PendingPlayerScreen(
+                pending: pendingPlayback,
+                isFullscreen: true,
+                onClose: { closePlayback() },
+                onPresented: {
+                    Log.info(.app, "播放页已出现（准备态） \(pendingPlayback.presentedMilliseconds)ms")
+                    resumeNotice = nil
+                }
             )
         } else {
             Color.black
@@ -603,6 +765,35 @@ struct LibraryView: View {
                         .background(Color.black)
                         .clipped()
                         .id("\(playback.id)-\(inlineGeneration)")
+                    } else if let pendingPlayback, !isPlayerFullscreen {
+                        HStack(spacing: 10) {
+                            Image(systemName: "player.fill")
+                                .foregroundStyle(.secondary)
+                            Text(pendingPlayback.label)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                            Spacer()
+                            Button("取消") { closePlayback() }
+                                .font(.caption.weight(.semibold))
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        PendingPlayerScreen(
+                            pending: pendingPlayback,
+                            isFullscreen: false,
+                            onClose: { closePlayback() },
+                            onPresented: {
+                                Log.info(
+                                    .app,
+                                    "内联播放页已出现（准备态） \(pendingPlayback.presentedMilliseconds)ms"
+                                )
+                            }
+                        )
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.black)
+                        .clipped()
                     }
 
                     NavigationStack {
@@ -693,22 +884,81 @@ struct LibraryView: View {
         autoAdvanceTask?.cancel()
         resumeNoticeTask?.cancel()
         resumeNotice = nil
-        let requestedAt = ProcessInfo.processInfo.systemUptime
+        // 旧会话立即停止，避免它的预读与准备中的新文件抢 SMB 带宽。
+        if let old = playback {
+            old.stopSubtitles()
+            NowPlayingCenter.shared.detach(engine: old.engine)
+            old.engine.stop()
+        }
+        playback = nil
+        store.dismissPlaybackFailure()
+
+        let label = store.playbackTitle(for: entry)
+        let pending = PendingPlayback(
+            entry: entry,
+            label: label,
+            poster: store.cachedThumbnail(for: entry),
+            requestedAt: ProcessInfo.processInfo.systemUptime
+        )
+        pendingPlayback = pending
+        isPlayerFullscreen = fullscreen
+        if fullscreen {
+            // 旋转与 I/O 并行；不再等 prepare 完成后才请求横屏。
+            AppOrientation.request(.landscape, delay: .milliseconds(50))
+        }
+
+        let progress = PlaybackProgressStore(context: modelContext)
+        let resume = progress.resumePosition(
+            for: PlaybackProgressPolicy.key(
+                path: entry.path,
+                size: entry.size,
+                modified: entry.modified
+            )
+        )
+        let requestedAt = pending.requestedAt
+
         playbackTask = Task { @MainActor in
-            guard let prepared = await store.preparePlayback(entry),
-                  let renderer = prepared.engine.videoRenderer else { return }
+            guard let prepared = await store.preparePlayback(entry, startAt: resume) else {
+                if pending.cancelled || Task.isCancelled {
+                    Log.info(.app, "播放准备已取消 \(Log.shortPath(entry.path))")
+                    return
+                }
+                let failure = store.playbackFailure
+                    ?? PlaybackFailure.interrupted("播放准备未完成")
+                store.dismissPlaybackFailure()
+                pending.failure = failure
+                Log.notice(
+                    .app,
+                    "播放准备失败（准备态保留） \(Log.shortPath(entry.path)) "
+                        + failure.title
+                )
+                return
+            }
+            guard let renderer = prepared.engine.videoRenderer else {
+                prepared.engine.stop()
+                let failure = PlaybackFailure.interrupted("播放器渲染层未就绪")
+                store.dismissPlaybackFailure()
+                pending.failure = failure
+                Log.error(
+                    .app,
+                    "播放准备缺少渲染层 \(Log.shortPath(entry.path))"
+                )
+                return
+            }
+            if pending.cancelled || Task.isCancelled {
+                prepared.engine.stop()
+                Log.info(.app, "播放准备完成后取消 \(Log.shortPath(entry.path))")
+                return
+            }
             let prepareMilliseconds = Int(
                 (ProcessInfo.processInfo.systemUptime - requestedAt) * 1000
             )
-            if let old = playback {
-                old.stopSubtitles()
-                NowPlayingCenter.shared.detach(engine: old.engine)
-            }
-            playback?.engine.stop()
+            var startup = prepared.startup
+            startup.playerPresentedMilliseconds = pending.presentedMilliseconds
             let session = LibraryPlaybackSession(
                 engine: prepared.engine,
                 renderer: renderer,
-                label: store.playbackTitle(for: entry),
+                label: label,
                 entry: entry,
                 tracks: prepared.tracks,
                 prepareMilliseconds: prepareMilliseconds,
@@ -718,29 +968,48 @@ struct LibraryView: View {
                 engineMilliseconds: prepared.engineMilliseconds,
                 openInputMilliseconds: prepared.openInputMilliseconds,
                 streamInfoMilliseconds: prepared.streamInfoMilliseconds,
+                startup: startup,
                 selectedTrack: prepared.selectedTrack,
                 timeline: prepared.timeline,
                 loader: prepared.loader
             )
+            pendingPlayback = nil
             playback = session
-            isPlayerFullscreen = fullscreen
-            if fullscreen {
-                AppOrientation.request(.landscape, delay: .milliseconds(350))
-            }
             Log.debug(
                 .app,
                 "播放会话已建立 请求全屏=\(fullscreen) 当前全屏状态=\(isPlayerFullscreen) "
+                    + "播放页出现=\(startup.playerPresentedMilliseconds)ms "
                     + "会话=\(playback != nil)"
             )
             NowPlayingCenter.shared.attach(engine: prepared.engine, title: session.label)
-            let progress = PlaybackProgressStore(context: modelContext)
-            let resume = progress.resumePosition(for: session.progressKey)
             // 先挂字幕采集/分片读取，再起播：大文件 ASS 才能接住第一个 Cluster 的字幕包。
             session.startSubtitles(at: resume ?? 0)
             prepared.engine.play()
+            let scanBegan = ProcessInfo.processInfo.systemUptime
+            Task { @MainActor [weak session] in
+                let external = await prepared.externalTracksTask.value
+                guard let session else { return }
+                session.startup.subtitleScanMilliseconds = Int(
+                    (ProcessInfo.processInfo.systemUptime - scanBegan) * 1000
+                )
+                session.mergeExternalTracks(external)
+            }
             if let resume {
-                prepared.engine.seek(to: resume)
-                showResumeNotice(position: resume)
+                if prepared.startup.resumeLocated {
+                    showResumeNotice(position: resume)
+                } else {
+                    resumeNotice = "续播定位失败，已从头播放"
+                    resumeNoticeTask?.cancel()
+                    resumeNoticeTask = Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(8))
+                        guard !Task.isCancelled else { return }
+                        resumeNotice = nil
+                    }
+                    Log.notice(
+                        .app,
+                        "续播定位失败，已从头播放 \(Log.shortPath(entry.path))"
+                    )
+                }
             }
             scheduleLaunchRewindIfNeeded(session)
             startProgressTimer()
@@ -1066,17 +1335,26 @@ struct LibraryView: View {
 
                 stressLog("打开 \(entry.path)")
                 let readyDeadline = Date().addingTimeInterval(90)
-                while playback?.entry.id != entry.id, Date() < readyDeadline {
+                while playback?.entry.id != entry.id,
+                      pendingPlayback?.failure == nil,
+                      Date() < readyDeadline {
                     try? await Task.sleep(for: .milliseconds(200))
                 }
                 guard let session = playback, session.entry.id == entry.id else {
+                    let failure = pendingPlayback?.failure ?? store.playbackFailure
                     stressLog("打开失败 \(entry.path)")
-                    Log.error(.app, "压力测试打开失败 \(Log.shortPath(entry.path))")
+                    Log.error(
+                        .app,
+                        "压力测试打开失败 \(Log.shortPath(entry.path)) "
+                            + "原因=\(failure?.message ?? "无")"
+                    )
                     try? appendAcceptanceReport([
                         "reason": "stress-open-failed",
                         "stressIndex": index + 1,
                         "path": entry.path,
                         "fileSizeBytes": entry.size,
+                        "failure": failure?.message ?? "",
+                        "failureKind": failure?.kind.rawValue ?? "",
                         "capturedAt": ISO8601DateFormatter().string(from: Date()),
                     ])
                     closePlayback(report: false)
@@ -1516,6 +1794,19 @@ struct LibraryView: View {
             "engineMilliseconds": session.engineMilliseconds,
             "openInputMilliseconds": session.openInputMilliseconds,
             "streamInfoMilliseconds": session.streamInfoMilliseconds,
+            "playerPresentedMilliseconds": session.startup.playerPresentedMilliseconds,
+            "openBytesRead": session.startup.openBytesRead,
+            "openReadCount": session.startup.openReadCount,
+            "avioFillCount": session.startup.avioFillCount,
+            "attachmentBytes": session.startup.attachmentBytes,
+            "attachmentFontBytes": session.startup.attachmentFontBytes,
+            "skippedFontCount": session.startup.skippedFontCount,
+            "headerCacheHitBytes": session.startup.headerCacheHitBytes,
+            "headerCacheHitRatio": session.startup.headerCacheHitRatio,
+            "subtitleScanMilliseconds": session.startup.subtitleScanMilliseconds,
+            "startupPrerollMode": stats.startupPrerollMode,
+            "startupBufferStalls": stats.startupBufferStalls,
+            "resumeLocated": session.startup.resumeLocated,
             "clickToFirstVideoMilliseconds": session.prepareMilliseconds + stats.firstVideoMilliseconds,
             "averageBitrateMbps": bitrate,
             "positionSeconds": session.engine.clock.currentTime,
@@ -1554,6 +1845,7 @@ struct LibraryView: View {
             "lastSeekPrerollFrames": stats.lastSeekPrerollFrames,
             "subtitleTrack": session.selectedTrack?.title ?? "",
             "subtitleCues": session.timeline?.cues.count ?? 0,
+            "subtitleFirstCueMilliseconds": session.subtitleFirstCueMilliseconds,
             "subtitleError": session.subtitleError ?? "",
             "capturedAt": ISO8601DateFormatter().string(from: Date()),
         ]
@@ -1653,6 +1945,8 @@ struct LibraryView: View {
             NowPlayingCenter.shared.detach(engine: playback.engine)
         }
         playback?.engine.stop()
+        pendingPlayback?.cancelled = true
+        pendingPlayback = nil
         playback = nil
         isPlayerFullscreen = false
         resumeNotice = nil

@@ -1,0 +1,57 @@
+{
+  "source": "docs/acceptance-2026-11-10-2h-random.json",
+  "samples": 78,
+  "generatedAt": "2026-11-10",
+  "note": "历史 78 条 SMB 样本；read-byte 字段从 startup-latency 起新增，本基线未采集。",
+  "metrics": {
+    "clickToFirstFrameMs": {
+      "min": 866,
+      "p50": 4185,
+      "p90": 27810,
+      "max": 85702,
+      "mean": 10558.9
+    },
+    "prepareMs": {
+      "min": 811,
+      "p50": 3788,
+      "p90": 27418,
+      "max": 85644,
+      "mean": 9838.3
+    },
+    "openInputMs": {
+      "min": 665,
+      "p50": 1833,
+      "p90": 21741,
+      "max": 56324,
+      "mean": 6545.0
+    },
+    "streamInfoMs": {
+      "min": 0,
+      "p50": 0,
+      "p90": 2653,
+      "max": 24595,
+      "mean": 1945.1
+    },
+    "subtitleMs": {
+      "min": 32,
+      "p50": 377,
+      "p90": 4582,
+      "max": 15818,
+      "mean": 1012.8
+    },
+    "engineMs": {
+      "min": 6,
+      "p50": 17,
+      "p90": 22,
+      "max": 165,
+      "mean": 23.3
+    },
+    "firstVideoMs": {
+      "min": 0,
+      "p50": 37,
+      "p90": 2028,
+      "max": 25907,
+      "mean": 720.6
+    }
+  }
+}

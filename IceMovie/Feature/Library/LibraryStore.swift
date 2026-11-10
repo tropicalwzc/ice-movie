@@ -3,10 +3,27 @@ import Foundation
 import IceCore
 import MediaLibraryKit
 import Observation
+import PersistenceKit
 import RenderKit
 import SubtitleKit
 import ThumbnailKit
 import UIKit
+
+struct StartupDiagnostics: Sendable {
+    var playerPresentedMilliseconds = 0
+    var openBytesRead: Int64 = 0
+    var openReadCount = 0
+    var avioFillCount = 0
+    var attachmentBytes = 0
+    var attachmentFontBytes = 0
+    var skippedFontCount = 0
+    var headerCacheHitBytes: Int64 = 0
+    var headerCacheHitRatio: Double = 0
+    var subtitleScanMilliseconds = 0
+    var startupPrerollMode = "fast"
+    var startupBufferStalls = 0
+    var resumeLocated = true
+}
 
 struct PreparedPlayback {
     let engine: PlaybackEngine
@@ -20,6 +37,9 @@ struct PreparedPlayback {
     let engineMilliseconds: Int
     let openInputMilliseconds: Int
     let streamInfoMilliseconds: Int
+    var startup = StartupDiagnostics()
+    /// 外挂字幕的后台扫描；不阻塞起播，完成后由播放会话合并。
+    let externalTracksTask: Task<[SubtitleTrack], Never>
 }
 
 /// 媒体库视图模型。
@@ -357,6 +377,18 @@ final class LibraryStore {
 
     // MARK: - 缩略图
 
+    /// 只读内存里已经加载过的缩略图，供播放页占位使用；绝不触发新的抽帧读取。
+    func cachedThumbnail(for entry: MediaEntry) -> UIImage? {
+        guard !entry.isDirectory else { return nil }
+        let key = ThumbnailCacheKey.make(
+            path: entry.path,
+            size: entry.size,
+            modified: entry.modified,
+            namespace: source.cacheNamespace
+        ) as NSString
+        return imageCache.object(forKey: key)
+    }
+
     func thumbnail(for entry: MediaEntry) async -> UIImage? {
         guard !entry.isDirectory else { return nil }
         let key = ThumbnailCacheKey.make(
@@ -388,7 +420,7 @@ final class LibraryStore {
     var onPlaybackRequested: ((MediaEntry) -> Void)?
 
     /// 为媒体库内联播放创建引擎，并完成字幕轨发现与默认轨加载。
-    func preparePlayback(_ entry: MediaEntry) async -> PreparedPlayback? {
+    func preparePlayback(_ entry: MediaEntry, startAt: Double? = nil) async -> PreparedPlayback? {
         preparationGeneration += 1
         let generation = preparationGeneration
         preparingPlaybackID = entry.id
@@ -402,7 +434,22 @@ final class LibraryStore {
             let source = self.source
             let path = entry.path
             let began = ProcessInfo.processInfo.systemUptime
-            let byteSource = try await source.openByteSource(path: path)
+            let baseSource = try await source.openByteSource(path: path)
+            let byteSource: any ByteSource
+            if let cache = ContainerHeaderCache.shared {
+                let cached = CachedByteSource(
+                    base: baseSource,
+                    cache: cache,
+                    namespace: source.cacheNamespace,
+                    path: entry.path,
+                    size: entry.size,
+                    modified: entry.modified
+                )
+                await cached.prepare()
+                byteSource = cached
+            } else {
+                byteSource = baseSource
+            }
             let sourceOpenMilliseconds = Int(
                 (ProcessInfo.processInfo.systemUptime - began) * 1000
             )
@@ -442,10 +489,11 @@ final class LibraryStore {
                     }
             )
             let subtitleBegan = ProcessInfo.processInfo.systemUptime
-            let external = await discoverExternalSubtitles(for: entry)
-            // 位图字幕（PGS/DVD/DVB）当前没有可用的文本渲染路径，直接排除，
-            // 避免默认选轨或用户手选后“已选中但始终不显示”。
-            let discovered = embedded + external
+            // 外挂字幕扫描移到起播之后：内封轨先可用，播放不等目录枚举。
+            let externalTracksTask = Task { [weak self] in
+                await self?.discoverExternalSubtitles(for: entry) ?? []
+            }
+            let discovered = embedded
             let tracks = discovered.filter { $0.format != .bitmap }
             if tracks.count != discovered.count {
                 Log.info(
@@ -470,6 +518,32 @@ final class LibraryStore {
             // 引擎仍在主线程创建，保持 AVAudioEngine/渲染器的原有线程语义。
             let engineBegan = ProcessInfo.processInfo.systemUptime
             let engine = try PlaybackEngine(reader: opened.reader)
+            let openSeconds = Double(
+                opened.reader.openInputMilliseconds + opened.reader.streamInfoMilliseconds
+            ) / 1000
+            // 容器头命中或只读了很小一段时，openBytes/耗时不能代表链路速度；
+            // 这时保持“未知”，让引擎用快速档，避免热打开被误判成慢链路。
+            let measuredThroughput: Double
+            if opened.reader.headerCacheHitRatio > 0.5
+                || opened.reader.openBytesRead < 512 * 1024
+                || openSeconds <= 0 {
+                measuredThroughput = 0
+            } else {
+                measuredThroughput = Double(opened.reader.openBytesRead) / openSeconds
+            }
+            if measuredThroughput > 0 {
+                engine.setStartupThroughput(bytesPerSecond: measuredThroughput)
+            }
+            var resumeLocated = true
+            if let startAt, startAt > 0 {
+                resumeLocated = await engine.prepareSeek(to: startAt)
+                Log.info(
+                    .app,
+                    "续播定位 \(resumeLocated ? "成功" : "失败") "
+                        + "目标=\(String(format: "%.1f", startAt))s "
+                        + "文件=\(Log.shortPath(entry.path))"
+                )
+            }
             let engineMilliseconds = Int(
                 (ProcessInfo.processInfo.systemUptime - engineBegan) * 1000
             )
@@ -477,8 +551,23 @@ final class LibraryStore {
                 .app,
                 "播放准备拆分 \(Log.shortPath(entry.path)) "
                     + "SMB=\(sourceOpenMilliseconds)ms 探测=\(probeMilliseconds)ms "
-                    + "字幕=\(subtitleMilliseconds)ms 引擎=\(engineMilliseconds)ms"
+                    + "字幕=\(subtitleMilliseconds)ms 引擎=\(engineMilliseconds)ms "
+                    + "读取=\(opened.reader.openBytesRead)B/\(opened.reader.openReadCount)次 "
+                    + "AVIO填充=\(opened.reader.avioFillCount) "
+                    + "附件=\(opened.reader.attachmentBytes)B 字体=\(opened.reader.attachmentFontBytes)B"
             )
+            var startup = StartupDiagnostics()
+            startup.openBytesRead = opened.reader.openBytesRead
+            startup.openReadCount = opened.reader.openReadCount
+            startup.avioFillCount = opened.reader.avioFillCount
+            startup.attachmentBytes = opened.reader.attachmentBytes
+            startup.attachmentFontBytes = opened.reader.attachmentFontBytes
+            startup.skippedFontCount = opened.reader.skippedFontCount
+            startup.headerCacheHitBytes = opened.reader.headerCacheHitBytes
+            startup.headerCacheHitRatio = opened.reader.headerCacheHitRatio
+            startup.subtitleScanMilliseconds = subtitleMilliseconds
+            startup.startupPrerollMode = engine.startupPrerollMode
+            startup.resumeLocated = resumeLocated
             return PreparedPlayback(
                 engine: engine,
                 tracks: tracks,
@@ -490,7 +579,9 @@ final class LibraryStore {
                 subtitleMilliseconds: subtitleMilliseconds,
                 engineMilliseconds: engineMilliseconds,
                 openInputMilliseconds: opened.reader.openInputMilliseconds,
-                streamInfoMilliseconds: opened.reader.streamInfoMilliseconds
+                streamInfoMilliseconds: opened.reader.streamInfoMilliseconds,
+                startup: startup,
+                externalTracksTask: externalTracksTask
             )
         } catch {
             playbackFailure = PlaybackFailure.classify(error)
@@ -598,7 +689,8 @@ final class LibraryStore {
         imageCache.removeAllObjects()
         await thumbnails.removeAll()
         SubtitleScriptCache.removeAll()
-        Log.info(.app, "本地缓存已清空（缩略图 + 字幕脚本）")
+        await ContainerHeaderCache.shared?.clear()
+        Log.info(.app, "本地缓存已清空（缩略图 + 字幕脚本 + 容器头）")
     }
 
     func displayTitle(for entry: MediaEntry) -> String {

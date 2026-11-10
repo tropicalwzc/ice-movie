@@ -1,0 +1,131 @@
+diff --git a/libavformat/matroskadec.c b/libavformat/matroskadec.c
+index 210fc57..dbb4119 100644
+--- a/libavformat/matroskadec.c
++++ b/libavformat/matroskadec.c
+@@ -436,6 +436,9 @@ typedef struct MatroskaDemuxContext {
+ 
+     /* WebM DASH Manifest live flag */
+     int is_live;
++    /* IceMovie: skip font attachment payloads during playback open. */
++    int skip_font_attachments;
++    int current_attachment_is_font;
+ 
+     /* Bandwidth value for WebM DASH Manifest */
+     int bandwidth;
+@@ -1153,6 +1156,20 @@ static int matroska_ebmlnum_sint(MatroskaDemuxContext *matroska,
+ static int ebml_parse(MatroskaDemuxContext *matroska,
+                       EbmlSyntax *syntax, void *data);
+ 
++static int icemovie_is_font_mime(const char *mime)
++{
++    if (!mime)
++        return 0;
++    return !strncmp(mime, "font/", 5) ||
++           !strncmp(mime, "application/font", 16) ||
++           !strncmp(mime, "application/x-font", 18) ||
++           !strcmp(mime, "application/vnd.ms-opentype") ||
++           !strcmp(mime, "application/vnd.ms-fontobject") ||
++           !strcmp(mime, "application/x-truetype-font") ||
++           !strcmp(mime, "application/x-font-ttf") ||
++           !strcmp(mime, "application/x-font-opentype");
++}
++
+ static EbmlSyntax *ebml_parse_id(EbmlSyntax *syntax, uint32_t id)
+ {
+     int i;
+@@ -1491,9 +1508,24 @@ static int ebml_parse(MatroskaDemuxContext *matroska,
+     case EBML_STR:
+     case EBML_UTF8:
+         res = ebml_read_ascii(pb, length, syntax->def.s, data);
++        if (!res && id == MATROSKA_ID_FILEMIMETYPE && data)
++            matroska->current_attachment_is_font =
++                icemovie_is_font_mime(*(char **)data);
+         break;
+     case EBML_BIN:
+-        res = ebml_read_binary(pb, length, pos_alt, data);
++        if (id == MATROSKA_ID_FILEDATA && data &&
++            matroska->skip_font_attachments &&
++            matroska->current_attachment_is_font) {
++            EbmlBin *bin = data;
++            memset(bin, 0, sizeof(*bin));
++            bin->pos = pos_alt;
++            if (avio_skip(pb, length) < 0)
++                res = AVERROR(EIO);
++            else
++                res = 0;
++        } else {
++            res = ebml_read_binary(pb, length, pos_alt, data);
++        }
+         break;
+     case EBML_LEVEL1:
+     case EBML_NEST:
+@@ -1512,6 +1544,8 @@ static int ebml_parse(MatroskaDemuxContext *matroska,
+                 av_log(matroska->ctx, AV_LOG_ERROR, "Duplicate element\n");
+             level1_elem->parsed = 1;
+         }
++        if (id == MATROSKA_ID_ATTACHEDFILE)
++            matroska->current_attachment_is_font = 0;
+         if (res = ebml_parse_nest(matroska, syntax->def.n, data))
+             return res;
+         break;
+@@ -3324,6 +3358,7 @@ static int matroska_read_header(AVFormatContext *s)
+     int64_t pos;
+     Ebml ebml = { 0 };
+     int i, j, res;
++    int skipped_fonts = 0;
+ 
+     matroska->ctx = s;
+     matroska->cues_parsing_deferred = 1;
+@@ -3402,6 +3437,12 @@ static int matroska_read_header(AVFormatContext *s)
+ 
+     attachments = attachments_list->elem;
+     for (j = 0; j < attachments_list->nb_elem; j++) {
++        if (matroska->skip_font_attachments &&
++            icemovie_is_font_mime(attachments[j].mime) &&
++            !attachments[j].bin.data) {
++            skipped_fonts++;
++            continue;
++        }
+         if (!(attachments[j].filename && attachments[j].mime &&
+               attachments[j].bin.data && attachments[j].bin.size > 0)) {
+             av_log(matroska->ctx, AV_LOG_ERROR, "incomplete attachment\n");
+@@ -3445,6 +3486,12 @@ static int matroska_read_header(AVFormatContext *s)
+         }
+     }
+ 
++    if (skipped_fonts > 0) {
++        char skipped_buf[32];
++        snprintf(skipped_buf, sizeof(skipped_buf), "%d", skipped_fonts);
++        av_dict_set(&s->metadata, "icemovie_skipped_font_count", skipped_buf, 0);
++    }
++
+     chapters = chapters_list->elem;
+     for (i = 0; i < chapters_list->nb_elem; i++)
+         if (chapters[i].start != AV_NOPTS_VALUE && chapters[i].uid &&
+@@ -4868,11 +4915,26 @@ const FFInputFormat ff_webm_dash_manifest_demuxer = {
+ };
+ #endif
+ 
++static const AVOption matroska_options[] = {
++    { "skip_font_attachments", "skip font attachment payloads during open",
++      offsetof(MatroskaDemuxContext, skip_font_attachments), AV_OPT_TYPE_BOOL,
++      { .i64 = 0 }, 0, 1, AV_OPT_FLAG_DECODING_PARAM },
++    { NULL },
++};
++
++static const AVClass matroska_class = {
++    .class_name = "matroska",
++    .item_name  = av_default_item_name,
++    .option     = matroska_options,
++    .version    = LIBAVUTIL_VERSION_INT,
++};
++
+ const FFInputFormat ff_matroska_demuxer = {
+     .p.name         = "matroska,webm",
+     .p.long_name    = NULL_IF_CONFIG_SMALL("Matroska / WebM"),
+     .p.extensions   = "mkv,mk3d,mka,mks,webm",
+     .p.mime_type    = "audio/webm,audio/x-matroska,video/webm,video/x-matroska",
++    .p.priv_class   = &matroska_class,
+     .priv_data_size = sizeof(MatroskaDemuxContext),
+     .flags_internal = FF_INFMT_FLAG_INIT_CLEANUP,
+     .read_probe     = matroska_probe,

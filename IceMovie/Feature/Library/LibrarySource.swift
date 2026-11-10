@@ -61,6 +61,8 @@ actor SMBLibrarySource: LibrarySource {
     nonisolated(unsafe) private var shareNameValue: String
     private let credentials: Credentials?
     private var connected: Bool
+    /// 最近一次浏览目录的原始条目；字幕扫描直接复用，避免再走一次 SMB 枚举。
+    private var rawEntryCache: [String: (items: [SMBEntry], at: Date)] = [:]
 
     struct Credentials: Sendable {
         let host: String
@@ -94,6 +96,7 @@ actor SMBLibrarySource: LibrarySource {
     func listDirectory(path: String) async throws -> [MediaEntry] {
         try await ensureConnected()
         let items = try await client.listDirectory(path: path)
+        rawEntryCache[path] = (items, Date())
         return LibraryEntryBuilder.build(
             directoryPath: path,
             items: items.map {
@@ -104,7 +107,13 @@ actor SMBLibrarySource: LibrarySource {
 
     func listAllEntries(path: String) async throws -> [MediaEntry] {
         try await ensureConnected()
-        let items = try await client.listDirectory(path: path)
+        let items: [SMBEntry]
+        if let cached = rawEntryCache[path], Date().timeIntervalSince(cached.at) < 30 {
+            items = cached.items
+        } else {
+            items = try await client.listDirectory(path: path)
+            rawEntryCache[path] = (items, Date())
+        }
         let prefix = path.isEmpty ? "" : path + "/"
         return items.map {
             MediaEntry(

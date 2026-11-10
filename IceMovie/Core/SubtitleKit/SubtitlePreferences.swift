@@ -2,7 +2,7 @@ import Foundation
 
 /// 字幕偏好。放在 SubtitleKit 里，便于单元测试；实际存储用 UserDefaults。
 public enum SubtitlePreferences {
-    public static let defaultFontSize: Double = 22
+    public static let defaultFontSize: Double = 24
     public static let defaultBottomPadding: Double = 130
     public static let defaultOffset: Double = 0
 
@@ -15,6 +15,7 @@ public enum SubtitlePreferences {
         static let fontSize = "subtitle.fontSize"
         static let bottomPadding = "subtitle.bottomPadding"
         static let offset = "subtitle.offset"
+        static let fontSizeMigration = "subtitle.fontSize.migrated.v2"
     }
 
     public static var enabled: Bool {
@@ -44,6 +45,16 @@ public enum SubtitlePreferences {
         set { defaults.set(clamp(newValue, 14, 36), forKey: Key.fontSize) }
     }
 
+    /// 默认字号从 22 提到 24：只迁移“仍是旧默认值”的用户，
+    /// 已经手动调过字号的不覆盖。
+    public static func migrateIfNeeded() {
+        guard !defaults.bool(forKey: Key.fontSizeMigration) else { return }
+        if let stored = defaults.object(forKey: Key.fontSize) as? Double, stored == 22 {
+            defaults.set(defaultFontSize, forKey: Key.fontSize)
+        }
+        defaults.set(true, forKey: Key.fontSizeMigration)
+    }
+
     public static var bottomPadding: Double {
         get { clamp(defaults.object(forKey: Key.bottomPadding) as? Double ?? defaultBottomPadding, 60, 260) }
         set { defaults.set(clamp(newValue, 60, 260), forKey: Key.bottomPadding) }
@@ -59,7 +70,10 @@ public enum SubtitlePreferences {
     }
 
     public static func reset() {
-        for key in [Key.enabled, Key.language, Key.fontSize, Key.bottomPadding, Key.offset] {
+        for key in [
+            Key.enabled, Key.language, Key.fontSize, Key.bottomPadding,
+            Key.offset, Key.fontSizeMigration,
+        ] {
             defaults.removeObject(forKey: key)
         }
     }

@@ -9,14 +9,25 @@ import IceCore
 /// 跳转只需要移动读取位置，窗口越界时自然失效。
 final class AVIOBridge {
     private let source: any ByteSource
-    private let windowSize: Int
+    private let maxWindowSize: Int
+    private let startWindowSize: Int
+    private var currentWindowSize: Int
+    private var sequentialFills = 0
 
     private var window = Data()
     private var windowStart: Int64 = 0
     private var position: Int64 = 0
     private var reachedEOF = false
+    private(set) var fillCount = 0
+    private(set) var bytesRead: Int64 = 0
 
     private(set) var context: UnsafeMutablePointer<AVIOContext>?
+
+    /// 底层字节源的读取统计；本地源没有实现时返回 AVIO 自身的填充计数。
+    var sourceReadStats: ByteSourceReadStats {
+        (source as? ReadStatsProviding)?.readStats
+            ?? ByteSourceReadStats(readCount: fillCount, bytesRead: bytesRead)
+    }
 
     /// 已预读到当前读位置之后的字节数；进度条缓冲区间使用。
     var bufferedAheadBytes: Int64 {
@@ -40,6 +51,11 @@ final class AVIOBridge {
 
     func setPrefetchEnabled(_ enabled: Bool) {
         (source as? PrefetchControlling)?.setPrefetchEnabled(enabled)
+    }
+
+    /// 打开阶段结束：缓存层停止把播放媒体数据写盘。
+    func endOpenPhase() {
+        (source as? CachePhaseControlling)?.endOpenPhase()
     }
 
     func setSupply(audioAhead: Double, videoAhead: Double) {
@@ -84,9 +100,15 @@ final class AVIOBridge {
         (source as? NetworkSpeedProviding)?.downloadBytesPerSecond ?? 0
     }
 
-    init(source: any ByteSource, windowSize: Int = 4 << 20) throws {
+    init(
+        source: any ByteSource,
+        windowSize: Int = 4 << 20,
+        startWindowSize: Int = 256 << 10
+    ) throws {
         self.source = source
-        self.windowSize = windowSize
+        self.maxWindowSize = max(64 << 10, windowSize)
+        self.startWindowSize = min(max(16 << 10, startWindowSize), self.maxWindowSize)
+        self.currentWindowSize = self.startWindowSize
 
         let avioBufferSize = 64 << 10
         guard let raw = av_malloc(avioBufferSize) else {
@@ -131,7 +153,7 @@ final class AVIOBridge {
     fileprivate func read(into destination: UnsafeMutablePointer<UInt8>, size: Int) -> Int32 {
         guard size > 0 else { return 0 }
         // FFmpeg 约定：到达末尾必须返回 AVERROR_EOF，返回 0 会让部分 demuxer 反复轮询。
-        guard fillWindowIfNeeded() else { return ffmpeg_eof }
+        guard fillWindowIfNeeded(requested: size) else { return ffmpeg_eof }
 
         let offsetInWindow = Int(position - windowStart)
         let available = window.count - offsetInWindow
@@ -162,16 +184,19 @@ final class AVIOBridge {
             return -1
         }
         // 显式通知缓存层：seek 后旧窗口作废，立刻从新位置预读。
-        if position != previous, position >= 0,
-           let seekable = source as? any SeekAwareByteSource {
-            seekable.seekWillChange(to: position)
+        if position != previous {
+            currentWindowSize = startWindowSize
+            sequentialFills = 0
+            if position >= 0, let seekable = source as? any SeekAwareByteSource {
+                seekable.seekWillChange(to: position)
+            }
         }
         return position
     }
 
     // MARK: - 内部
 
-    private func fillWindowIfNeeded() -> Bool {
+    private func fillWindowIfNeeded(requested: Int) -> Bool {
         let offsetInWindow = position - windowStart
         if offsetInWindow >= 0, offsetInWindow < Int64(window.count) {
             return true
@@ -180,14 +205,29 @@ final class AVIOBridge {
             return false
         }
 
-        let data = readSynchronously(at: position, count: windowSize)
+        // 元数据小读按小窗口取；FFmpeg 自己要大块时按请求大小取，不能被窗口截断。
+        let readSize = min(max(requested, currentWindowSize), maxWindowSize)
+        let previousEnd = windowStart + Int64(window.count)
+        let isSequential = !window.isEmpty && position == previousEnd
+        let data = readSynchronously(at: position, count: readSize)
         if data.isEmpty {
             reachedEOF = true
             return false
         }
         window = data
         windowStart = position
-        reachedEOF = data.count < windowSize
+        fillCount += 1
+        bytesRead += Int64(data.count)
+        if isSequential {
+            sequentialFills += 1
+            if sequentialFills % 4 == 0 {
+                currentWindowSize = min(maxWindowSize, currentWindowSize * 2)
+            }
+        } else {
+            sequentialFills = 0
+            currentWindowSize = startWindowSize
+        }
+        reachedEOF = data.count < readSize
         return true
     }
 

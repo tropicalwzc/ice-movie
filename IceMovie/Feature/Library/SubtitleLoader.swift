@@ -54,11 +54,11 @@ struct SubtitleLoader {
                     throw SubtitleLoadError.empty(track.title)
                 }
                 let script = track.format == .ass ? sanitized.script : nil
-                let fonts = script == nil ? [] : await containerFonts()
+                // 容器字体附件不再读取：统一使用内置 CJK / CoreText 系统字体。
                 return LoadedSubtitles(
                     timeline: SubtitleTimeline(cues: cues),
                     script: script,
-                    fonts: fonts
+                    fonts: []
                 )
             } catch {
                 await byteSource.close()
@@ -79,30 +79,26 @@ struct SubtitleLoader {
                 let sanitized = ASSScriptSanitizer.sanitizeIfNeeded(cached)
                 let cues = SubtitleParser.parse(sanitized.script, format: .ass)
                 if !cues.isEmpty {
-                    // 缓存只存脚本；附件字体在第二次打开时仍需注册，否则 libass
-                    // 会退回系统字体，字幕字号/字距与首次播放不一致。
+                    // 缓存只存脚本；字体统一使用内置 CJK / 系统字体，不再读附件。
                     let script = track.format == .ass ? sanitized.script : nil
-                    let fonts = script == nil ? [] : await containerFonts()
                     Log.info(
                         .subtitle,
-                        "内封字幕缓存命中 stream=\(index) 条目=\(cues.count) 字体附件=\(fonts.count)"
+                        "内封字幕缓存命中 stream=\(index) 条目=\(cues.count) 字体附件=0"
                     )
                     return LoadedSubtitles(
                         timeline: SubtitleTimeline(cues: cues),
                         script: script,
-                        fonts: fonts
+                        fonts: []
                     )
                 }
             }
 
             let byteSource = try await source.openSubtitleByteSource(path: entry.path)
-            let reader = try MediaReader.open(source: byteSource, label: entry.path)
+            // 只读字幕轨，不跑完整流探测；字体附件也不读。
+            let reader = try MediaReader.open(source: byteSource, label: entry.path, fastProbe: true)
             do {
                 let began = ProcessInfo.processInfo.systemUptime
                 let text = try reader.readSubtitleScript(streamIndex: index)
-                let fonts = reader.attachments()
-                    .filter(\.isFont)
-                    .map { SubtitleFont(name: $0.name, data: $0.data) }
                 reader.close()
                 await byteSource.close()
                 let sanitized = track.format == .ass
@@ -117,7 +113,7 @@ struct SubtitleLoader {
                 let elapsed = Int((ProcessInfo.processInfo.systemUptime - began) * 1000)
                 Log.info(
                     .subtitle,
-                    "内封字幕加载 stream=\(index) 条目=\(cues.count) 字体附件=\(fonts.count) "
+                    "内封字幕加载 stream=\(index) 条目=\(cues.count) 字体附件=0 "
                         + "耗时=\(elapsed)ms 降级=\(sanitized.applied ? "是" : "否")"
                 )
                 guard !cues.isEmpty else {
@@ -132,33 +128,13 @@ struct SubtitleLoader {
                 return LoadedSubtitles(
                     timeline: SubtitleTimeline(cues: cues),
                     script: track.format == .ass ? sanitized.script : nil,
-                    fonts: fonts
+                    fonts: []
                 )
             } catch {
                 reader.close()
                 await byteSource.close()
                 throw error
             }
-        }
-    }
-
-    /// 外挂 ASS 的字体可能仍在视频容器里；单独开一次字节源只读附件，失败不影响字幕。
-    private func containerFonts() async -> [SubtitleFont] {
-        do {
-            let byteSource = try await source.openSubtitleByteSource(path: entry.path)
-            let reader = try MediaReader.open(source: byteSource, label: entry.path)
-            let fonts = reader.attachments()
-                .filter(\.isFont)
-                .map { SubtitleFont(name: $0.name, data: $0.data) }
-            reader.close()
-            await byteSource.close()
-            if !fonts.isEmpty {
-                Log.info(.subtitle, "容器字体附件 \(fonts.count) 个：\(fonts.map(\.name).joined(separator: ", "))")
-            }
-            return fonts
-        } catch {
-            Log.error(.subtitle, "容器字体附件读取失败：\(error.localizedDescription)")
-            return []
         }
     }
 

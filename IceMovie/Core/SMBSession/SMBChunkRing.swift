@@ -68,10 +68,14 @@ public final class SMBChunkRing: @unchecked Sendable {
     }
 
     /// 只保留与 `[keepFrom, keepTo)` 有交集的块；部分重叠的块整块保留。
-    public func trim(keepFrom: Int64, keepTo: Int64) {
+    /// `pinHeaderBytes` 用于固定容器头区间：seek 到文件尾部再回到头部时，
+    /// MP4 的 moov / MKV 的 SeekHead 不需要重新走网络。
+    public func trim(keepFrom: Int64, keepTo: Int64, pinHeaderBytes: Int64 = 0) {
         lock.lock()
         let victims = chunks.compactMap { start, data -> Int64? in
             let end = start + Int64(data.count)
+            let intersectsPinnedHeader = pinHeaderBytes > 0 && start < pinHeaderBytes
+            guard !intersectsPinnedHeader else { return nil }
             return end <= keepFrom || start >= keepTo ? start : nil
         }
         for start in victims {

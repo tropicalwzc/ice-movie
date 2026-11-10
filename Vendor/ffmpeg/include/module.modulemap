@@ -1,4 +1,11 @@
-module CFFmpeg [system] {
-    header "ice_ffmpeg_shim.h"
+module CFFmpeg {
+    header "libavformat/avformat.h"
+    header "libavcodec/avcodec.h"
+    header "libavutil/avutil.h"
+    header "libavutil/opt.h"
+    header "libavutil/imgutils.h"
+    header "libavutil/channel_layout.h"
+    header "libswscale/swscale.h"
+    header "libswresample/swresample.h"
     export *
 }

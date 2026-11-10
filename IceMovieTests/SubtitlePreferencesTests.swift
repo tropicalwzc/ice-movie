@@ -23,7 +23,7 @@ final class SubtitlePreferencesTests: XCTestCase {
     func testDefaults() {
         XCTAssertTrue(SubtitlePreferences.enabled)
         XCTAssertNil(SubtitlePreferences.lastLanguage)
-        XCTAssertEqual(SubtitlePreferences.fontSize, 22)
+        XCTAssertEqual(SubtitlePreferences.fontSize, 24)
         XCTAssertEqual(SubtitlePreferences.bottomPadding, 130)
         XCTAssertEqual(SubtitlePreferences.offset, 0)
     }
@@ -37,6 +37,17 @@ final class SubtitlePreferencesTests: XCTestCase {
 
         SubtitlePreferences.enabled = true
         XCTAssertTrue(SubtitlePreferences.enabled)
+    }
+
+    func testFontSizeMigrationOnlyMovesOldDefault() {
+        SubtitlePreferences.fontSize = 22
+        SubtitlePreferences.migrateIfNeeded()
+        XCTAssertEqual(SubtitlePreferences.fontSize, 24, "旧默认 22 应迁移到 24")
+
+        SubtitlePreferences.fontSize = 20
+        suite.removeObject(forKey: "subtitle.fontSize.migrated.v2")
+        SubtitlePreferences.migrateIfNeeded()
+        XCTAssertEqual(SubtitlePreferences.fontSize, 20, "用户手动调过字号不应被覆盖")
     }
 
     func testStyleValuesClamp() {

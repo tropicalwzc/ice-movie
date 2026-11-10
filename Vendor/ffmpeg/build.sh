@@ -64,6 +64,26 @@ build_arch() {
   cd "$ROOT"
 }
 
+# 应用本仓库维护的 FFmpeg patch；已应用时跳过，避免重复执行失败。
+apply_patches() {
+  local src="$1"
+  local patch_file
+  for patch_file in "$ROOT"/patches/*.patch; do
+    [ -e "$patch_file" ] || continue
+    if git -C "$src" apply --check "$patch_file" 2>/dev/null; then
+      echo "==== 应用 patch $(basename "$patch_file") ===="
+      git -C "$src" apply "$patch_file"
+    elif git -C "$src" apply --reverse --check "$patch_file" 2>/dev/null; then
+      echo "==== patch 已应用：$(basename "$patch_file") ===="
+    else
+      echo "应用 patch 失败：$patch_file" >&2
+      exit 1
+    fi
+  done
+}
+
+apply_patches "$SRC"
+
 mkdir -p "$ROOT/build"
 build_arch "device" "arm64-apple-ios26.0" "iphoneos"
 build_arch "simulator" "arm64-apple-ios26.0-simulator" "iphonesimulator"
@@ -76,6 +96,22 @@ for lib in $LIBS; do
   cp "$ROOT/build/device/lib/$lib.a" "$ROOT/lib/iphoneos/"
   cp "$ROOT/build/simulator/lib/$lib.a" "$ROOT/lib/iphonesimulator/"
 done
+
+# Swift 通过 CFFmpeg 模块导入 FFmpeg 头文件；include 目录每次重建，
+# 所以在这里固定生成 modulemap，避免 build.sh 之后模块丢失。
+cat > "$ROOT/include/module.modulemap" <<'MAP'
+module CFFmpeg {
+    header "libavformat/avformat.h"
+    header "libavcodec/avcodec.h"
+    header "libavutil/avutil.h"
+    header "libavutil/opt.h"
+    header "libavutil/imgutils.h"
+    header "libavutil/channel_layout.h"
+    header "libswscale/swscale.h"
+    header "libswresample/swresample.h"
+    export *
+}
+MAP
 
 echo "==== 全部完成 ===="
 ls -lh "$ROOT/lib/iphoneos" "$ROOT/lib/iphonesimulator"

@@ -45,12 +45,73 @@ public final class PlaybackEngine: @unchecked Sendable {
         public var videoQueueDepth = 0
         public var videoQueueDropped = 0
         public var videoQueueBytes = 0
+        /// 起播后 30 秒内的缓冲次数；用于起播水位自适应验收。
+        public var startupBufferStalls = 0
+        public var startupPrerollMode = "fast"
     }
 
-    /// 起播前先垫这么多秒的音频。
-    private static let prerollSeconds = 3.0
-    /// 起播前视频至少垫这么多秒，避免音频先响、画面还在等数据。
-    private static let videoPrerollSeconds = 2.0
+    /// 当前起播预滚档位：fast（1 帧 + ≤300ms 音频）或 conservative（2s/1s）。
+    public private(set) var startupPrerollMode = "fast"
+    private var startupThroughputBytesPerSecond: Double = 0
+    private var startupModeDecided = false
+
+    /// 打开阶段平均读取速度；用于在慢链路选择保守起播水位。
+    public func setStartupThroughput(bytesPerSecond: Double) {
+        lock.withLock {
+            startupThroughputBytesPerSecond = max(0, bytesPerSecond)
+        }
+    }
+
+    /// 起播预滚档位的纯函数版本，便于验收两档阈值。
+    public static func startupPreroll(mode: String) -> (audio: Double, video: Double) {
+        mode == "conservative"
+            ? (conservativeAudioPrerollSeconds, conservativeVideoPrerollSeconds)
+            : (prerollSeconds, videoPrerollSeconds)
+    }
+
+    private var effectiveAudioPrerollSeconds: Double {
+        Self.startupPreroll(mode: startupPrerollMode).audio
+    }
+
+    private var effectiveVideoPrerollSeconds: Double {
+        Self.startupPreroll(mode: startupPrerollMode).video
+    }
+
+    /// 吞吐低于码率 1.5 倍时回退保守档；没有码率信息时用快速档。
+    private func decideStartupMode() {
+        guard !startupModeDecided else { return }
+        startupModeDecided = true
+        let bytesPerSecond: Double
+        if let length = reader.byteLength, duration > 0, length > 0 {
+            bytesPerSecond = Double(length) / duration
+        } else {
+            bytesPerSecond = 0
+        }
+        let measured = max(
+            startupThroughputBytesPerSecond,
+            reader.downloadBytesPerSecond
+        )
+        startupPrerollMode = Self.startupPrerollMode(
+            measuredBytesPerSecond: measured,
+            bitrateBytesPerSecond: bytesPerSecond
+        )
+        lock.withLock {
+            stats.startupPrerollMode = startupPrerollMode
+        }
+        Log.info(
+            .render,
+            "起播水位档位=\(startupPrerollMode) 实测=\(Int(measured / 1024))KB/s "
+                + "码率=\(Int(bytesPerSecond / 1024))KB/s"
+        )
+    }
+
+    /// 起播前先垫这么多秒的音频（快速档：首帧可用即起播）。
+    private static let prerollSeconds = 0.3
+    /// 快速档视频只需要 1 帧；显示层未绑定时按待发帧数判断。
+    private static let videoPrerollSeconds = 0.05
+    /// 慢链路保守档：先垫 2 秒音频 + 1 秒视频，避免开头反复欠载。
+    private static let conservativeAudioPrerollSeconds = 2.0
+    private static let conservativeVideoPrerollSeconds = 1.0
     /// 播放中音频低于这个水位就暂停主时钟。
     private static let audioStallSeconds = 0.12
     /// 缓冲暂停后音频回到这个水位才恢复。
@@ -88,6 +149,8 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var ended = false
     private var pendingSeek: (target: Double, id: Int, requestedAt: Double)?
     private var seekRequests = 0
+    private var completedSeekID = 0
+    private var seekWaiters: [Int: CheckedContinuation<Bool, Never>] = [:]
     private var pumpThread: Thread?
     private var syncTimer: DispatchSourceTimer?
     private var playStartedAt: Double?
@@ -186,6 +249,8 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     public func play() {
         guard !stopped else { return }
+        reader.endOpenPhase()
+        decideStartupMode()
         startPumpIfNeeded()
 
         if let pausedAt {
@@ -207,21 +272,23 @@ public final class PlaybackEngine: @unchecked Sendable {
     private func tryStartPlayback() {
         guard wantsPlay, !clock.isPlaying, !stopped else { return }
         if output != nil {
-            guard ended || output?.bufferedAhead ?? 0 >= Self.prerollSeconds else { return }
+            guard ended || output?.bufferedAhead ?? 0 >= effectiveAudioPrerollSeconds else {
+                return
+            }
             // 显示层尚未绑定时不能等视频水位，否则无头播放/测试永远起不来；
             // 正常 App 里图层会在覆盖层出现后立即绑定并补发缓存帧。
             if let videoRenderer, videoRenderer.isBound {
-                guard ended || videoRenderer.bufferedAhead >= Self.videoPrerollSeconds else {
+                guard ended || videoRenderer.bufferedAhead >= effectiveVideoPrerollSeconds else {
                     return
                 }
             }
         } else if let videoRenderer {
             if videoRenderer.isBound {
-                guard ended || videoRenderer.bufferedAhead >= Self.videoPrerollSeconds else {
+                guard ended || videoRenderer.bufferedAhead >= effectiveVideoPrerollSeconds else {
                     return
                 }
             } else {
-                guard ended || videoRenderer.pendingCount >= 3 else { return }
+                guard ended || videoRenderer.pendingCount >= 1 else { return }
             }
         }
         if playStartedAt == nil {
@@ -284,6 +351,48 @@ public final class PlaybackEngine: @unchecked Sendable {
         return id
     }
 
+    /// 起播前定位：等 demuxer seek、音频裁剪与视频预滚完成后再返回，
+    /// 调用方随后直接 `play()`，不再先播 0 秒再跳。
+    public func prepareSeek(to seconds: Double) async -> Bool {
+        guard !stopped else { return false }
+        let id = seek(to: seconds, requestedAt: ProcessInfo.processInfo.systemUptime)
+        guard id > 0 else { return false }
+        return await withCheckedContinuation { continuation in
+            lock.lock()
+            if completedSeekID >= id {
+                let success = stats.failure == nil
+                lock.unlock()
+                continuation.resume(returning: success)
+            } else {
+                seekWaiters[id] = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    private func finishSeek(id: Int, success: Bool) {
+        lock.lock()
+        completedSeekID = max(completedSeekID, id)
+        let ready = seekWaiters.filter { $0.key <= completedSeekID }
+        for key in ready.keys {
+            seekWaiters.removeValue(forKey: key)
+        }
+        lock.unlock()
+        for continuation in ready.values {
+            continuation.resume(returning: success)
+        }
+    }
+
+    private func finishAllSeekWaiters() {
+        lock.lock()
+        let waiters = seekWaiters
+        seekWaiters.removeAll()
+        lock.unlock()
+        for continuation in waiters.values {
+            continuation.resume(returning: false)
+        }
+    }
+
     public func setRate(_ rate: Float) {
         // MasterClock 支持 0.25–4，AudioOutput 只支持 0.5–2.0。
         // 必须取交集后统一钳制，否则时钟与音频速率不一致会触发持续校正。
@@ -330,6 +439,7 @@ public final class PlaybackEngine: @unchecked Sendable {
         condition.broadcast()
         condition.unlock()
         stopSyncTimer()
+        finishAllSeekWaiters()
         reader.cancelPrefetch()
         videoPipeline?.stop()
         output?.pause()
@@ -496,6 +606,9 @@ public final class PlaybackEngine: @unchecked Sendable {
         let now = ProcessInfo.processInfo.systemUptime
         lock.withLock {
             stats.bufferStalls += 1
+            if let started = playStartedAt, now - started <= 30 {
+                stats.startupBufferStalls += 1
+            }
             bufferStallTimes.append(now)
             bufferStallTimes.removeAll { now - $0 > 60 }
             stats.maxBufferStallsPerMinute = max(
@@ -559,7 +672,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             condition.lock()
             while !stopped, pendingSeek == nil, !ended {
                 // 播放中要持续供给；暂停时也先垫到预缓冲水位，起播才不会欠载。
-                if wantsPlay || (output?.bufferedAhead ?? 0) < Self.prerollSeconds {
+                if wantsPlay || (output?.bufferedAhead ?? 0) < effectiveAudioPrerollSeconds {
                     break
                 }
                 condition.wait()
@@ -650,8 +763,10 @@ public final class PlaybackEngine: @unchecked Sendable {
         // 显示层尚未绑定时视频水位来自待发缓存；先垫到起播量就停止读包，
         // 否则缓存帧上限会让视频水位永远达不到 8 秒，播放泵会把整个文件读进来。
         if let videoRenderer, !videoRenderer.isBound {
-            let audioReady = output.map { $0.bufferedAhead >= Self.prerollSeconds } ?? true
-            return audioReady && videoRenderer.pendingAhead >= Self.videoPrerollSeconds
+            let audioReady = output.map {
+                $0.bufferedAhead >= effectiveAudioPrerollSeconds
+            } ?? true
+            return audioReady && videoRenderer.pendingAhead >= effectiveVideoPrerollSeconds
         }
         return Self.isReadAheadEnough(
             audioAhead: output?.bufferedAhead,
@@ -661,6 +776,19 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     /// 读包限速策略：音频和视频都补到各自的高水位才停，避免只维持 1.5 秒音频、
     /// 一点网络抖动就进入“缓冲中”。纯音频/纯视频只检查各自的水位。
+    /// 起播档位的纯函数版本，便于单元测试。
+    public static func startupPrerollMode(
+        measuredBytesPerSecond: Double,
+        bitrateBytesPerSecond: Double
+    ) -> String {
+        guard bitrateBytesPerSecond > 0, measuredBytesPerSecond > 0 else {
+            return "fast"
+        }
+        return measuredBytesPerSecond < bitrateBytesPerSecond * 1.5
+            ? "conservative"
+            : "fast"
+    }
+
     static func isReadAheadEnough(audioAhead: Double?, videoAhead: Double?) -> Bool {
         if let audioAhead {
             guard audioAhead >= Self.audioAheadSeconds else { return false }
@@ -805,6 +933,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     private func performSeek(_ target: Double, id: Int, requestedAt: Double) {
         guard reader.seek(to: target) else {
             Log.error(.demux, "seek 被拒绝 id=\(id) 目标=\(fmt(target))s")
+            finishSeek(id: id, success: false)
             return
         }
         resetBufferStallState()
@@ -846,6 +975,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             .render,
             "seek 执行 id=\(id) 位置=\(fmt(target))s 松手到执行=\(max(0, queued))ms"
         )
+        finishSeek(id: id, success: true)
     }
 
     private func fail(_ message: String) {

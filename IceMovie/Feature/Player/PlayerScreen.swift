@@ -48,7 +48,7 @@ struct PlayerScreen: View {
         subtitleFonts: [SubtitleFont] = [],
         subtitleLoading: Bool = false,
         subtitleError: String? = nil,
-        subtitleFontSize: Double = 22,
+        subtitleFontSize: Double = 24,
         subtitleBottomPadding: Double = 130,
         subtitleOffset: Double = 0,
         onSelectSubtitle: ((SubtitleTrack?) -> Void)? = nil,

@@ -45,7 +45,10 @@ struct RootView: View {
                 connectionPage
             }
         }
-        .task { await bootstrap() }
+        .task {
+            SubtitlePreferences.migrateIfNeeded()
+            await bootstrap()
+        }
     }
 
     private var restoringPage: some View {

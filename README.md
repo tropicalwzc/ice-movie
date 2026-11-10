@@ -169,7 +169,7 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 | 内封字幕 `Caches/SubtitleScripts` | 50 MB | LRU，按文件修改时间 | 只存降级后的 ASS 文本（通常 60 KB–1 MB），不缓存字体与视频 |
 
 - 内存中的封面另有 64 MB `NSCache`，退出即释放。
-- 播放预读：SMB 播放块默认 1 MB、内存环约 512 MB（512 块，可用 `-smbChunkMB` / `-smbRingMB` 调整）；音频/视频各补到 15 秒，起播先垫 3 秒音频 + 2 秒视频。局域网带宽足够时提前读、提前解码，网络抖动不再立刻触发“缓冲中”；该缓冲只占内存，不写硬盘。
+- 播放预读：SMB 播放块默认 1 MB、内存环约 512 MB（512 块，可用 `-smbChunkMB` / `-smbRingMB` 调整）；音频/视频各补到 15 秒，起播快速档只需 1 帧视频 + ≤300ms 音频，慢链路自动回退到 2s/1s。局域网带宽足够时提前读、提前解码，网络抖动不再立刻触发“缓冲中”；该缓冲只占内存，不写硬盘。
 - 预读是持续的后台任务：环形窗口填满后不会停死，播放消耗后从新的读位置继续补下一段。
 - 视频包封装/投递在独立有界队列和线程完成，播放泵只做读包与音频/字幕处理；音频低于 1 秒时暂停后台预读，把 SMB 带宽让给播放读，避免高码率 4K 反复缓冲。
 - 关闭视频或切换文件时会立即取消旧文件的预读任务并递增 generation，旧任务最多完成手头一个 1MB 读就退出，不会在后台继续下载抢下一部的带宽。
@@ -205,7 +205,7 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 4. 从 600s 继续播到 1372.1s：0 欠载，最大音频偏差 0.03s、显示偏差 0.001s，累计 341 条字幕；播完自动进入第 6 集。
 
 内存预读环 512 MB：按 3.12 Mbps 可缓存约 23 分钟内容，按 Solo Leveling 的
-5.8 Mbps 约 12 分钟，按高码率 4K（80 Mbps）约 51 秒；起播先垫 3 秒音频 + 2 秒视频，
+5.8 Mbps 约 12 分钟，按高码率 4K（80 Mbps）约 51 秒；起播快速档只需 1 帧视频 + ≤300ms 音频，慢链路自动回退到 2s/1s，
 播放中音视频各补到 15 秒。该缓冲只占内存，不写入硬盘缓存。
 
 ### iPhone 横屏播放（iPhone 16 真机验证）
@@ -226,6 +226,33 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 - 逐条写 `Documents/ice-acceptance.json`：首帧耗时、视频入队/恢复次数、显示层状态、视频队列深度/丢包、缓冲次数/分钟、累计缓冲、seek 时延/偏差、`seekCacheHit`、`seekCacheHits`/`seekCacheMisses`、`ringResetCount`、字幕条数与错误。
 - 无视频帧、显示层解码恢复、播放失败或显示层 failed 会自动停止；单分钟缓冲 ≥6 次默认也停止，加 `-stressTolerateBufferStalls` 时改为记录 `stressBufferException` 并继续，适合区分代码问题与服务器/过热掉速。最多 30 分钟。
 - 总结条目包含 `stressCompleted`、`stressSeriousFound`、`stressBufferExceptions`、`stressStopReason`。
+
+### 起播延迟诊断字段
+
+验收报告的每条播放记录额外包含以下字段，用于区分“代码读取量”和“环境掉速”：
+
+| 字段 | 单位 | 含义 |
+|---|---|---|
+| `playerPresentedMilliseconds` | ms | 点击到播放页出现的时间；占位图与加载态在此刻已可见 |
+| `openBytesRead` | byte | 打开容器阶段实际从字节源读到的字节数 |
+| `openReadCount` | 次 | 打开阶段字节源发起的读取次数 |
+| `avioFillCount` | 次 | `AVIOBridge` 预读窗口填充次数 |
+| `attachmentBytes` | byte | 容器附件总字节数（不含已跳过的字体） |
+| `attachmentFontBytes` | byte | 容器附件中字体字节数 |
+| `skippedFontCount` | 个 | FFmpeg 跳过的字体附件数量 |
+| `headerCacheHitBytes` | byte | 容器头缓存命中的字节数 |
+| `headerCacheHitRatio` | 0–1 | 打开阶段读取中缓存命中的比例 |
+| `subtitleScanMilliseconds` | ms | 起播后外挂字幕扫描耗时 |
+| `startupPrerollMode` | `fast` / `conservative` | 起播预滚档位 |
+| `startupBufferStalls` | 次 | 起播后 30 秒内的缓冲次数 |
+
+### 容器头缓存
+
+- 位置：App 沙盒 `Library/Caches/ContainerHeaderCache/`，`index.json` 记录页位图，`data/` 存 64KB 页。
+- 写入范围：只在“打开容器”阶段写入；`PlaybackEngine.play()` 之后停止写入，播放媒体数据不落盘。
+- 容量：全局 512MB、单文件 64MB，按文件最近访问 LRU 淘汰；源文件大小/修改时间/首 64KB 指纹任一变化即失效。
+- 清理：媒体库「更多 > 清空缓存」会同时删除缩略图、字幕脚本与容器头缓存；也可以删除上述目录。
+- 验证二次打开：先播一次，再播同一文件，报告中的 `headerCacheHitRatio` 应明显上升、`openBytesRead` 应明显下降。
 
 ## 真机人工验证清单
 

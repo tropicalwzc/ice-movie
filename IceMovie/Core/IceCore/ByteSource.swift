@@ -14,6 +14,39 @@ public protocol ByteSource: Sendable {
     func close() async
 }
 
+/// 可选的读取统计：用于区分“代码读了多少”和“环境掉速”。
+public struct ByteSourceReadStats: Sendable, Equatable {
+    public var readCount = 0
+    public var bytesRead: Int64 = 0
+    public var smallReadCount = 0
+    /// 容器头缓存命中的字节数与参与缓存判断的总字节数。
+    public var cacheHitBytes: Int64 = 0
+    public var cacheReadBytes: Int64 = 0
+
+    public init(
+        readCount: Int = 0,
+        bytesRead: Int64 = 0,
+        smallReadCount: Int = 0,
+        cacheHitBytes: Int64 = 0,
+        cacheReadBytes: Int64 = 0
+    ) {
+        self.readCount = readCount
+        self.bytesRead = bytesRead
+        self.smallReadCount = smallReadCount
+        self.cacheHitBytes = cacheHitBytes
+        self.cacheReadBytes = cacheReadBytes
+    }
+}
+
+public protocol ReadStatsProviding: AnyObject, Sendable {
+    var readStats: ByteSourceReadStats { get }
+}
+
+/// 缓存阶段开关：打开阶段允许写入，起播后停止写入。
+public protocol CachePhaseControlling: AnyObject, Sendable {
+    func endOpenPhase()
+}
+
 /// 可选的预读指标：报告当前读位置之后已经缓存了多少字节，供进度条画缓冲区间。
 public protocol BufferMetricsProviding: Sendable {
     var bufferedAheadBytes: Int64 { get }

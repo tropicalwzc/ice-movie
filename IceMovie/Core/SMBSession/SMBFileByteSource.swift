@@ -23,7 +23,7 @@ struct SMBHandleProvider: @unchecked Sendable {
 /// - 句柄失效时重开一次并重试同一偏移。
 final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedProviding,
     BufferRetentionProviding, SeekAwareByteSource, SeekCacheProviding, BufferSupplyProviding,
-    PrefetchCancelling, PrefetchControlling, @unchecked Sendable {
+    PrefetchCancelling, PrefetchControlling, ReadStatsProviding, @unchecked Sendable {
     private let scheduler: SMBReadScheduler
     private let priority: SMBReadPriority
     private let reopen: SMBHandleProvider?
@@ -59,8 +59,30 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
     private var supplyLow = false
     private var speedSamples: [(time: Double, bytes: Int)] = []
     private var retainBackBytes: Int64 = 0
+    private var readCountValue = 0
+    private var bytesReadValue: Int64 = 0
+    private var smallReadCountValue = 0
+    /// 元数据小读的独立缓存：避免为 64KB 请求拉 1MB 块，也避免相邻小读重复走网络。
+    private struct SmallRange {
+        let offset: Int64
+        let data: Data
+    }
+    private var smallRanges: [SmallRange] = []
+    /// 容器头固定保留 16MB：MP4 moov 在尾部时，回到头部不重新走网络。
+    private let headerPinBytes: Int64 = 16 << 20
+    private var pinnedHeaderRanges: [SmallRange] = []
 
     var length: Int64? { lengthValue }
+
+    var readStats: ByteSourceReadStats {
+        lock.withLock {
+            ByteSourceReadStats(
+                readCount: readCountValue,
+                bytesRead: bytesReadValue,
+                smallReadCount: smallReadCountValue
+            )
+        }
+    }
 
     /// 最近约 2 秒的实际网络下载速度（含预读）。
     var downloadBytesPerSecond: Double {
@@ -127,7 +149,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         playhead = target
         updateRetentionLocked()
         let keepTo = target + forwardBudgetLocked()
-        ring.trim(keepFrom: windowStart, keepTo: keepTo)
+        ring.trim(keepFrom: windowStart, keepTo: keepTo, pinHeaderBytes: headerPinBytes)
         lock.unlock()
     }
 
@@ -178,6 +200,15 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         let closedNow = lock.withLock { closed }
         guard !closedNow else { throw ByteSourceError.closed }
         if let length, offset >= length { return Data() }
+        if count < chunkSize {
+            lock.withLock { smallReadCountValue += 1 }
+        }
+
+        // 容器头区间优先命中固定缓存，任何大小的读都可以复用。
+        if let cached = pinnedHeaderRead(at: offset, count: count) {
+            Log.debug(.smb, "容器头命中 偏移=\(offset) 长度=\(cached.count)")
+            return cached
+        }
 
         if priority == .playback, !lock.withLock({ reachedEOF }) {
             if let cached = ring.readAvailable(at: offset, count: count) {
@@ -187,6 +218,17 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
             }
         } else if let cached = ring.readAvailable(at: offset, count: count) {
             return cached
+        }
+
+        // 打开阶段的元数据读通常只有几十 KB：按请求区间精确读，不放大成 1MB 块。
+        if count < chunkSize {
+            if let cached = smallRangeRead(at: offset, count: count) {
+                Log.debug(.smb, "小读命中 偏移=\(offset) 长度=\(cached.count)")
+                return cached
+            }
+            let data = try await fetchExact(at: offset, count: count)
+            storeSmallRange(data, at: offset)
+            return data
         }
 
         let requestEnd = offset + Int64(count)
@@ -301,7 +343,112 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         }
 
         recordDownload(data.count)
+        if !data.isEmpty {
+            lock.withLock {
+                readCountValue += 1
+                bytesReadValue += Int64(data.count)
+            }
+        }
         return data
+    }
+
+    /// 精确读：按请求区间发起 pread，不再按 1MB 对齐整取。
+    private func fetchExact(at offset: Int64, count: Int) async throws -> Data {
+        var box = currentHandleBox()
+        var cursor = offset
+        var remaining = count
+        var result = Data()
+        var retried = false
+
+        while remaining > 0 {
+            if let lengthValue, cursor >= lengthValue { break }
+            let want: Int
+            if let lengthValue {
+                want = min(remaining, Int(max(0, lengthValue - cursor)))
+            } else {
+                want = remaining
+            }
+            guard want > 0 else { break }
+            do {
+                let part = try await submitRead(
+                    box: box,
+                    start: cursor,
+                    length: want,
+                    priority: priority
+                )
+                if part.isEmpty { break }
+                result.append(part)
+                cursor += Int64(part.count)
+                remaining -= part.count
+            } catch {
+                guard !retried, let reopen else { throw error }
+                retried = true
+                Log.notice(
+                    .smb,
+                    "精确读失败，重开句柄 偏移=\(cursor) 优先级=\(priority.label) "
+                        + error.localizedDescription
+                )
+                box = try await reopen.open()
+                lock.withLock {
+                    guard !closed else { return }
+                    handle = box.handle
+                }
+            }
+        }
+
+        if !result.isEmpty {
+            lock.withLock {
+                readCountValue += 1
+                bytesReadValue += Int64(result.count)
+            }
+            recordDownload(result.count)
+        }
+        return result
+    }
+
+    private func smallRangeRead(at offset: Int64, count: Int) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let index = smallRanges.firstIndex(where: {
+            offset >= $0.offset && offset + Int64(count) <= $0.offset + Int64($0.data.count)
+        }) else { return nil }
+        let entry = smallRanges.remove(at: index)
+        smallRanges.append(entry)
+        let start = Int(offset - entry.offset)
+        return entry.data.subdata(in: start..<(start + count))
+    }
+
+    private func pinnedHeaderRead(at offset: Int64, count: Int) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        let end = offset + Int64(count)
+        guard let index = pinnedHeaderRanges.firstIndex(where: {
+            offset >= $0.offset && end <= $0.offset + Int64($0.data.count)
+        }) else { return nil }
+        let entry = pinnedHeaderRanges.remove(at: index)
+        pinnedHeaderRanges.append(entry)
+        let start = Int(offset - entry.offset)
+        return entry.data.subdata(in: start..<(start + count))
+    }
+
+    private func storeSmallRange(_ data: Data, at offset: Int64) {
+        guard !data.isEmpty, data.count <= 256 * 1024 else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        if offset < headerPinBytes {
+            pinnedHeaderRanges.removeAll { $0.offset == offset }
+            pinnedHeaderRanges.append(SmallRange(offset: offset, data: data))
+            var total = pinnedHeaderRanges.reduce(0) { $0 + $1.data.count }
+            while total > Int(headerPinBytes), pinnedHeaderRanges.count > 1 {
+                total -= pinnedHeaderRanges.removeFirst().data.count
+            }
+            return
+        }
+        smallRanges.removeAll { $0.offset == offset }
+        smallRanges.append(SmallRange(offset: offset, data: data))
+        while smallRanges.count > 4 {
+            smallRanges.removeFirst()
+        }
     }
 
     private func recordDownload(_ bytes: Int) {
@@ -390,7 +537,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         reachedEOF = false
         windowStart = max(0, target - backBudgetLocked())
         if seekCacheEnabled {
-            ring.trim(keepFrom: windowStart, keepTo: target + forwardBudgetLocked())
+            ring.trim(keepFrom: windowStart, keepTo: target + forwardBudgetLocked(), pinHeaderBytes: headerPinBytes)
         } else {
             ring.reset()
         }
@@ -425,7 +572,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         prefetchHead = max(prefetchHead, ring.contiguousEnd(from: max(0, readHead)))
         updateRetentionLocked()
         let keepTo = max(playhead, readHead) + forwardBudgetLocked()
-        ring.trim(keepFrom: windowStart, keepTo: keepTo)
+        ring.trim(keepFrom: windowStart, keepTo: keepTo, pinHeaderBytes: headerPinBytes)
         // 供给危险时只更新读头/缓冲统计，不启动新的预读任务。
         if prefetchActive || supplyLow {
             lock.unlock()

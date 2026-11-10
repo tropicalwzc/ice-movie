@@ -77,6 +77,28 @@ public final class MediaReader: @unchecked Sendable {
     private var pendingSeek: (target: Double, startedAt: Double)?
     public private(set) var openInputMilliseconds = 0
     public private(set) var streamInfoMilliseconds = 0
+    /// 打开阶段的实际读取量，用于区分代码成本与环境掉速。
+    public private(set) var avioFillCount = 0
+    public private(set) var openBytesRead: Int64 = 0
+    public private(set) var openReadCount = 0
+    public private(set) var attachmentBytes = 0
+    public private(set) var attachmentFontBytes = 0
+    public private(set) var skippedFontCount = 0
+    public private(set) var headerCacheHitBytes: Int64 = 0
+    public private(set) var headerCacheHitRatio: Double = 0
+
+    /// 封面图附件（attached_pic）的字节数；字体跳过后仍应保留。
+    public var attachedPictureBytes: Int {
+        guard let format else { return 0 }
+        var total = 0
+        for index in 0..<Int(format.pointee.nb_streams) {
+            guard let stream = format.pointee.streams?[index] else { continue }
+            if stream.pointee.disposition & AV_DISPOSITION_ATTACHED_PIC != 0 {
+                total += Int(stream.pointee.attached_pic.size)
+            }
+        }
+        return total
+    }
 
     private init(format: UnsafeMutablePointer<AVFormatContext>?, bridge: AVIOBridge?, info: MediaInfo) {
         self.format = format
@@ -98,7 +120,9 @@ public final class MediaReader: @unchecked Sendable {
 
         do {
             let info = try loadInfo(format: context, label: path)
-            return MediaReader(format: context, bridge: nil, info: info)
+            let reader = MediaReader(format: context, bridge: nil, info: info)
+            reader.applyOpenStats(format: context, bridge: nil)
+            return reader
         } catch {
             var failed: UnsafeMutablePointer<AVFormatContext>? = context
             avformat_close_input(&failed)
@@ -111,7 +135,10 @@ public final class MediaReader: @unchecked Sendable {
         label: String,
         fastProbe: Bool = false
     ) throws -> MediaReader {
-        let bridge = try AVIOBridge(source: source)
+        let bridge = try AVIOBridge(
+            source: source,
+            startWindowSize: fastProbe ? 64 << 10 : 256 << 10
+        )
         guard let context = avformat_alloc_context() else {
             bridge.releaseContext()
             throw MediaReaderError.openFailed(-1)
@@ -132,6 +159,8 @@ public final class MediaReader: @unchecked Sendable {
         if fastProbe {
             av_dict_set(&options, "probesize", "8388608", 0)
             av_dict_set(&options, "analyzeduration", "2000000", 0)
+            // 字体附件不参与播放；只跳过字体，封面图等非字体附件仍保留。
+            av_dict_set(&options, "skip_font_attachments", "1", 0)
         }
         let inputBegan = ProcessInfo.processInfo.systemUptime
         let result = avformat_open_input(&opened, nil, nil, &options)
@@ -160,6 +189,7 @@ public final class MediaReader: @unchecked Sendable {
             let reader = MediaReader(format: opened, bridge: bridge, info: info)
             reader.openInputMilliseconds = openInputMilliseconds
             reader.streamInfoMilliseconds = streamInfoMilliseconds
+            reader.applyOpenStats(format: opened, bridge: bridge)
             return reader
         } catch {
             var failed: UnsafeMutablePointer<AVFormatContext>? = opened
@@ -190,6 +220,64 @@ public final class MediaReader: @unchecked Sendable {
             }
         }
         return hasPlayable
+    }
+
+    /// 记录打开阶段的读取量、附件大小与字体跳过数量。
+    private func applyOpenStats(
+        format: UnsafeMutablePointer<AVFormatContext>,
+        bridge: AVIOBridge?
+    ) {
+        if let bridge {
+            avioFillCount = bridge.fillCount
+            let stats = bridge.sourceReadStats
+            // bytesRead 取字节源的真实网络读取量，不含容器头缓存命中。
+            openBytesRead = stats.bytesRead
+            openReadCount = max(bridge.fillCount, stats.readCount)
+            headerCacheHitBytes = stats.cacheHitBytes
+            if stats.cacheReadBytes > 0 {
+                headerCacheHitRatio = Double(stats.cacheHitBytes) / Double(stats.cacheReadBytes)
+            }
+        }
+        let attachments = attachmentByteCounts()
+        attachmentBytes = attachments.total
+        attachmentFontBytes = attachments.fonts
+        skippedFontCount = format.pointee.metadata.flatMap {
+            Self.metadata($0, key: "icemovie_skipped_font_count")
+        }.flatMap(Int.init) ?? 0
+    }
+
+    /// 不复制附件数据，只统计字节数；字体按文件名后缀判断。
+    public func attachmentByteCounts() -> (total: Int, fonts: Int, fontCount: Int) {
+        guard let format else { return (0, 0, 0) }
+        var total = 0
+        var fonts = 0
+        var fontCount = 0
+        for index in 0..<Int(format.pointee.nb_streams) {
+            guard let stream = format.pointee.streams?[index],
+                  let params = stream.pointee.codecpar,
+                  params.pointee.codec_type == AVMEDIA_TYPE_ATTACHMENT,
+                  params.pointee.extradata_size > 0 else { continue }
+            let size = Int(params.pointee.extradata_size)
+            total += size
+            let name = stream.pointee.metadata.flatMap {
+                Self.metadata($0, key: "filename")
+            } ?? ""
+            if Self.isFontAttachmentName(name) {
+                fonts += size
+                fontCount += 1
+            }
+        }
+        return (total, fonts, fontCount)
+    }
+
+    private static func isFontAttachmentName(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.hasSuffix(".ttf") || lower.hasSuffix(".otf") || lower.hasSuffix(".ttc")
+    }
+
+    /// 起播后停止容器头缓存写入；读缓存仍然可用。
+    public func endOpenPhase() {
+        bridge?.endOpenPhase()
     }
 
     public func close() {

@@ -73,6 +73,82 @@ final class SubtitleDiscoveryTests: XCTestCase {
         )
         XCTAssertEqual(tracks.first?.format, .bitmap)
     }
+
+    /// 真实库回归：集数整个包在方括号里（[YYDM-11FNAS][Angel Beats][10][BDRIP]…）。
+    /// 去括号先于抽集数会把 [10] 删掉，导致全方括号命名永远匹配不上外挂字幕。
+    func testFullyBracketedNamesMatchByEpisode() {
+        let video = "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P][X264-10bit_AAC][AB43189A].mp4"
+        let siblings = [
+            "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P][X264-10bit_AAC][AB43189A].ass",
+            "[YYDM-11FNAS][Angel Beats][11][BDRIP][720P][X264-10bit_AAC][AB43189A].ass",
+        ]
+        XCTAssertEqual(SubtitleDiscovery.parse(video).episode, 10)
+        let tracks = SubtitleDiscovery.external(videoFileName: video, siblings: siblings)
+        XCTAssertEqual(tracks.count, 1, "只应匹配第 10 集")
+        XCTAssertTrue(tracks.first?.title.contains("[10]") == true)
+    }
+
+    /// 方括号命名的视频 + 省略标签的字幕名（Angel Beats - 10.chs.ass）也要能对上。
+    func testBracketedVideoMatchesPlainNamedSubtitle() {
+        let video = "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P][X264-10bit_AAC][AB43189A].mp4"
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: video,
+            siblings: ["Angel Beats - 10.chs.ass", "Angel Beats - 11.chs.ass"]
+        )
+        XCTAssertEqual(tracks.count, 1)
+        XCTAssertEqual(tracks.first?.language, .simplifiedChinese)
+    }
+
+    /// 词元模糊匹配：视频与字幕的分组标签不同（[YYDM] vs [Kamigami]），
+    /// 但作品名一致时应能匹配上。
+    func testFuzzyTokenMatchIgnoresGroupTags() {
+        let video = "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P][X264-10bit_AAC][AB43189A].mp4"
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: video,
+            siblings: ["[Kamigami] Angel Beats - 10 [BD 1080p].ass"]
+        )
+        XCTAssertEqual(tracks.count, 1)
+    }
+
+    /// 一一对应：同目录同集数视频唯一、同集数字幕唯一时，标题完全对不上也应匹配
+    ///（字幕用中文标题、视频用英文标题的真实场景）。
+    func testOneToOneDisambiguationMatchesForeignTitle() {
+        let video = "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P].mp4"
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: video,
+            siblings: ["[YYDM-11FNAS][Angel Beats][10][BDRIP][720P].mp4", "天使的脉动 - 10.chs.ass"]
+        )
+        XCTAssertEqual(tracks.count, 1)
+    }
+
+    /// 反例：同目录有多个同集数视频时，“一一对应”失效，不能盲目匹配无关字幕。
+    func testOneToOneDisabledWhenAmbiguous() {
+        let video = "ShowA - 10.mkv"
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: video,
+            siblings: ["ShowA - 10.mkv", "ShowB - 10.mkv", "ShowC - 10.chs.ass"]
+        )
+        XCTAssertTrue(tracks.isEmpty, "同集数视频不唯一，不应匹配无关字幕")
+    }
+
+    /// 季数不一致时直接否决，避免跨季错配。
+    func testSeasonMismatchRejected() {
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: "Some Show S02E05 [1080p].mkv",
+            siblings: ["Some Show S01E05.chs.ass", "Some Show S02E05.chs.ass"]
+        )
+        XCTAssertEqual(tracks.count, 1)
+        XCTAssertTrue(tracks.first?.title.contains("S02E05") == true)
+    }
+
+    /// SxxExx 命名同季不同集不能互相匹配（集数在 E 后面，词元会被剔除）。
+    func testSameSeasonDifferentEpisodeRejected() {
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: "Some Show S02E05 [1080p].mkv",
+            siblings: ["Some Show S02E06.chs.ass"]
+        )
+        XCTAssertTrue(tracks.isEmpty)
+    }
 }
 
 /// 7.1b：真实库结构（字幕在 `- Sub` 子目录、文件名与视频不同）。

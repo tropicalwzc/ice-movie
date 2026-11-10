@@ -22,14 +22,19 @@ final class PlayerCommands {
         activeToken = token
         self.engine = engine
         self.toggleFullscreenHandler = toggleFullscreen
+        Log.info(.app, "命令总线挂载 token=\(token.uuidString.prefix(8))")
         return token
     }
 
     func detach(token: UUID) {
-        guard activeToken == token else { return }
+        guard activeToken == token else {
+            Log.info(.app, "命令总线卸载被忽略 token=\(token.uuidString.prefix(8))（已换新会话）")
+            return
+        }
         activeToken = nil
         engine = nil
         toggleFullscreenHandler = nil
+        Log.info(.app, "命令总线卸载 token=\(token.uuidString.prefix(8))")
     }
 
     func togglePlayPause() {

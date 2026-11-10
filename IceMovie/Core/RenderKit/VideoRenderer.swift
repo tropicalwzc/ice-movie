@@ -23,6 +23,9 @@ public final class VideoRenderer: @unchecked Sendable {
         public var lastRecoveryPosition: Double = 0
         /// 已投递到主线程、尚未 consume 的样本数；用于定位显示层背压。
         public var pendingDispatch = 0
+        /// 回放缓存因"连续段超出窗口"整段重建的次数。频繁重建意味着
+        /// 关键帧间隔大于缓存窗口，旋转/重建会退化为一次刷新 seek。
+        public var recentRestarts = 0
     }
 
     /// 跨越主线程边界时用来包裹非 Sendable 的样本。
@@ -30,6 +33,9 @@ public final class VideoRenderer: @unchecked Sendable {
         let buffer: CMSampleBuffer
         let presentationTime: Double
         let isKeyframe: Bool
+        /// 入队序号：帧每次进入 enqueue 就 +1（含被丢弃的帧）。
+        /// 回放前逐帧校验它连续，才能确认快照里没有缺帧。
+        let sequence: UInt64
     }
 
     private weak var layer: AVSampleBufferDisplayLayer?
@@ -38,13 +44,27 @@ public final class VideoRenderer: @unchecked Sendable {
     private var timebase: CMTimebase?
     /// 最近排入的帧。SwiftUI 旋转/重建 VideoSurface 或显示层恢复时，
     /// 新层需要立刻有内容，否则会黑屏到下一次播放泵送帧。
-    private var recent: [CMSampleBuffer] = []
+    ///
+    /// 只允许保存「从关键帧开始的一段连续帧」：中间缺一帧，回放就会因
+    /// 参考帧缺失解码失败。因此窗口满了不能抽帧缩容，只能整段作废。
+    private var recent: [SampleBox] = []
+    /// 缓存段的上限帧数。超过后整段丢弃，等下一个关键帧重建。
+    private let recentLimit = 120
+    /// 缓存是否在等关键帧重新开始。与 `needsKeyframe` 不同：它只影响
+    /// “要不要往 recent 里放”，不会拦下已绑定显示层的正常送帧。
+    private var recentAwaitingKeyframe = true
+    /// 全局入队序号，用来判定快照是否逐帧连续。
+    private var enqueueSequence: UInt64 = 0
     /// 解码失败后只接受下一个关键帧，避免坏帧在“恢复→重灌”之间反复刷屏。
     private var needsKeyframe = false
     private var lastRefreshAt: Double = 0
     private var refreshRetryTask: Task<Void, Never>?
     /// 每次刷新/seek 递增；旧重试唤醒后据此作废。
     private var refreshGeneration = 0
+    /// 绑定代次：bind() 接管 recent 缓存时递增。此前投递到主队列、
+    /// 尚未 consume 的帧已由 bind() 从 recent 回放，代次不匹配的旧分发
+    /// 直接丢弃，保证每帧只通过一种路径（回放或 consume）进入显示层。
+    private var bindingGeneration = 0
     /// 新层绑定或解码故障时，请播放引擎从当前位置重新解出一段关键帧。
     public var onNeedsRefresh: ((Double) -> Void)?
     private var stats = Metrics()
@@ -59,6 +79,7 @@ public final class VideoRenderer: @unchecked Sendable {
 
     deinit {
         refreshRetryTask?.cancel()
+        Log.info(.render, "渲染器释放")
         for observer in observers {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -78,19 +99,87 @@ public final class VideoRenderer: @unchecked Sendable {
         self.layer = layer
         needsRecovery = false
         pendingRecoveryReason = nil
+        let pending = recent
+        recent.removeAll()
+        // 快照被取走后缓存从零开始：新段必须有新的关键帧做起点，
+        // 否则会存下一段"开头不是关键帧"的帧，永远无法回放。
+        recentAwaitingKeyframe = true
+        // 快照接管后，此前在飞的 consume 分发作废：这些帧已包含在 pending
+        // 里由下面的回放路径入队，旧分发再执行会把同一帧送进新层两次
+        //（重复解码、统计双计、显示层背压）。
+        bindingGeneration &+= 1
+        // 只有「首帧是关键帧且序号逐帧连续」的快照才能直接回放。缓存超窗
+        // 重建、丢包、恢复清空都会在段中留下缺口，回放这种序列会让显示层
+        // 因参考帧缺失解码失败，进而触发恢复与二次 seek —— 正是回放要避免的。
+        // 不可回放时置 needsKeyframe，refreshOrRetry 才会真正发出刷新请求。
+        let replayable = Self.isReplayable(
+            firstIsKeyframe: pending.first?.isKeyframe ?? false,
+            sequences: pending.map(\.sequence)
+        )
+        needsKeyframe = !replayable
         lock.unlock()
 
         let created = makeTimebase()
         lock.lock()
         timebase = created
-        recent.removeAll()
-        needsKeyframe = true
         lock.unlock()
 
         layer.videoGravity = .resizeAspect
         layer.controlTimebase = created
         observe(layer: layer)
+
+        // 起播前绑定：resume seek 已经把解封装器放到目标位置，播放泵会送来
+        // 第一个关键帧；此时再发一次 refresh seek 只会制造二次跳转和额外缓冲。
+        if !clock.isPlaying, pending.isEmpty {
+            Log.info(
+                .render,
+                "显示层绑定，等待播放泵送关键帧 位置=\(String(format: "%.2f", clock.currentTime))s"
+            )
+            return
+        }
+
+        // 播放开始后图层才绑定时，播放泵已缓存了「关键帧 + 其后的连续帧」。
+        // 直接补发这些帧，避免为了拿关键帧再发一次 seek，造成起播二次跳转。
+        if replayable, let first = pending.first {
+            lock.withLock {
+                needsKeyframe = false
+                stats.enqueued += pending.count
+                stats.lastEnqueuedTime = max(
+                    stats.lastEnqueuedTime,
+                    pending.last?.presentationTime ?? 0
+                )
+            }
+            for box in pending {
+                layer.enqueue(box.buffer)
+            }
+            Log.info(
+                .render,
+                "显示层绑定，回放缓存帧 \(pending.count) 帧 "
+                    + "起点=\(String(format: "%.2f", first.presentationTime))s"
+            )
+            return
+        }
+        let restarts = lock.withLock { stats.recentRestarts }
+        Log.info(
+            .render,
+            "显示层绑定，缓存不可回放 帧数=\(pending.count) "
+                + "首帧关键帧=\(pending.first?.isKeyframe == true) 重建次数=\(restarts)"
+        )
         refreshOrRetry(reason: "显示层绑定")
+    }
+
+    /// 快照能否直接回放：首帧是关键帧，且入队序号逐帧连续。
+    ///
+    /// 序号把"缓存超窗重建、丢包、恢复清空"造成的缺口都算在内，比只看
+    /// 首帧是否关键帧更严格；连续段内少一帧就会因参考帧缺失解码失败。
+    static func isReplayable(firstIsKeyframe: Bool, sequences: [UInt64]) -> Bool {
+        guard firstIsKeyframe else { return false }
+        guard sequences.count > 1 else { return true }
+        for index in 1..<sequences.count
+        where sequences[index] != sequences[index - 1] &+ 1 {
+            return false
+        }
+        return true
     }
 
     private func observe(layer: AVSampleBufferDisplayLayer) {
@@ -159,6 +248,9 @@ public final class VideoRenderer: @unchecked Sendable {
         lock.withLock {
             needsKeyframe = true
             recent.removeAll()
+            // 缓存段被清空后必须重新以关键帧开头，否则会存下一段
+            // 无法回放的半截序列。
+            recentAwaitingKeyframe = true
         }
         refreshOrRetry(reason: "显示层恢复")
     }
@@ -229,6 +321,7 @@ public final class VideoRenderer: @unchecked Sendable {
         lock.withLock {
             needsKeyframe = true
             recent.removeAll()
+            recentAwaitingKeyframe = true
             stats.flushes += 1
         }
         guard let layer else { return }
@@ -256,45 +349,68 @@ public final class VideoRenderer: @unchecked Sendable {
 
     public func enqueue(_ sample: CMSampleBuffer, isKeyframe: Bool = false) {
         let presentation = CMSampleBufferGetPresentationTimeStamp(sample)
-        let box = SampleBox(
-            buffer: sample,
-            presentationTime: presentation.isValid ? presentation.seconds : 0,
-            isKeyframe: isKeyframe
-        )
-
+        var dispatchGeneration = 0
+        var sampleBox: SampleBox?
         let unbound: Bool = lock.withLock {
             if needsKeyframe, !isKeyframe {
                 return true
             }
+            enqueueSequence &+= 1
+            let box = SampleBox(
+                buffer: sample,
+                presentationTime: presentation.isValid ? presentation.seconds : 0,
+                isKeyframe: isKeyframe,
+                sequence: enqueueSequence
+            )
+            sampleBox = box
             if isKeyframe {
                 needsKeyframe = false
+                // 新的关键帧是唯一可接受的缓存起点。
                 recent.removeAll()
+                recentAwaitingKeyframe = false
             }
-            // 新显示层必须从关键帧开始解码；保留“最近关键帧 + 后续帧”，
-            // 旋转/重建/解码恢复时才有可解码的起点。
-            recent.append(sample)
-            while recent.count > 120 {
-                if recent.count > 1 {
-                    recent.remove(at: 1)
-                } else {
-                    recent.removeFirst()
+            if !recentAwaitingKeyframe {
+                // 只缓存「从关键帧开始的连续段」：上面的 gate 已把等待期内的
+                // 非关键帧挡在外面，因此这里 append 的帧不会在段中留缺口。
+                recent.append(box)
+                if recent.count > recentLimit {
+                    // 连续段已超出窗口。不能删中间帧缩容——删掉关键帧后的
+                    // 第 1 帧会让段内出现越来越大的缺口，回放到显示层必然
+                    // 因参考帧缺失解码失败。整段作废，等下一个关键帧重建；
+                    // 期间旋转/重建由 bind 的连续性校验改走 refreshOrRetry。
+                    recent.removeAll()
+                    recentAwaitingKeyframe = true
+                    stats.recentRestarts += 1
                 }
             }
+            dispatchGeneration = bindingGeneration
             return layer == nil
         }
-        guard !unbound else { return }
+        guard !unbound, let box = sampleBox else { return }
         lock.withLock { stats.pendingDispatch += 1 }
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-                self?.consume(box)
+                self?.consume(box, generation: dispatchGeneration)
             }
         }
     }
 
     @MainActor
-    private func consume(_ box: SampleBox) {
-        lock.withLock { stats.pendingDispatch = max(0, stats.pendingDispatch - 1) }
-        guard let layer else { return }
+    private func consume(_ box: SampleBox, generation: Int) {
+        lock.lock()
+        stats.pendingDispatch = max(0, stats.pendingDispatch - 1)
+        // 绑定重建后，本次分发对应的帧已由 bind() 从 recent 回放；
+        // 代次不匹配说明是绑定前的旧分发，直接丢弃，避免同一帧
+        // 第二次进入新显示层。
+        guard generation == bindingGeneration else {
+            lock.unlock()
+            return
+        }
+        guard let layer else {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
 
         lock.lock()
         // 恢复后只放行关键帧；已经排在主队列里的旧帧直接丢弃。
@@ -302,8 +418,18 @@ public final class VideoRenderer: @unchecked Sendable {
             lock.unlock()
             return
         }
+        let wasWaitingForKeyframe = needsKeyframe
         if box.isKeyframe {
             needsKeyframe = false
+            if wasWaitingForKeyframe {
+                let timebaseSeconds = timebase.map { CMTimebaseGetTime($0).seconds } ?? -1
+                Log.info(
+                    .render,
+                    "seek 后关键帧入队 pts=\(String(format: "%.3f", box.presentationTime))s "
+                        + "时钟=\(String(format: "%.3f", clock.currentTime))s "
+                        + "时间基=\(String(format: "%.3f", timebaseSeconds))s"
+                )
+            }
         }
         stats.enqueued += 1
         stats.lastEnqueuedTime = max(stats.lastEnqueuedTime, box.presentationTime)
@@ -379,8 +505,7 @@ public final class VideoRenderer: @unchecked Sendable {
     public var pendingAhead: Double {
         lock.withLock {
             guard let last = recent.last else { return 0 }
-            let pts = CMSampleBufferGetPresentationTimeStamp(last).seconds
-            return max(0, pts - clock.currentTime)
+            return max(0, last.presentationTime - clock.currentTime)
         }
     }
 
@@ -442,6 +567,7 @@ public final class VideoRenderer: @unchecked Sendable {
         // 用户 seek 后旧刷新重试必须作废，否则冷却结束会对新位置再发一次 seek。
         refreshGeneration += 1
         recent.removeAll()
+        recentAwaitingKeyframe = true
         needsKeyframe = true
         stats.lastEnqueuedTime = 0
         let timebase = self.timebase
@@ -449,13 +575,25 @@ public final class VideoRenderer: @unchecked Sendable {
 
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-                self?.layer?.flush()
+                guard let self else { return }
+                self.layer?.flush()
+                let pending = self.lock.withLock { self.stats.pendingDispatch }
+                Log.info(
+                    .render,
+                    "视频跳转清层 位置=\(String(format: "%.2f", seconds))s "
+                        + "状态=\(self.layer?.status.rawValue ?? -1) "
+                        + "待发=\(pending)"
+                )
             }
         }
         if let timebase {
             CMTimebaseSetTime(timebase, time: CMTime(seconds: seconds, preferredTimescale: 600))
         }
-        Log.info(.render, "视频跳转 位置=\(String(format: "%.2f", seconds))s")
+        Log.info(
+            .render,
+            "视频跳转 位置=\(String(format: "%.2f", seconds))s "
+                + "时间基=\(timebase.map { String(format: "%.3f", CMTimebaseGetTime($0).seconds) } ?? "无")"
+        )
     }
 }
 

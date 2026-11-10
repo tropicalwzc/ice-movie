@@ -30,3 +30,13 @@ Vendor/libass/build.log
 *.swp
 *.tmp
 *.orig
+__pycache__/
+
+# 压测/验收报告：本地产物（真机跑出来的数据与报告），不入库
+# 注意：规范类文档不要用 acceptance-<日期> 这类名字，否则会命中下面的规则
+docs/acceptance-*.json
+docs/acceptance-*.md
+docs/startup-acceptance-*-*.json
+docs/startup-acceptance-*-*.md
+docs/startup-baseline-*.json
+docs/startup-baseline-*.md

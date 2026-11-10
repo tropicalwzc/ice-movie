@@ -118,8 +118,9 @@ struct RootView: View {
             try? FileManager.default.removeItem(at: url)
             Log.info(.app, "验收报告已清空")
         }
-        if arguments.contains("-debugLog") {
+        if arguments.contains("-debugLog") || arguments.contains("-logDebug") {
             Log.minimumLevel = .debug
+            Log.enableFileLogging()
         }
         if arguments.contains("-landscape") || arguments.contains("-portrait") {
             requestOrientation(landscape: arguments.contains("-landscape"))
@@ -147,12 +148,29 @@ struct RootView: View {
                 .flatMap(Double.init) ?? 20
             let readLimitKBps = value(for: "-smbReadLimitKBps", in: arguments)
                 .flatMap(Int.init) ?? 0
+            // 真机自动化不要传明文密码：只有 user/password 都没给时才复用
+            // 设备上已保存的连接，避免把 A 账号的密码配给 B 账号。
+            let explicitUser = value(for: "-smbUser", in: arguments)
+            let explicitPassword = value(for: "-smbPassword", in: arguments)
+            let hasExplicitUser = explicitUser != nil
+            let hasExplicitPassword = explicitPassword != nil
+            if hasExplicitUser != hasExplicitPassword {
+                Log.notice(
+                    .app,
+                    "SMB 启动参数凭据不完整 host=\(host) "
+                        + "user=\(hasExplicitUser ? "有" : "无") "
+                        + "password=\(hasExplicitPassword ? "有" : "无")"
+                )
+            }
+            let savedCredential = (!hasExplicitUser && !hasExplicitPassword)
+                ? savedCredential(for: host)
+                : nil
             installLibrary(
                 source: SMBLibrarySource(
                     host: host,
                     share: share,
-                    user: value(for: "-smbUser", in: arguments) ?? "",
-                    password: value(for: "-smbPassword", in: arguments) ?? "",
+                    user: explicitUser ?? savedCredential?.username ?? "",
+                    password: explicitPassword ?? savedCredential?.password ?? "",
                     heartbeatInterval: .seconds(max(1, heartbeatSeconds)),
                     readLimitKBps: readLimitKBps
                 ),
@@ -300,6 +318,34 @@ struct RootView: View {
             "-videoSmb", "-videoTest",
         ]
         return !blockers.contains { arguments.contains($0) }
+    }
+
+    /// 按主机名复用设备钥匙串里的凭据；主机名大小写不一致时再从主机记录里找原名。
+    @MainActor
+    private func savedCredential(for host: String) -> HostCredential? {
+        do {
+            if let credential = try credentials.credential(for: host) {
+                return credential
+            }
+        } catch {
+            Log.error(
+                .app,
+                "读取钥匙串凭据失败 host=\(host) \(error.localizedDescription)"
+            )
+        }
+        let records = HostRecordStore(context: modelContext)
+        guard let record = records.all().first(where: {
+            $0.address.caseInsensitiveCompare(host) == .orderedSame
+        }) else { return nil }
+        do {
+            return try credentials.credential(for: record.address)
+        } catch {
+            Log.error(
+                .app,
+                "读取钥匙串凭据失败 host=\(record.address) \(error.localizedDescription)"
+            )
+            return nil
+        }
     }
 
     private func restoreLastSession() async {

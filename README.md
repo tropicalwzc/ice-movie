@@ -156,7 +156,7 @@ xcodebuild -project IceMovie.xcodeproj -scheme IceMovieUITests \
 - `-smbHost <地址> -smbShare <共享> -library`：SMB 库
 - `-resetPlaybackProgress`：清空续播记录
 - `-resetSubtitlePreferences`：清空字幕偏好
-- `-debugLog` / `-logDebug`：打开调试日志
+- `-debugLog` / `-logDebug`：打开调试日志并追加写入 `Documents/ice-playback.log`（多窗口只初始化一次，不互相清空）
 - `-diagnostics`：直接打开诊断页
 
 ## 缓存策略
@@ -245,6 +245,9 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 | `subtitleScanMilliseconds` | ms | 起播后外挂字幕扫描耗时 |
 | `startupPrerollMode` | `fast` / `conservative` | 起播预滚档位 |
 | `startupBufferStalls` | 次 | 起播后 30 秒内的缓冲次数 |
+| `lastSeekTimebaseOffset` | s | seek 完成时的显示层时间基偏差；窗口内 tick 采样不会覆盖它 |
+| `maxSeekTimebaseOffset` | s | seek 后 2 秒内该偏差的最大值；>1s 表示画面可能停住或快速追赶 |
+| `seekTimebaseJumpCount` | 次 | 时间基偏差超过 1 秒的次数；每次 seek 最多计 1 次 |
 
 ### 容器头缓存
 

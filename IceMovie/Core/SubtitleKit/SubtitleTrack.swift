@@ -82,6 +82,10 @@ public struct SubtitleTrack: Sendable, Identifiable, Equatable {
 /// 字幕轨发现：内封轨来自容器元数据，外挂轨按「同目录 + 同名前缀」匹配。
 public enum SubtitleDiscovery {
     private static let subtitleExtensions: Set<String> = ["ass", "ssa", "srt", "vtt", "sup", "sub"]
+    /// 判定“同目录还有哪些视频”用的扩展名集合，供一一对应消歧。
+    private static let videoExtensions: Set<String> = [
+        "mkv", "mp4", "m4v", "avi", "ts", "m2ts", "mov", "webm", "flv", "wmv", "rmvb", "mpg", "mpeg",
+    ]
 
     /// 内封轨的输入：由调用方从 `MediaInfo` 映射而来，避免 SubtitleKit 依赖解封装模块。
     public struct EmbeddedSource: Sendable, Equatable {
@@ -127,26 +131,54 @@ public enum SubtitleDiscovery {
 
     /// 在同目录（及字幕子目录）里找与视频同集的外挂字幕。
     ///
-    /// 真实库里字幕名往往和视频名不同：视频带 `[Kamigami]`、`[BD 1080p x265]` 这类标签，
-    /// 字幕则省掉这些并放在 `- Sub` 子目录。因此匹配前先把两边都归一化：
-    /// 去掉方括号/圆括号内容与语言标记，抽出集数，只比较「标题 + 集数」。
+    /// 真实库里字幕名往往和视频名不同：视频带 `[Kamigami]`、`[BD 1080p x265]`、
+    /// `[YYDM-11FNAS]` 这类标签，字幕常省掉标签甚至换成另一种语言的标题。
+    /// 因此匹配分三层，按可信度从高到低：
+    /// 1) 归一化标题完全一致（全方括号命名时两侧标题都为空，退化为集数一致）；
+    /// 2) 标题词元模糊重合 ≥60%（括号内的作品名也参与，标签词被剔除）；
+    /// 3) 一一对应：同目录同集数的视频只有本片、同集数字幕只有一套时，
+    ///    允许标题完全对不上——字幕与剧集一一对应时这就是最强的信号。
+    /// 季数/集数任何一侧能比且不一致则直接否决，避免错配别的集。
     public static func external(
         videoFileName: String,
         filesByDirectory: [String: [String]]
     ) -> [SubtitleTrack] {
-        let video = parse(videoFileName)
+        let video = signature(videoFileName)
         var tracks: [SubtitleTrack] = []
 
         for (directory, names) in filesByDirectory {
+            // “一一对应”消歧需要同目录的视频清单；字幕子目录里没有视频时该规则自动失效。
+            let videosInDirectory = names.filter {
+                videoExtensions.contains(($0 as NSString).pathExtension.lowercased())
+            }
+            let episodesInDirectory = videosInDirectory.map { signature($0).episode }
+            let videosWithSameEpisode = video.episode.map { target in
+                episodesInDirectory.filter { $0 == target }.count
+            } ?? 0
+            let subtitleBasesWithSameEpisode = {
+                var bases: Set<String> = []
+                for name in names {
+                    let ext = (name as NSString).pathExtension.lowercased()
+                    guard subtitleExtensions.contains(ext) else { continue }
+                    let parsed = signature(name)
+                    if let episode = parsed.episode, episode == video.episode {
+                        bases.insert(parsed.base)
+                    }
+                }
+                return bases.count
+            }()
+
             for name in names {
                 let ext = (name as NSString).pathExtension.lowercased()
                 guard subtitleExtensions.contains(ext) else { continue }
 
-                let parsed = parse(name)
-                // 文件名里只有集数（如 EP01）时标题会归一化成空串，此时靠集数对齐。
-                guard parsed.base == video.base else { continue }
-                guard !parsed.base.isEmpty || (parsed.episode != nil && video.episode != nil) else { continue }
-                if let a = parsed.episode, let b = video.episode, a != b { continue }
+                let parsed = signature(name)
+                guard matches(
+                    video: video,
+                    candidate: parsed,
+                    videosWithSameEpisode: videosWithSameEpisode,
+                    subtitleBasesWithSameEpisode: subtitleBasesWithSameEpisode
+                ) else { continue }
 
                 let language = SubtitleLanguage.detect(from: languageToken(of: name))
                 let format: SubtitleFormat = switch ext {
@@ -175,9 +207,130 @@ public enum SubtitleDiscovery {
         external(videoFileName: videoFileName, filesByDirectory: ["": siblings])
     }
 
+    /// 匹配用的归一化特征：标题干、集数、季数、标题词元。
+    struct Signature {
+        var base: String
+        var episode: Int?
+        var season: Int?
+        var tokens: Set<String>
+    }
+
+    static func signature(_ name: String) -> Signature {
+        let parsed = parse(name)
+        return Signature(
+            base: parsed.base,
+            episode: parsed.episode,
+            season: season(of: name),
+            tokens: titleTokens(of: name)
+        )
+    }
+
+    /// 候选字幕是否属于这个视频。判定顺序见 `external` 的说明。
+    static func matches(
+        video: Signature,
+        candidate: Signature,
+        videosWithSameEpisode: Int,
+        subtitleBasesWithSameEpisode: Int
+    ) -> Bool {
+        if let a = video.season, let b = candidate.season, a != b { return false }
+        if let a = video.episode, let b = candidate.episode, a != b { return false }
+
+        if candidate.base == video.base {
+            if !candidate.base.isEmpty { return true }
+            // 全方括号命名：去标签后标题为空串，只能靠集数对齐。
+            if video.episode != nil, candidate.episode != nil { return true }
+        }
+
+        if tokenOverlap(video.tokens, candidate.tokens) >= 0.6 { return true }
+
+        if let episode = video.episode, candidate.episode == episode,
+           videosWithSameEpisode == 1, subtitleBasesWithSameEpisode == 1 {
+            return true
+        }
+        return false
+    }
+
+    /// 词元重合度：交集 / 较少一侧的词数；任一侧没有词元时按 0 处理。
+    static func tokenOverlap(_ a: Set<String>, _ b: Set<String>) -> Double {
+        let denominator = min(a.count, b.count)
+        guard denominator > 0 else { return 0 }
+        return Double(a.intersection(b).count) / Double(denominator)
+    }
+
+    /// 季数：`S02E05` / `第2季` / `Season 2`；识别不到时为 nil，不参与否决。
+    static func season(of name: String) -> Int? {
+        let stem = (name as NSString).deletingPathExtension
+        let patterns = [
+            "(?i)\\bs(\\d{1,2})e\\d{1,3}\\b",
+            "第\\s*(\\d{1,2})\\s*季",
+            "(?i)season\\s*(\\d{1,2})",
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
+                  let range = Range(match.range(at: 1), in: stem),
+                  let value = Int(stem[range]) else { continue }
+            return value
+        }
+        return nil
+    }
+
+    /// 不参与标题匹配的常见标签/语言/来源词。含数字的标签
+    /// （720P、X264、AB43189A、11FNAS 等）在词元阶段已按“含数字”剔除。
+    private static let tagStopWords: Set<String> = [
+        "bd", "bdrip", "bdmv", "web", "webdl", "webrip", "hdtv", "dvdrip", "remux",
+        "avc", "hevc", "aac", "flac", "ac3", "eac3", "dts", "dtshd", "ddp", "dd", "opus", "mp3", "ma",
+        "hi", "bit", "chs", "cht", "jpn", "jap", "eng", "english", "japanese", "chinese",
+        "gb", "big5", "sc", "tc", "zh", "hans", "hant",
+        "end", "sp", "ova", "oad", "movie", "nc", "op", "ed", "pv", "cm", "repack", "proper",
+        "sub", "subs", "subtitle", "subtitles", "ass", "srt", "font", "fonts",
+    ]
+
+    /// 标题词元：括号外文本与括号内文本都参与（全方括号命名时作品名只在括号里），
+    /// 剔除含数字的标签、语言标记与常见封装词，只留能代表作品名的词。
+    static func titleTokens(of name: String) -> Set<String> {
+        let stem = (name as NSString).deletingPathExtension
+        var chunks: [String] = []
+        var outside = stem
+        if let regex = try? NSRegularExpression(pattern: "\\[([^\\]]*)\\]") {
+            let whole = NSRange(stem.startIndex..., in: stem)
+            for match in regex.matches(in: stem, range: whole) {
+                if let range = Range(match.range(at: 1), in: stem) {
+                    chunks.append(String(stem[range]))
+                }
+            }
+            outside = regex.stringByReplacingMatches(in: stem, range: whole, withTemplate: " ")
+        }
+        chunks.append(outside)
+
+        var tokens: Set<String> = []
+        for chunk in chunks {
+            for word in chunk.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }) {
+                let token = String(word)
+                guard !token.contains(where: \.isNumber) else { continue }
+                guard !tagStopWords.contains(token) else { continue }
+                // 单字符只在是汉字时保留（K-ON 这类英文单字母两侧都会被同样丢弃，不影响重合度）。
+                guard token.count > 1 || token.unicodeScalars.contains(where: {
+                    (0x4E00...0x9FFF).contains($0.value)
+                }) else { continue }
+                tokens.insert(token)
+            }
+        }
+        return tokens
+    }
+
     /// 归一化：去标签、去语言标记、抽集数，只留字母数字与汉字。
     static func parse(_ name: String) -> (base: String, episode: Int?) {
         var stem = (name as NSString).deletingPathExtension
+        var episode: Int?
+        // 集数可能整个包在方括号里（[YYDM-11FNAS][Angel Beats][10][BDRIP]…）。
+        // 必须在去括号之前抽取：否则 [10] 会被整段删掉，集数丢失、标题也只剩
+        // 空串，这类全方括号命名的视频永远匹配不上外挂字幕（真实库很常见）。
+        if let regex = try? NSRegularExpression(pattern: "\\[0*(\\d{1,3})(?:v\\d+)?\\]"),
+           let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
+           let range = Range(match.range(at: 1), in: stem) {
+            episode = Int(stem[range])
+        }
         for pattern in ["\\[[^\\]]*\\]", "\\([^)]*\\)", "（[^）]*）"] {
             stem = stem.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
         }
@@ -190,22 +343,37 @@ public enum SubtitleDiscovery {
             options: .regularExpression
         )
 
-        var episode: Int?
-        let patterns = [
-            "(?i)\\bep?\\s*0*(\\d{1,3})\\b",
-            "第\\s*0*(\\d{1,3})\\s*[集话話]",
-            "[\\s\\-_]0*(\\d{1,3})(?=[\\s.]|$)",
-        ]
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern),
-                  let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
-                  let range = Range(match.range(at: 1), in: stem),
-                  let value = Int(stem[range]) else { continue }
-            episode = value
-            if let whole = Range(match.range, in: stem) {
-                stem.replaceSubrange(whole, with: " ")
+        // 方括号里已经抽到集数就不再兜底，避免 "- 10" 之外再误命中别的数字。
+        if episode == nil {
+            // S02E05 这类美剧命名：集数在 E 后面，且整段含数字会被词元阶段剔除，
+            // 必须先抽出来，否则 S02E05 与 S02E06 会因词元完全一致而错配。
+            if let regex = try? NSRegularExpression(pattern: "(?i)\\bs\\d{1,2}e0*(\\d{1,3})\\b"),
+               let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
+               let range = Range(match.range(at: 1), in: stem),
+               let value = Int(stem[range]) {
+                episode = value
+                if let whole = Range(match.range, in: stem) {
+                    stem.replaceSubrange(whole, with: " ")
+                }
             }
-            break
+        }
+        if episode == nil {
+            let patterns = [
+                "(?i)\\bep?\\s*0*(\\d{1,3})\\b",
+                "第\\s*0*(\\d{1,3})\\s*[集话話]",
+                "[\\s\\-_]0*(\\d{1,3})(?=[\\s.]|$)",
+            ]
+            for pattern in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern),
+                      let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
+                      let range = Range(match.range(at: 1), in: stem),
+                      let value = Int(stem[range]) else { continue }
+                episode = value
+                if let whole = Range(match.range, in: stem) {
+                    stem.replaceSubrange(whole, with: " ")
+                }
+                break
+            }
         }
 
         let scalars = stem.lowercased().unicodeScalars.filter { scalar in

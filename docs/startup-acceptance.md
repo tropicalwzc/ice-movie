@@ -35,6 +35,9 @@ python3 Scripts/startup-acceptance.py <下载后的>/AppData/Documents/ice-accep
 | `headerCacheHitRatio` | 0–1 | 容器头缓存命中比例 |
 | `subtitleScanMilliseconds` | ms | 起播后外挂字幕扫描耗时 |
 | `startupBufferStalls` | 次 | 起播后 30 秒内缓冲次数 |
+| `lastSeekTimebaseOffset` | s | seek 完成时的显示层时间基偏差；窗口内 tick 采样不会覆盖它 |
+| `maxSeekTimebaseOffset` | s | seek 后 2 秒内该偏差的最大值；>1s 表示画面可能停住/追赶 |
+| `seekTimebaseJumpCount` | 次 | 时间基偏差超过 1 秒的次数；每次 seek 最多计 1 次 |
 
 ## 目标
 

@@ -471,9 +471,10 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         }
     }
 
-    /// 低量级诊断日志；只有 -debugLog 时写入 Documents/ice-smb.log。
+    /// 低量级诊断日志；-debugLog / -logDebug 时写入 Documents/ice-smb.log。
     private func diag(_ message: String) {
-        guard ProcessInfo.processInfo.arguments.contains("-debugLog") else { return }
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-debugLog") || arguments.contains("-logDebug") else { return }
         let stamp = ISO8601DateFormatter().string(from: Date())
         let line = "[\(stamp)] \(message)\n"
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

@@ -124,6 +124,10 @@ func mergedSubtitleTracks(
 @Observable
 final class LibraryPlaybackSession: Identifiable {
     let id = UUID()
+    deinit {
+        // 压测切文件时核对会话是否按时释放（泄漏会连带引擎与预读缓冲）。
+        Log.info(.app, "播放会话释放 id=\(id.uuidString.prefix(8))")
+    }
     let engine: PlaybackEngine
     let renderer: VideoRenderer
     let label: String
@@ -690,7 +694,10 @@ struct LibraryView: View {
                 onAdjustBottomPadding: { playback.adjustBottomPadding($0) },
                 onAdjustOffset: { playback.adjustSubtitleOffset($0) },
                 resumeNotice: resumeNotice,
-                onRestartFromBeginning: { restartPlayback() }
+                onRestartFromBeginning: { restartPlayback() },
+                onNextEpisode: nextPlayableEntry(for: playback.entry) == nil
+                    ? nil
+                    : { playNextEpisode() }
             )
         } else if let pendingPlayback {
             PendingPlayerScreen(
@@ -758,7 +765,10 @@ struct LibraryView: View {
                             onAdjustBottomPadding: { playback.adjustBottomPadding($0) },
                             onAdjustOffset: { playback.adjustSubtitleOffset($0) },
                             resumeNotice: resumeNotice,
-                            onRestartFromBeginning: { restartPlayback() }
+                            onRestartFromBeginning: { restartPlayback() },
+                            onNextEpisode: nextPlayableEntry(for: playback.entry) == nil
+                                ? nil
+                                : { playNextEpisode() }
                         )
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .frame(maxWidth: .infinity)
@@ -1028,6 +1038,21 @@ struct LibraryView: View {
         }
     }
 
+    private func nextPlayableEntry(for entry: MediaEntry) -> MediaEntry? {
+        let entries = store.entriesByPath[entry.directoryPath] ?? store.currentEntries
+        return PlaybackQueue.next(after: entry, in: entries)
+    }
+
+    /// 播放页“>>”按钮：跳到同目录下一个视频。
+    private func playNextEpisode() {
+        guard let playback, let next = nextPlayableEntry(for: playback.entry) else { return }
+        Log.info(
+            .app,
+            "手动下一集 \(Log.shortPath(playback.entry.path)) → \(Log.shortPath(next.path))"
+        )
+        openPlayback(next, fullscreen: isPlayerFullscreen)
+    }
+
     /// 播放自然结束后自动播放同目录的下一个视频；没有下一个则退回媒体库。
     private func startAutoAdvanceMonitor() {
         autoAdvanceTask?.cancel()
@@ -1278,6 +1303,9 @@ struct LibraryView: View {
             let rootFolders = max(0, Int(argumentValue("-stressRootFolders") ?? "0") ?? 0)
             let perDirectoryLimit = max(1, Int(argumentValue("-stressPerDirectoryLimit") ?? "3") ?? 3)
             let tolerateFileErrors = arguments.contains("-stressTolerateFileErrors")
+            // 定向复现：按 -stressPaths 给定顺序整组播放，不做随机抽样，
+            // 用于复现“连续播放若干文件后切到某个文件才出问题”的跨会话缺陷。
+            let orderedSequence = arguments.contains("-stressSequence")
             let began = ProcessInfo.processInfo.systemUptime
 
             var waited = 0.0
@@ -1286,13 +1314,21 @@ struct LibraryView: View {
                 waited += 0.5
             }
             stressLog("开始抽样")
-            let all = await collectStressVideos(root: root, rootFolders: rootFolders)
-            let picks = selectStressVideos(
-                all,
-                count: count,
-                hdFirst: hdFirst,
-                perDirectoryLimit: perDirectoryLimit
-            )
+            let all: [MediaEntry]
+            let picks: [MediaEntry]
+            if orderedSequence {
+                picks = await collectOrderedStressEntries()
+                all = picks
+                stressLog("序列模式 按给定顺序播放 \(picks.count) 条")
+            } else {
+                all = await collectStressVideos(root: root, rootFolders: rootFolders)
+                picks = selectStressVideos(
+                    all,
+                    count: count,
+                    hdFirst: hdFirst,
+                    perDirectoryLimit: perDirectoryLimit
+                )
+            }
             stressLog("抽样完成 候选=\(all.count) 选中=\(picks.count)")
             for pick in picks.prefix(20) {
                 stressLog("样本 \(pick.path) size=\(pick.size)")
@@ -1361,7 +1397,13 @@ struct LibraryView: View {
                     continue
                 }
 
-                stressLog("会话就绪 \(entry.path)")
+                // 每个会话从同一基线起算：起始内存若逐个文件抬高，就是上一个
+                // 会话没释放干净（跨会话泄漏），比播放指标更早暴露问题。
+                MemoryFootprint.resetPeak()
+                let sessionStartMB = MemoryFootprint.currentMB
+                stressLog(
+                    "会话就绪 \(entry.path) 起始内存=\(String(format: "%.0f", sessionStartMB))MB"
+                )
                 Log.notice(
                     .app,
                     "压力测试 [\(index + 1)/\(picks.count)] \(Log.shortPath(entry.path)) "
@@ -1398,6 +1440,8 @@ struct LibraryView: View {
                     let s = session.engine.statistics
                     stressLog(
                         "采样 t=\(tick * 5)s 位置=\(String(format: "%.1f", session.engine.clock.currentTime))s "
+                            + "内存=\(String(format: "%.0f", MemoryFootprint.currentMB))MB "
+                            + "峰值=\(String(format: "%.0f", MemoryFootprint.peakMB))MB "
                             + "下载=\(String(format: "%.1f", session.engine.downloadBytesPerSecond / 1_048_576))MB/s "
                             + "预读=\(String(format: "%.1f", session.engine.bufferedAheadSeconds))s "
                             + "音频领先=\(String(format: "%.1f", session.engine.bufferedAhead))s "
@@ -1420,14 +1464,23 @@ struct LibraryView: View {
                 let video = session.renderer.metrics
                 let postSeekBufferStalls = max(0, stats.bufferStalls - preSeek.bufferStalls)
                 let postSeekBufferSeconds = max(0, stats.bufferSeconds - preSeek.bufferSeconds)
-                let syncOK = stats.maxDrift < 0.5
-                    && stats.clockJumpCount == 0
-                    && abs(stats.lastSeekDrift) < 0.5
+                let syncOK = PlaybackEngine.isAcceptanceSyncOK(
+                    maxDrift: stats.maxDrift,
+                    clockJumpCount: stats.clockJumpCount,
+                    lastSeekDrift: stats.lastSeekDrift,
+                    maxSeekTimebaseOffset: stats.maxSeekTimebaseOffset,
+                    seekTimebaseJumpCount: stats.seekTimebaseJumpCount
+                )
                 let syncIssue = !syncOK
                 if syncIssue { syncIssues += 1 }
+                let endMemoryMB = MemoryFootprint.currentMB
                 stressLog(
                     "结果 首帧=\(stats.firstVideoMilliseconds)ms 视频=\(video.enqueued) "
                         + "恢复=\(video.recoveries) 缓冲=\(stats.bufferStalls)/\(stats.maxBufferStallsPerMinute) "
+                        + "内存=\(String(format: "%.0f", endMemoryMB))MB "
+                        + "峰值=\(String(format: "%.0f", MemoryFootprint.peakMB))MB "
+                        + "起始=\(String(format: "%.0f", sessionStartMB))MB "
+                        + "本会话增=\(String(format: "%+.0f", endMemoryMB - sessionStartMB))MB "
                         + "状态=\(session.renderer.statusDescription)"
                 )
                 let noVideo = stats.firstVideoMilliseconds == 0 || video.enqueued == 0
@@ -1473,7 +1526,9 @@ struct LibraryView: View {
                     reasons.append(
                         "音画偏差 max=\(String(format: "%.2f", stats.maxDrift))s "
                             + "seek=\(String(format: "%.2f", stats.lastSeekDrift))s "
-                            + "跳变=\(stats.clockJumpCount)"
+                            + "跳变=\(stats.clockJumpCount) "
+                            + "时间基=\(String(format: "%.2f", stats.maxSeekTimebaseOffset))s/"
+                            + "\(stats.seekTimebaseJumpCount)次"
                     )
                 }
                 let reason = reasons.isEmpty ? "正常" : reasons.joined(separator: "；")
@@ -1550,6 +1605,40 @@ struct LibraryView: View {
             "stressPicks": picks.map { ["path": $0.path, "size": $0.size] },
             "capturedAt": ISO8601DateFormatter().string(from: Date()),
         ])
+    }
+
+    /// -stressSequence 模式：把 -stressPaths 里列出的文件按给定顺序
+    /// 解析成播放列表（“|”分隔，每项必须是共享内的完整文件路径）。
+    private func collectOrderedStressEntries() async -> [MediaEntry] {
+        let paths = (argumentValue("-stressPaths") ?? "")
+            .split(separator: "|")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var result: [MediaEntry] = []
+        for path in paths {
+            // 起播前 SMB 可能还没连好，列目录会瞬时返回空；重试几次再放弃。
+            var entries: [MediaEntry] = []
+            for attempt in 0..<4 {
+                entries = (try? await store.source.listAllEntries(path: path)) ?? []
+                if entries.contains(where: { $0.path == path }) { break }
+                // listAllEntries 只接受目录；文件路径改为列父目录后精确匹配。
+                let parent = (path as NSString).deletingLastPathComponent
+                if !parent.isEmpty {
+                    entries = (try? await store.source.listAllEntries(path: parent)) ?? []
+                }
+                if entries.contains(where: { $0.path == path }) { break }
+                if attempt < 3 {
+                    stressLog("序列路径未就绪，重试 \(attempt + 1) \(path)")
+                    try? await Task.sleep(for: .seconds(3))
+                }
+            }
+            if let entry = entries.first(where: { !$0.isDirectory && $0.path == path }) {
+                result.append(entry)
+            } else {
+                stressLog("序列路径未命中 \(path) 列出=\(entries.count)")
+            }
+        }
+        return result
     }
 
     private func collectStressVideos(
@@ -1816,12 +1905,15 @@ struct LibraryView: View {
             "videoRecoveries": video.recoveries,
             "videoLastRecovery": video.lastRecoveryReason ?? "",
             "videoDroppedWhileUnbound": video.droppedWhileUnbound,
+            "videoRecentRestarts": video.recentRestarts,
             "videoBufferedAhead": session.renderer.bufferedAhead,
             "videoStatus": session.renderer.statusDescription,
             "videoQueueDepth": stats.videoQueueDepth,
             "videoQueueDropped": stats.videoQueueDropped,
             "videoQueueBytes": stats.videoQueueBytes,
             "downloadBytesPerSecond": session.engine.downloadBytesPerSecond,
+            "memoryFootprintMB": MemoryFootprint.currentMB,
+            "memoryPeakMB": MemoryFootprint.peakMB,
             "bufferedAheadSeconds": session.engine.bufferedAheadSeconds,
             "seekCacheHit": session.engine.lastSeekCacheHit,
             "seekCacheHits": session.engine.seekCacheHits,
@@ -1842,6 +1934,9 @@ struct LibraryView: View {
             "seekCount": stats.seekCount,
             "lastSeekLatencyMilliseconds": stats.lastSeekLatencyMilliseconds,
             "lastSeekDrift": stats.lastSeekDrift,
+            "lastSeekTimebaseOffset": stats.lastSeekTimebaseOffset,
+            "maxSeekTimebaseOffset": stats.maxSeekTimebaseOffset,
+            "seekTimebaseJumpCount": stats.seekTimebaseJumpCount,
             "lastSeekPrerollFrames": stats.lastSeekPrerollFrames,
             "subtitleTrack": session.selectedTrack?.title ?? "",
             "subtitleCues": session.timeline?.cues.count ?? 0,

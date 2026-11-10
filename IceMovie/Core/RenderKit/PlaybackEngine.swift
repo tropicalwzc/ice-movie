@@ -29,6 +29,11 @@ public final class PlaybackEngine: @unchecked Sendable {
         public var startupMilliseconds = 0
         public var firstVideoMilliseconds = 0
         public var maxVideoOffset: Double = 0
+        /// seek 完成时/完成后 2 秒内，显示层时间基与主时钟的最大偏差。
+        public var lastSeekTimebaseOffset: Double = 0
+        public var maxSeekTimebaseOffset: Double = 0
+        /// 时间基偏差超过 1 秒的次数；SSIS-499 这类“画面停住/像 3 倍速追赶”的直接信号。
+        public var seekTimebaseJumpCount = 0
         public var seekCount = 0
         public var lastSeekLatencyMilliseconds = 0
         public var lastSeekPrerollFrames = 0
@@ -166,6 +171,15 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var activeSeekID: Int?
     private var seekRequestedAt: Double = 0
     private var seekPrerollFrames = 0
+    private var seekTimebaseWatchUntil: Double = 0
+    private var seekTimebaseJumpFlagged = false
+    /// seek 期间暂停 tick 的时钟/时间基校正，避免旧音频位置把时钟拉回。
+    private var seekInProgress = false
+    /// seek 代次：每次 seek 开始/结束都 +1。tick 读取音频时间前后各取一次，
+    /// 代次前进说明期间发生了 seek，本次读到的音频时间已作废。
+    /// 只检查 seekInProgress 布尔值不够：它只保护“检查”这一瞬间，
+    /// 保护不了“读取音频时间 → 校正主时钟”整段窗口。
+    private var seekEpoch = 0
     private var volume: Float = 1
     private var wasBuffering = false
     private var subtitleStreamIndex: Int?
@@ -243,6 +257,8 @@ public final class PlaybackEngine: @unchecked Sendable {
         wantsPlay = false
         condition.broadcast()
         condition.unlock()
+        // 跨文件压测时用这条日志核对引擎是否按时释放（内存每个会话涨几十 MB）。
+        Log.info(.render, "引擎释放")
     }
 
     // MARK: - 控制
@@ -774,8 +790,26 @@ public final class PlaybackEngine: @unchecked Sendable {
         )
     }
 
-    /// 读包限速策略：音频和视频都补到各自的高水位才停，避免只维持 1.5 秒音频、
-    /// 一点网络抖动就进入“缓冲中”。纯音频/纯视频只检查各自的水位。
+    /// seek 后显示层时间基偏差超过 1 秒即视为“画面停住/追赶”风险。
+    public static func isSeekTimebaseJump(_ offset: Double) -> Bool {
+        abs(offset) > 1.0
+    }
+
+    /// 验收同步判定：音频/时钟漂移之外，必须同时满足显示层时间基条件。
+    public static func isAcceptanceSyncOK(
+        maxDrift: Double,
+        clockJumpCount: Int,
+        lastSeekDrift: Double,
+        maxSeekTimebaseOffset: Double,
+        seekTimebaseJumpCount: Int
+    ) -> Bool {
+        maxDrift < 0.5
+            && clockJumpCount == 0
+            && abs(lastSeekDrift) < 0.5
+            && maxSeekTimebaseOffset <= 1.0
+            && seekTimebaseJumpCount == 0
+    }
+
     /// 起播档位的纯函数版本，便于单元测试。
     public static func startupPrerollMode(
         measuredBytesPerSecond: Double,
@@ -789,6 +823,8 @@ public final class PlaybackEngine: @unchecked Sendable {
             : "fast"
     }
 
+    /// 读包限速策略：音频和视频都补到各自的高水位才停，避免只维持 1.5 秒音频、
+    /// 一点网络抖动就进入“缓冲中”。纯音频/纯视频只检查各自的水位。
     static func isReadAheadEnough(audioAhead: Double?, videoAhead: Double?) -> Bool {
         if let audioAhead {
             guard audioAhead >= Self.audioAheadSeconds else { return false }
@@ -930,24 +966,81 @@ public final class PlaybackEngine: @unchecked Sendable {
         )
     }
 
+    /// 记录 seek 后显示层时间基偏差。SSIS-499 的问题在 maxDrift 上不可见：
+    /// 音频和主时钟一致，但显示层时间基被旧时钟校正到 431s，画面停住/追赶。
+    private func beginSeekTimebaseWatch() {
+        lock.withLock {
+            seekTimebaseJumpFlagged = false
+            seekTimebaseWatchUntil = ProcessInfo.processInfo.systemUptime + 2
+        }
+    }
+
+    private func recordSeekTimebaseOffset(_ offset: Double, atCompletion: Bool = false) {
+        lock.withLock {
+            let now = ProcessInfo.processInfo.systemUptime
+            guard atCompletion || now <= seekTimebaseWatchUntil else { return }
+            guard atCompletion || !seekInProgress else { return }
+            let magnitude = abs(offset)
+            if atCompletion {
+                stats.lastSeekTimebaseOffset = magnitude
+            }
+            stats.maxSeekTimebaseOffset = max(stats.maxSeekTimebaseOffset, magnitude)
+            if Self.isSeekTimebaseJump(magnitude), !seekTimebaseJumpFlagged {
+                seekTimebaseJumpFlagged = true
+                stats.seekTimebaseJumpCount += 1
+                Log.notice(
+                    .render,
+                    "seek 后显示层时间基异常 偏差=\(String(format: "%.2f", magnitude))s "
+                        + "位置=\(String(format: "%.1f", clock.currentTime))s"
+                )
+            }
+        }
+    }
+
     private func performSeek(_ target: Double, id: Int, requestedAt: Double) {
         guard reader.seek(to: target) else {
             Log.error(.demux, "seek 被拒绝 id=\(id) 目标=\(fmt(target))s")
             finishSeek(id: id, success: false)
             return
         }
+        // seek 期间停掉 tick 的时钟/时间基校正；否则旧音频位置会在
+        // output.reset 之前把刚移到目标的时钟拉回去。
+        // 代次在进入/退出各推进一次：tick 只要在这段窗口内读过音频时间，
+        // 前后代次必然不一致，旧值会被丢弃，不会回写主时钟。
+        lock.withLock {
+            seekInProgress = true
+            seekEpoch &+= 1
+        }
+        defer {
+            lock.withLock {
+                seekInProgress = false
+                seekEpoch &+= 1
+            }
+        }
         resetBufferStallState()
         videoPipeline?.flush()
         lock.withLock { subtitleDecoder }?.reset()
         decoder?.reset(to: target)
         output?.reset()
+        // output.reset() 清掉旧音频锚点后再移动主时钟，最后重置显示层，
+        // 保证 tick 不会看到“新时间基 + 旧时钟”的组合。
+        clock.seek(to: target)
+        videoRenderer?.reset(to: target)
         // 只有主时钟本来就在播放时才立刻恢复音频；起播缓冲阶段时钟是暂停的，
         // 先 play 会让音频独自跑出十几秒，随后主时钟再追音频造成音画不同步。
         if wantsPlay, clock.isPlaying { output?.play() }
-        videoRenderer?.reset(to: target)
-        clock.seek(to: target)
+        beginSeekTimebaseWatch()
+        recordSeekTimebaseOffset(videoRenderer?.timebaseOffset ?? 0, atCompletion: true)
 
         audioSeekTarget = output == nil ? nil : target
+        Log.info(
+            .render,
+            "seek 完成 目标=\(fmt(target))s 时钟=\(fmt(clock.currentTime))s "
+                + "播放中=\(clock.isPlaying) 速率=\(String(format: "%.2f", clock.rate)) "
+                + "音频缓冲=\(fmt(output?.bufferedAhead ?? 0))s "
+                + "视频缓冲=\(fmt(videoRenderer?.bufferedAhead ?? 0))s "
+                + "时间基偏差=\(fmt(videoRenderer?.timebaseOffset ?? 0))s"
+        )
         // 视频不做丢弃：显示层需要从关键帧开始的所有参考帧才能解出目标帧，
         // 早于目标时间的帧由它按时间基自动丢弃。
         lock.withLock {
@@ -1007,10 +1100,14 @@ public final class PlaybackEngine: @unchecked Sendable {
         reader.setPlayhead(byteOffset: playheadByteOffset)
         let audioSupply = output?.bufferedAhead ?? Self.audioAheadSeconds
         reader.setSupply(audioAhead: audioSupply, videoAhead: videoRenderer?.bufferedAhead ?? 0)
-        videoRenderer?.syncTimebase()
+        let seeking = lock.withLock { seekInProgress }
+        if !seeking {
+            videoRenderer?.syncTimebase()
+        }
         if let renderer = videoRenderer {
             let offset = abs(renderer.timebaseOffset)
             lock.withLock { stats.maxVideoOffset = max(stats.maxVideoOffset, offset) }
+            recordSeekTimebaseOffset(offset)
         }
 
         let buffering = isBuffering
@@ -1026,33 +1123,42 @@ public final class PlaybackEngine: @unchecked Sendable {
 
         updateBufferingState()
         guard !stalledForBuffering else { return }
+        // 先取 seek 代次再读音频时间；读取与校正之间若开始或完成了一次
+        // seek，代次会前进，读到的旧音频时间对 seek 后的时钟位置是脏数据，
+        // 必须丢弃，否则会把主时钟从目标位置拉回（画面停住/追赶/时间基跳变）。
+        let seekEpochAtRead = lock.withLock { seekEpoch }
         guard let audioTime = output?.playedContentTime else {
             checkDrained()
             return
         }
-        clock.sync(to: audioTime)
+        // 只保护布尔值不够：seek 完成后布尔值已复位，而音频时间还是 seek 前的
+        // 旧值。代次一致才说明这段时间没有 seek 活动，音频时间可以信任。
+        let canSync = lock.withLock { !seekInProgress && seekEpoch == seekEpochAtRead }
+        if canSync {
+            clock.sync(to: audioTime)
 
-        lock.withLock {
-            let drift = abs(clock.lastSyncDrift)
-            if drift > stats.maxDrift {
-                stats.maxDrift = drift
-                stats.maxDriftPosition = clock.currentTime
-                stats.maxDriftAudioTime = audioTime
-                stats.maxDriftClockTime = clock.currentTime
-            }
-            if drift > 1.0 {
-                stats.clockJumpCount += 1
-                Log.notice(
-                    .render,
-                    "时钟大偏差 \(String(format: "%.2f", drift))s 音频=\(fmt(audioTime))s "
-                        + "主时钟=\(fmt(clock.currentTime))s 位置=\(fmt(clock.currentTime))s"
-                )
-            }
-            if stats.startupMilliseconds == 0, audioTime > 0.1, let playStartedAt {
-                stats.startupMilliseconds = Int(
-                    (ProcessInfo.processInfo.systemUptime - playStartedAt) * 1000
-                )
-                Log.info(.render, "首帧出声 启动耗时=\(stats.startupMilliseconds)ms")
+            lock.withLock {
+                let drift = abs(clock.lastSyncDrift)
+                if drift > stats.maxDrift {
+                    stats.maxDrift = drift
+                    stats.maxDriftPosition = clock.currentTime
+                    stats.maxDriftAudioTime = audioTime
+                    stats.maxDriftClockTime = clock.currentTime
+                }
+                if drift > 1.0 {
+                    stats.clockJumpCount += 1
+                    Log.notice(
+                        .render,
+                        "时钟大偏差 \(String(format: "%.2f", drift))s 音频=\(fmt(audioTime))s "
+                            + "主时钟=\(fmt(clock.currentTime))s 位置=\(fmt(clock.currentTime))s"
+                    )
+                }
+                if stats.startupMilliseconds == 0, audioTime > 0.1, let playStartedAt {
+                    stats.startupMilliseconds = Int(
+                        (ProcessInfo.processInfo.systemUptime - playStartedAt) * 1000
+                    )
+                    Log.info(.render, "首帧出声 启动耗时=\(stats.startupMilliseconds)ms")
+                }
             }
         }
 

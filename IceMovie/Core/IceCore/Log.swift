@@ -140,9 +140,44 @@ public enum Log {
         return parts.suffix(2).joined(separator: "/")
     }
 
+    private static let fileQueue = DispatchQueue(label: "icemovie.log.file")
+    nonisolated(unsafe) private static var fileHandle: FileHandle?
+
+    /// `-debugLog` 时把日志同步落盘，便于真机复现后取回。
+    public static func enableFileLogging(fileName: String = "ice-playback.log") {
+        fileQueue.sync {
+            // 多窗口/多场景会重复调用；只初始化一次，且追加而不是清空，
+            // 避免后开的窗口把前一个窗口的日志抹掉。
+            guard fileHandle == nil else { return }
+            let url = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            )[0].appendingPathComponent(fileName)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            guard let handle = try? FileHandle(forWritingTo: url) else { return }
+            do {
+                try handle.seekToEnd()
+            } catch {
+                try? handle.close()
+                return
+            }
+            fileHandle = handle
+        }
+    }
+
     private static func write(_ level: LogLevel, _ category: LogCategory, _ message: String) {
         guard level >= LogStore.shared.minimumLevel else { return }
         LogStore.shared.append(level: level, category: category, message: message)
+        fileQueue.async {
+            guard let fileHandle else { return }
+            let stamp = ISO8601DateFormatter().string(from: Date())
+            let line = "\(stamp) [\(level.label)] [\(category.rawValue)] \(message)\n"
+            if let data = line.data(using: .utf8) {
+                try? fileHandle.write(contentsOf: data)
+            }
+        }
         guard let logger = loggers[category] else { return }
         switch level {
         case .debug:

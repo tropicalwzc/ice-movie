@@ -53,7 +53,7 @@
 
 - [ ] 8.1 运行 `IceMovieTests` 全量单元测试与 `IceMovieUITests` 关键用例；验证：全部通过，无新增失败
 - [ ] 8.2 模拟器冷/热打开 10 条样本（含 MP4 尾部 moov、4K MKV、带字体附件 MKV）：记录 `playerPresentedMilliseconds`、prepare、open、probe、读取字节与缓存命中；验证：播放页出现 <200ms，热打开 prepare 中位 <1.2s
-- [ ] 8.3 iPad 真机跑 20 条代表样本 + 2 小时随机测试：对比基线，确认点击→首帧达标率、prepare 中位/p90、缓存命中率与起播后 30 秒缓冲次数；验证：点击→首帧 1.5s 内比例 >80%，prepare 中位 <1.2s，起播后 30 秒缓冲次数 ≤1
+- [x] 8.3 iPad 真机跑 20 条代表样本 + 2 小时随机测试：对比基线，确认点击→首帧达标率、prepare 中位/p90、缓存命中率与起播后 30 秒缓冲次数；验证：点击→首帧 1.5s 内比例 >80%，prepare 中位 <1.2s，起播后 30 秒缓冲次数 ≤1
 - [x] 8.4 更新 `docs/acceptance-*.md/json` 与验收脚本，按新字段产出报告；验证：报告可由脚本重新生成，字段与 1.1 定义一致
 
 ## Workflow follow-up

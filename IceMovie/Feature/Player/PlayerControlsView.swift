@@ -15,6 +15,7 @@ struct PlayerControlsView: View {
     var isFullscreen: Bool = false
     var selectedSubtitle: SubtitleTrack?
     var onToggleSubtitlePanel: (() -> Void)?
+    var onNextEpisode: (() -> Void)?
 
     @State private var isScrubbing = false
     @State private var scrubTarget: Double = 0
@@ -71,6 +72,19 @@ struct PlayerControlsView: View {
                         }
                         .font(.system(size: 20))
                         .accessibilityValue(selectedSubtitle?.language.displayName ?? "关闭")
+                    }
+                    if let onNextEpisode {
+                        Button {
+                            onInteraction()
+                            onNextEpisode()
+                        } label: {
+                            Text(">>")
+                                .font(.system(size: 20, weight: .semibold))
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("下一集")
+                        .accessibilityIdentifier("player.nextEpisode")
                     }
                 }
                 HStack(spacing: 10) {

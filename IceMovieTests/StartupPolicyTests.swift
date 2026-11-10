@@ -34,6 +34,35 @@ final class StartupPolicyTests: XCTestCase {
         )
     }
 
+    func testAcceptanceSyncIncludesTimebase() {
+        XCTAssertTrue(
+            PlaybackEngine.isAcceptanceSyncOK(
+                maxDrift: 0.05,
+                clockJumpCount: 0,
+                lastSeekDrift: -0.01,
+                maxSeekTimebaseOffset: 0.02,
+                seekTimebaseJumpCount: 0
+            )
+        )
+        XCTAssertFalse(
+            PlaybackEngine.isAcceptanceSyncOK(
+                maxDrift: 0.05,
+                clockJumpCount: 0,
+                lastSeekDrift: -0.01,
+                maxSeekTimebaseOffset: 431.74,
+                seekTimebaseJumpCount: 1
+            ),
+            "SSIS-499 类问题不能因 maxDrift 正常就判为通过"
+        )
+    }
+
+    func testSeekTimebaseJumpThreshold() {
+        XCTAssertFalse(PlaybackEngine.isSeekTimebaseJump(0.04))
+        XCTAssertFalse(PlaybackEngine.isSeekTimebaseJump(1.0))
+        XCTAssertTrue(PlaybackEngine.isSeekTimebaseJump(1.01))
+        XCTAssertTrue(PlaybackEngine.isSeekTimebaseJump(431.74))
+    }
+
     func testPrerollThresholdsForBothModes() {
         let fast = PlaybackEngine.startupPreroll(mode: "fast")
         XCTAssertEqual(fast.audio, 0.3, accuracy: 0.001)

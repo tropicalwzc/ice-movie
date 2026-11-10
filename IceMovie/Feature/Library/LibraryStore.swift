@@ -657,6 +657,18 @@ final class LibraryStore {
                 videoFileName: entry.name,
                 filesByDirectory: filesByDirectory
             )
+            // 诊断：外挂字幕没匹配上时，先看目录里到底有哪些字幕候选文件。
+            let candidates = filesByDirectory.flatMap { directory, names in
+                names
+                    .filter { ["ass", "ssa", "srt", "vtt", "sup", "sub"]
+                        .contains(($0 as NSString).pathExtension.lowercased()) }
+                    .map { directory.isEmpty ? $0 : "\(directory)/\($0)" }
+            }
+            Log.debug(
+                .subtitle,
+                "外挂字幕扫描 目录条目=\(all.count) 候选=\(candidates.count) "
+                    + "文件=\(candidates.prefix(12).joined(separator: " / "))"
+            )
             for track in tracks {
                 Log.info(
                     .subtitle,

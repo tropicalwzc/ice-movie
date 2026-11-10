@@ -29,6 +29,7 @@ struct PlayerScreen: View {
     let onAdjustOffset: ((Double) -> Void)?
     let resumeNotice: String?
     let onRestartFromBeginning: (() -> Void)?
+    let onNextEpisode: (() -> Void)?
 
     @State private var pip: PictureInPictureCoordinator
     @State private var commandToken: UUID?
@@ -56,7 +57,8 @@ struct PlayerScreen: View {
         onAdjustBottomPadding: ((Double) -> Void)? = nil,
         onAdjustOffset: ((Double) -> Void)? = nil,
         resumeNotice: String? = nil,
-        onRestartFromBeginning: (() -> Void)? = nil
+        onRestartFromBeginning: (() -> Void)? = nil,
+        onNextEpisode: (() -> Void)? = nil
     ) {
         self.engine = engine
         self.renderer = renderer
@@ -80,6 +82,7 @@ struct PlayerScreen: View {
         self.onAdjustOffset = onAdjustOffset
         self.resumeNotice = resumeNotice
         self.onRestartFromBeginning = onRestartFromBeginning
+        self.onNextEpisode = onNextEpisode
         _pip = State(initialValue: PictureInPictureCoordinator(engine: engine))
     }
 
@@ -108,7 +111,8 @@ struct PlayerScreen: View {
             onAdjustBottomPadding: onAdjustBottomPadding,
             onAdjustOffset: onAdjustOffset,
             resumeNotice: resumeNotice,
-            onRestartFromBeginning: onRestartFromBeginning
+            onRestartFromBeginning: onRestartFromBeginning,
+            onNextEpisode: onNextEpisode
         )
         .statusBarHidden(isFullscreen)
         .persistentSystemOverlays(isFullscreen ? .hidden : .automatic)
@@ -117,6 +121,7 @@ struct PlayerScreen: View {
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             pip.setEnabled(pipEnabled)
+            Log.info(.app, "播放页出现")
             commandToken = PlayerCommands.shared.attach(
                 engine: engine,
                 toggleFullscreen: onToggleFullscreen
@@ -127,6 +132,11 @@ struct PlayerScreen: View {
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            Log.info(.app, "播放页消失")
+            // 拆掉画中画控制器与显示层引用：协调器挂在 @State 上可能活得更久，
+            // 而 ContentSource 会强持有显示层（连带 VideoToolbox 解码会话），
+            // 不拆的话每切一个文件就多压一个解码会话在进程里。
+            pip.teardown()
             if let commandToken {
                 PlayerCommands.shared.detach(token: commandToken)
             }
@@ -160,6 +170,7 @@ private struct PlayerSurface: View {
     let onAdjustOffset: ((Double) -> Void)?
     let resumeNotice: String?
     let onRestartFromBeginning: (() -> Void)?
+    let onNextEpisode: (() -> Void)?
 
     @State private var controlsVisible = true
     @State private var showSubtitlePanel = false
@@ -297,7 +308,8 @@ private struct PlayerSurface: View {
                     selectedSubtitle: selectedSubtitle,
                     onToggleSubtitlePanel: {
                         showSubtitlePanel.toggle()
-                    }
+                    },
+                    onNextEpisode: onNextEpisode
                 )
             }
 
@@ -752,19 +764,35 @@ private struct SubtitlePanel: View {
     }
 }
 
-/// iPad 全屏播放器右上角状态：实时下载速度 + 电量。
+/// iPad 全屏播放器右上角状态：实时下载速度 + 进程内存 + 电量。
+///
+/// 内存这一格是给泄漏排查用的：引擎/显示层没释放时播放指标全都正常，
+/// 只有内存会一路抬高，所以把当前占用摆出来，涨得异常就变色报警。
 private struct PlayerStatusBadge: View {
     let engine: PlaybackEngine
+
+    /// 进入播放页时的内存基线，用来区分“本次会话自身增长”与进程历史占用。
+    @State private var baselineMB: Double?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let speed = engine.downloadBytesPerSecond
+            let memory = MemoryFootprint.currentMB
             let battery = BatteryStatus.current
+            let memoryTint = tint(for: memory)
             HStack(spacing: 9) {
                 Image(systemName: "wifi")
                     .font(.caption2)
                 Text(speedLabel(speed))
                     .monospacedDigit()
+                Rectangle()
+                    .fill(.white.opacity(0.25))
+                    .frame(width: 1, height: 12)
+                Image(systemName: "memorychip")
+                    .font(.caption2)
+                Text(MemoryFootprint.label(memory))
+                    .monospacedDigit()
+                    .foregroundStyle(memoryTint)
                 Rectangle()
                     .fill(.white.opacity(0.25))
                     .frame(width: 1, height: 12)
@@ -783,7 +811,25 @@ private struct PlayerStatusBadge: View {
             .clipShape(Capsule())
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("player.status")
-            .accessibilityLabel("\(speedLabel(speed))，电量 \(battery.label)")
+            .accessibilityLabel(
+                "\(speedLabel(speed))，内存 \(MemoryFootprint.label(memory))，电量 \(battery.label)"
+            )
+        }
+        .onAppear {
+            // 只记一次：TimelineView 每次刷新都会重算 body，不能在 body 里写状态。
+            if baselineMB == nil {
+                baselineMB = MemoryFootprint.currentMB
+            }
+        }
+    }
+
+    /// 当前占用高、或相对进入时涨得多，都判为异常并变色。
+    private func tint(for memory: Double) -> Color {
+        guard memory >= 0 else { return .white.opacity(0.5) }
+        switch MemoryFootprint.level(currentMB: memory, baselineMB: baselineMB) {
+        case .critical: return .red
+        case .warning: return .orange
+        case .normal: return .white
         }
     }
 

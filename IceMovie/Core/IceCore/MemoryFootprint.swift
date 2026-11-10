@@ -1,0 +1,92 @@
+import Darwin
+import Foundation
+
+/// 进程物理内存占用（`phys_footprint`）。
+///
+/// `phys_footprint` 是系统判断内存压力与 jetsam 的依据，含脏页与压缩内存，
+/// 比 `resident_size` 更接近“这个进程现在吃掉多少内存”。播放器的状态条与
+/// 压测采样都读它：跨会话泄漏（引擎/显示层没释放）在播放指标上完全看不出来，
+/// 只有内存曲线会露馅，所以要把这条线一直摆在眼前。
+public enum MemoryFootprint {
+
+    /// 当前进程物理内存占用（MB）。读取失败返回 -1。
+    public static var currentMB: Double {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size
+        )
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return -1 }
+        let megabytes = Double(info.phys_footprint) / 1_048_576
+        peakBox.observe(megabytes)
+        return megabytes
+    }
+
+    /// 自上次 `resetPeak()` 以来的峰值（MB）。读取不会刷新峰值。
+    public static var peakMB: Double { peakBox.value }
+
+    /// 会话开始时调用，把峰值基线归零，便于按文件对比泄漏。
+    public static func resetPeak() { peakBox.reset() }
+
+    /// 展示用格式：不足 1GB 用 MB，超过用 GB；读取失败显示 `--`。
+    public static func label(_ megabytes: Double) -> String {
+        guard megabytes >= 0 else { return "--" }
+        if megabytes >= 1024 {
+            return String(format: "%.2f GB", megabytes / 1024)
+        }
+        return String(format: "%.0f MB", megabytes)
+    }
+
+    /// 内存压力分级，状态条据此变色提示。
+    public enum Level: Sendable {
+        case normal
+        case warning
+        case critical
+    }
+
+    /// 判定当前内存压力。
+    ///
+    /// 两个维度都要看：绝对值高（进程历史累积）与相对进入时增长（本会话泄漏）。
+    /// 阈值按真机实测留余量——4K HEVC 会话峰值约 300–500MB 属正常，
+    /// 跨越 700MB 或单会话涨过 250MB 就已经不像正常播放了。
+    ///
+    /// - Parameter baselineMB: 进入播放页时的占用；传 nil 只看绝对值。
+    public static func level(currentMB: Double, baselineMB: Double?) -> Level {
+        guard currentMB >= 0 else { return .normal }
+        let grown = baselineMB.map { max(0, currentMB - $0) } ?? 0
+        if currentMB >= 1200 || grown >= 500 { return .critical }
+        if currentMB >= 700 || grown >= 250 { return .warning }
+        return .normal
+    }
+
+    private static let peakBox = PeakBox()
+
+    /// 峰值只由 `currentMB` 的读取推动，锁内做一次比较即可。
+    private final class PeakBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Double = 0
+
+        var value: Double {
+            lock.lock()
+            defer { lock.unlock() }
+            return stored
+        }
+
+        func observe(_ megabytes: Double) {
+            guard megabytes >= 0 else { return }
+            lock.lock()
+            if megabytes > stored { stored = megabytes }
+            lock.unlock()
+        }
+
+        func reset() {
+            lock.lock()
+            stored = 0
+            lock.unlock()
+        }
+    }
+}

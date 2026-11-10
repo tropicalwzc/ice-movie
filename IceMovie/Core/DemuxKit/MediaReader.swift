@@ -109,6 +109,8 @@ public final class MediaReader: @unchecked Sendable {
     deinit {
         close()
         bridge?.releaseContext()
+        // 压测切文件时核对解封装器（含预读缓冲）是否按时释放。
+        Log.info(.demux, "解封装器释放")
     }
 
     // MARK: - 打开

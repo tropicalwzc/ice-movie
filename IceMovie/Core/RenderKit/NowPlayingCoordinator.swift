@@ -41,7 +41,9 @@ public final class NowPlayingCenter {
 
 @MainActor
 final class NowPlayingCoordinator {
-    private let engine: PlaybackEngine
+    /// 弱持有：协调器可能被系统（锁屏中心/任务）缓存住，强持有会把整条
+    /// 播放管线（引擎、预读缓冲）一起钉在内存里，切文件时逐会话泄漏。
+    private weak var engine: PlaybackEngine?
     private let title: String
     private var updateTask: Task<Void, Never>?
     private var commandTargets: [(command: MPRemoteCommand, token: Any)] = []
@@ -61,7 +63,12 @@ final class NowPlayingCoordinator {
             }
         }
         updateNowPlaying()
-        Log.info(.app, "锁屏控制已就绪 标题=\(title) 时长=\(String(format: "%.1f", engine.duration))s")
+        Log.info(.app, "锁屏控制已就绪 标题=\(title) 时长=\(String(format: "%.1f", engine?.duration ?? 0))s")
+    }
+
+    deinit {
+        // 协调器强持有 engine，泄漏会推迟整条播放管线的释放。
+        Log.info(.app, "锁屏协调器释放 标题=\(title)")
     }
 
     public func deactivate() {
@@ -79,11 +86,11 @@ final class NowPlayingCoordinator {
         let center = MPRemoteCommandCenter.shared()
 
         add(center.playCommand) { [weak self] _ in
-            self?.engine.play()
+            self?.engine?.play()
             return .success
         }
         add(center.pauseCommand) { [weak self] _ in
-            self?.engine.pause()
+            self?.engine?.pause()
             return .success
         }
         add(center.togglePlayPauseCommand) { [weak self] _ in
@@ -100,19 +107,19 @@ final class NowPlayingCoordinator {
         center.skipBackwardCommand.preferredIntervals = [10]
         add(center.skipForwardCommand) { [weak self] event in
             let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? 10
-            self?.engine.seek(to: (self?.engine.clock.currentTime ?? 0) + interval)
+            self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) + interval)
             return .success
         }
         add(center.skipBackwardCommand) { [weak self] event in
             let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? 10
-            self?.engine.seek(to: (self?.engine.clock.currentTime ?? 0) - interval)
+            self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) - interval)
             return .success
         }
 
         add(center.changePlaybackPositionCommand) { [weak self] event in
             guard let position = (event as? MPChangePlaybackPositionCommandEvent)?
                 .positionTime else { return .commandFailed }
-            self?.engine.seek(to: position)
+            self?.engine?.seek(to: position)
             return .success
         }
     }
@@ -127,6 +134,7 @@ final class NowPlayingCoordinator {
     }
 
     private func updateNowPlaying() {
+        guard let engine else { return }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyPlaybackDuration: max(0, engine.duration),

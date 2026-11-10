@@ -14,7 +14,9 @@ public final class PictureInPictureCoordinator: NSObject {
     public private(set) var lastError: String?
     public var onStateChange: ((Bool) -> Void)?
 
-    private let engine: PlaybackEngine
+    /// 弱持有：这个协调器挂在 SwiftUI 的 @State 里，视图状态一旦被系统缓存，
+    /// 强持有会把引擎和它的预读缓冲一起钉住（跨文件播放时逐会话泄漏）。
+    private weak var engine: PlaybackEngine?
     private weak var layer: AVSampleBufferDisplayLayer?
     private var controller: AVPictureInPictureController?
 
@@ -25,10 +27,29 @@ public final class PictureInPictureCoordinator: NSObject {
         Log.info(.render, "画中画支持=\(isSupported)")
     }
 
+    deinit {
+        // 协调器强持有 engine；若它不释放，切文件时每个会话都会连带泄漏引擎。
+        Log.info(.render, "画中画协调器释放")
+    }
+
     /// 显示层创建后调用。控制器在第一次绑定后创建，之后由系统在退后台时自动进入。
     public func bind(layer: AVSampleBufferDisplayLayer) {
         self.layer = layer
         createControllerIfNeeded()
+    }
+
+    /// 播放页消失时调用：释放控制器与显示层引用。
+    ///
+    /// 协调器本体挂在 SwiftUI 的 `@State` 上，可能比播放会话活得久；
+    /// 而 `AVPictureInPictureController.ContentSource` 会强持有显示层，
+    /// 不主动拆掉的话每切一个文件就多压一个 VideoToolbox 解码会话在进程里，
+    /// 累积到第 8 个左右，10-bit H.264（软解路径）就会开始持续解码失败。
+    public func teardown() {
+        if controller?.isPictureInPictureActive == true {
+            controller?.stopPictureInPicture()
+        }
+        controller = nil
+        layer = nil
     }
 
     /// 设置页开关：默认关闭；关闭时停止正在进行的画中画并禁止自动进入。
@@ -91,9 +112,9 @@ extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleB
     ) {
         Log.info(.render, "画中画播放控制 playing=\(playing)")
         if playing {
-            engine.play()
+            engine?.play()
         } else {
-            engine.pause()
+            engine?.pause()
         }
         pictureInPictureController.invalidatePlaybackState()
     }
@@ -102,7 +123,7 @@ extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleB
         _ pictureInPictureController: AVPictureInPictureController
     ) -> CMTimeRange {
         let duration = CMTime(
-            seconds: max(0, engine.duration),
+            seconds: max(0, engine?.duration ?? 0),
             preferredTimescale: 600
         )
         return CMTimeRange(start: .zero, duration: duration)
@@ -111,7 +132,7 @@ extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleB
     public func pictureInPictureControllerIsPlaybackPaused(
         _ pictureInPictureController: AVPictureInPictureController
     ) -> Bool {
-        !engine.isPlaying
+        !(engine?.isPlaying ?? false)
     }
 
     public func pictureInPictureController(
@@ -126,9 +147,9 @@ extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleB
         skipByInterval skipInterval: CMTime,
         completion completionHandler: @escaping () -> Void
     ) {
-        let target = engine.clock.currentTime + skipInterval.seconds
+        let target = (engine?.clock.currentTime ?? 0) + skipInterval.seconds
         Log.info(.render, "画中画跳转 \(String(format: "%.1f", skipInterval.seconds))s 目标=\(String(format: "%.1f", target))s")
-        engine.seek(to: target)
+        engine?.seek(to: target)
         completionHandler()
     }
 }

@@ -138,6 +138,7 @@ xcodebuild -project IceMovie.xcodeproj -scheme IceMovieUITests \
 - `-libraryCloseAfter <秒>`：播放若干秒后关闭，验证续播
 - `-libraryRewindAt <秒> -libraryRewindTo <秒>`：每集播到指定秒后自动回退，用于长片压力验收
 - `-acceptanceReport`：每集结束/切换时把缓冲、字幕、偏差指标追加到 `Documents/ice-acceptance.json`
+- 每条压力 JSON 额外记录 `cpuAvgPercent` / `cpuMaxPercent` / `cpuEndPercent`（单核百分比，100 = 占满一个核心）；`cpuEndPercent ≥ 80` 通常意味着 EOF 后泵线程空转或收尾线程异常，需要复核
 - `-resetAcceptanceReport`：启动时清空逐集验收报告
 - `-keepControlsVisible`：验收时让控件常显（仅测试）
 - `-stressRandom`：随机抽样压力测试开关；配合 `-stressRootPath <相对路径>`（默认共享根）

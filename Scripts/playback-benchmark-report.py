@@ -6,7 +6,7 @@ Usage:
     --input ipad-seven-soak.json --output docs/acceptance-...-sevenshare-2h.md \
     --title "sevenshare 2 小时随机起播验收" \
     --device "iPad Air 11-inch (M2), iOS 27.0.1" \
-    --host "TROPICAL-BIGPC.local" --share "sevenshare" --storage "SATA SSD"
+    --host "tropical-bigpc.lan" --share "sevenshare" --storage "SATA SSD"
 """
 import argparse
 import json

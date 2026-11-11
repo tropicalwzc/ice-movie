@@ -778,8 +778,10 @@ private struct PlayerStatusBadge: View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let speed = engine.downloadBytesPerSecond
             let memory = MemoryFootprint.currentMB
+            let cpu = CPUUsage.currentPercent()
             let battery = BatteryStatus.current
             let memoryTint = tint(for: memory)
+            let cpuTint = tint(forCPU: cpu)
             HStack(spacing: 9) {
                 Image(systemName: "wifi")
                     .font(.caption2)
@@ -793,6 +795,14 @@ private struct PlayerStatusBadge: View {
                 Text(MemoryFootprint.label(memory))
                     .monospacedDigit()
                     .foregroundStyle(memoryTint)
+                Rectangle()
+                    .fill(.white.opacity(0.25))
+                    .frame(width: 1, height: 12)
+                Image(systemName: "cpu")
+                    .font(.caption2)
+                Text(CPUUsage.label(cpu))
+                    .monospacedDigit()
+                    .foregroundStyle(cpuTint)
                 Rectangle()
                     .fill(.white.opacity(0.25))
                     .frame(width: 1, height: 12)
@@ -812,7 +822,8 @@ private struct PlayerStatusBadge: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("player.status")
             .accessibilityLabel(
-                "\(speedLabel(speed))，内存 \(MemoryFootprint.label(memory))，电量 \(battery.label)"
+                "\(speedLabel(speed))，内存 \(MemoryFootprint.label(memory))，"
+                    + "CPU \(CPUUsage.label(cpu))，电量 \(battery.label)"
             )
         }
         .onAppear {
@@ -831,6 +842,14 @@ private struct PlayerStatusBadge: View {
         case .warning: return .orange
         case .normal: return .white
         }
+    }
+
+    /// CPU 是单核百分比：100% 约等于一个核心跑满；多核解码可能超过 100%。
+    private func tint(forCPU percent: Double) -> Color {
+        guard percent >= 0 else { return .white.opacity(0.5) }
+        if percent >= 200 { return .red }
+        if percent >= 100 { return .orange }
+        return .white
     }
 
     private func speedLabel(_ bytesPerSecond: Double) -> String {

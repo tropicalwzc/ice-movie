@@ -6,7 +6,7 @@ Usage:
     --input sevenshare=docs/acceptance-...-sevenshare-quick.json \
     --input FiveShare=docs/acceptance-...-FiveShare-quick.json \
     --output docs/acceptance-2026-11-10-multi-share-quick.md \
-    --device "iPad Air 11-inch (M2)" --host TROPICAL-BIGPC.local \
+    --device "iPad Air 11-inch (M2)" --host tropical-bigpc.lan \
     --args "-stressRandom ..."
 """
 import argparse
@@ -43,6 +43,13 @@ def sec(value):
 def pct(value):
     try:
         return f"{float(value) * 100:.1f}%"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def cpu_pct(value):
+    try:
+        return f"{float(value):.0f}%"
     except (TypeError, ValueError):
         return "—"
 
@@ -126,6 +133,11 @@ def summarize_share(entry):
         for x in subtitle_items
         if num(x, "subtitleFirstCueMilliseconds") > 0
     ]
+    cpu_avg = [num(x, "cpuAvgPercent") for x in stress
+               if x.get("cpuAvgPercent") is not None]
+    cpu_max = [num(x, "cpuMaxPercent") for x in stress
+               if x.get("cpuMaxPercent") is not None]
+    cpu_end_high = sum(1 for x in stress if num(x, "cpuEndPercent") >= 80)
     return {
         "share": entry["share"],
         "candidates": entry["plan"].get("stressAllCount", "—"),
@@ -143,6 +155,9 @@ def summarize_share(entry):
         "subtitle_avg": statistics.mean(subtitle_first) if subtitle_first else 0,
         "subtitle_p90": q(subtitle_first, 0.9),
         "subtitle_max": max(subtitle_first) if subtitle_first else 0,
+        "cpu_avg": statistics.mean(cpu_avg) if cpu_avg else 0,
+        "cpu_max": max(cpu_max) if cpu_max else 0,
+        "cpu_end_high": cpu_end_high,
         "file_exceptions": sum(1 for x in stress if x.get("stressFileException") is True),
         "buffer_exceptions": sum(1 for x in stress if x.get("stressBufferException") is True),
         "open_failed": len(entry["open_failed"]),
@@ -239,6 +254,12 @@ def main():
     subtitle_under_1s = sum(1 for v in subtitle_first if v <= 1000)
     subtitle_under_3s = sum(1 for v in subtitle_first if v <= 3000)
     subtitle_over_5s = sum(1 for v in subtitle_first if v > 5000)
+    cpu_avg = [num(x, "cpuAvgPercent") for x in all_stress
+               if x.get("cpuAvgPercent") is not None]
+    cpu_max = [num(x, "cpuMaxPercent") for x in all_stress
+               if x.get("cpuMaxPercent") is not None]
+    cpu_end_high = [x for x in all_stress if num(x, "cpuEndPercent") >= 80]
+    has_cpu = bool(cpu_avg or cpu_max)
     total_play_seconds = (
         sum(num(x, "stressPlaySeconds") for x in all_stress)
         if args.random
@@ -294,6 +315,14 @@ def main():
             f"{max(1, int(args.play_seconds - args.seek_after))} 秒"
         )
 
+    cpu_summary_line = ""
+    if has_cpu:
+        cpu_summary_line = (
+            f"- CPU（单核 %）：平均 {cpu_pct(statistics.mean(cpu_avg))}，"
+            f"峰值 {cpu_pct(max(cpu_max))}，结束时 ≥80% "
+            f"{len(cpu_end_high)}/{len(all_stress)}"
+        )
+
     lines = [
         "# 多磁盘轮换随机播放 / 跳转基准测试报告",
         "",
@@ -331,6 +360,7 @@ def main():
         f"- 字幕首条 cue：有字幕轨 {len(subtitle_track_items)}/{len(all_stress)}，"
         f"成功出 cue {len(subtitle_items)}，有轨未出 cue {len(subtitle_failed)}，"
         f"无字幕轨 {subtitle_none}；平均 {subtitle_avg_text}，p90 {subtitle_p90_text}",
+        *([cpu_summary_line] if has_cpu else []),
         f"- 时间范围：{summaries[0]['started']} → {summaries[-1]['ended']}",
         "",
         "## 分磁盘结果",
@@ -359,6 +389,22 @@ def main():
               stat_line("打开阶段读取字节", open_bytes, lambda v: f"{int(v / 1024)}KB"),
               stat_line("容器头缓存命中率", cache_ratio, pct),
               ""]
+
+    if has_cpu:
+        lines += ["## CPU", ""]
+        lines += [
+            stat_line("单条平均 CPU（单核 %）", cpu_avg, cpu_pct),
+            stat_line("单条峰值 CPU（单核 %）", cpu_max, cpu_pct),
+            f"- 结束时 CPU ≥80% 的样本：{len(cpu_end_high)}/{len(all_stress)}"
+            + ("（疑似 EOF/空转，需复核）" if cpu_end_high else ""),
+            "",
+        ]
+        lines += table(
+            ["共享", "CPU avg", "CPU max", "结束≥80%"],
+            [[s["share"], cpu_pct(s["cpu_avg"]), cpu_pct(s["cpu_max"]),
+              s["cpu_end_high"]] for s in summaries],
+        )
+        lines += [""]
 
     lines += ["## 字幕速度", ""]
     lines += [
@@ -429,6 +475,17 @@ def main():
          for x in sorted(all_stress,
                          key=lambda z: -num(z, "clickToFirstVideoMilliseconds"))[:10]],
     ) + [""]
+
+    if has_cpu:
+        lines += ["## CPU 峰值最高的 10 条", ""] + table(
+            ["共享", "#", "文件", "CPU avg", "CPU max", "结束 CPU"],
+            [[x.get("_share", ""), x.get("stressIndex"), short(x.get("path"), 34),
+              cpu_pct(x.get("cpuAvgPercent", 0)),
+              cpu_pct(x.get("cpuMaxPercent", 0)),
+              cpu_pct(x.get("cpuEndPercent", 0))]
+             for x in sorted(all_stress,
+                             key=lambda z: -num(z, "cpuMaxPercent"))[:10]],
+        ) + [""]
 
     lines += ["## 字幕最慢的 10 条", ""] + table(
         ["共享", "#", "文件", "首条 cue", "字幕条数", "轨道"],

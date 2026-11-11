@@ -129,6 +129,20 @@ final class SMBChunkRingTests: XCTestCase {
         XCTAssertEqual(kind, .miss)
     }
 
+    func testStoreKeepsPinnedHeaderChunks() {
+        let ring = SMBChunkRing(chunkSize: 4, capacity: 3)
+        ring.setHeaderPinBytes(8)
+        ring.store(Data([0, 1, 2, 3]), at: 0)
+        ring.store(Data([4, 5, 6, 7]), at: 4)
+        ring.store(Data([8, 9, 10, 11]), at: 8)
+        // 超过容量时优先淘汰 header pin 之外的块，0/4 应保留。
+        ring.store(Data([12, 13, 14, 15]), at: 12)
+
+        XCTAssertNotNil(ring.chunk(at: 0))
+        XCTAssertNotNil(ring.chunk(at: 4))
+        XCTAssertEqual(ring.stats().chunks, 3)
+    }
+
     func testResetClearsAllChunks() {
         let ring = SMBChunkRing(chunkSize: 4, capacity: 4)
         ring.store(Data([0, 1, 2, 3]), at: 0)

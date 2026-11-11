@@ -152,6 +152,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var wantsPlay = false
     private var stopped = false
     private var ended = false
+    private var loggedEndPark = false
     private var pendingSeek: (target: Double, id: Int, requestedAt: Double)?
     private var seekRequests = 0
     private var completedSeekID = 0
@@ -286,25 +287,30 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     /// 缓冲足够才真正开声，避免起播瞬间供给不足造成断续。
     private func tryStartPlayback() {
-        guard wantsPlay, !clock.isPlaying, !stopped else { return }
+        condition.lock()
+        let wantsPlaySnapshot = wantsPlay
+        let stoppedSnapshot = stopped
+        let endedSnapshot = ended
+        condition.unlock()
+        guard wantsPlaySnapshot, !clock.isPlaying, !stoppedSnapshot else { return }
         if output != nil {
-            guard ended || output?.bufferedAhead ?? 0 >= effectiveAudioPrerollSeconds else {
+            guard endedSnapshot || output?.bufferedAhead ?? 0 >= effectiveAudioPrerollSeconds else {
                 return
             }
             // 显示层尚未绑定时不能等视频水位，否则无头播放/测试永远起不来；
             // 正常 App 里图层会在覆盖层出现后立即绑定并补发缓存帧。
             if let videoRenderer, videoRenderer.isBound {
-                guard ended || videoRenderer.bufferedAhead >= effectiveVideoPrerollSeconds else {
+                guard endedSnapshot || videoRenderer.bufferedAhead >= effectiveVideoPrerollSeconds else {
                     return
                 }
             }
         } else if let videoRenderer {
             if videoRenderer.isBound {
-                guard ended || videoRenderer.bufferedAhead >= effectiveVideoPrerollSeconds else {
+                guard endedSnapshot || videoRenderer.bufferedAhead >= effectiveVideoPrerollSeconds else {
                     return
                 }
             } else {
-                guard ended || videoRenderer.pendingCount >= 1 else { return }
+                guard endedSnapshot || videoRenderer.pendingCount >= 1 else { return }
             }
         }
         if playStartedAt == nil {
@@ -342,7 +348,9 @@ public final class PlaybackEngine: @unchecked Sendable {
     @discardableResult
     public func seek(to seconds: Double, requestedAt: Double? = nil) -> Int {
         guard !stopped else { return -1 }
-        let target = min(max(0, seconds), max(0, duration - 0.1))
+        let target = duration > 0
+            ? min(max(0, seconds), max(0, duration - 0.1))
+            : max(0, seconds)
         let releaseAt = requestedAt ?? ProcessInfo.processInfo.systemUptime
         condition.lock()
         let previous = pendingSeek
@@ -367,8 +375,8 @@ public final class PlaybackEngine: @unchecked Sendable {
         return id
     }
 
-    /// 起播前定位：等 demuxer seek、音频裁剪与视频预滚完成后再返回，
-    /// 调用方随后直接 `play()`，不再先播 0 秒再跳。
+    /// 起播前定位：等 demuxer seek、时钟与显示层重置完成（finishSeek）后返回；
+    /// 音频裁剪和视频预滚在后续读包时完成，不在 prepareSeek 内等待。
     public func prepareSeek(to seconds: Double) async -> Bool {
         guard !stopped else { return false }
         let id = seek(to: seconds, requestedAt: ProcessInfo.processInfo.systemUptime)
@@ -568,7 +576,12 @@ public final class PlaybackEngine: @unchecked Sendable {
     /// 缓冲时冻结主时钟与音频，恢复后从同一位置继续；否则静音期间时钟继续走，
     /// 新排入的音频会整体落后于画面。
     private func updateBufferingState() {
-        guard !stopped, !ended, wantsPlay else {
+        condition.lock()
+        let stoppedSnapshot = stopped
+        let endedSnapshot = ended
+        let wantsPlaySnapshot = wantsPlay
+        condition.unlock()
+        guard !stoppedSnapshot, !endedSnapshot, wantsPlaySnapshot else {
             if stalledForBuffering {
                 finishBufferStall()
             }
@@ -686,7 +699,17 @@ public final class PlaybackEngine: @unchecked Sendable {
 
         while true {
             condition.lock()
-            while !stopped, pendingSeek == nil, !ended {
+            while !stopped, pendingSeek == nil {
+                if ended {
+                    // EOF 后不要空转：等 seek() 把 ended 置回 false，或 stop() 唤醒。
+                    if !loggedEndPark {
+                        loggedEndPark = true
+                        Log.debug(.render, "泵线程 EOF 等待")
+                    }
+                    condition.wait()
+                    continue
+                }
+                loggedEndPark = false
                 // 播放中要持续供给；暂停时也先垫到预缓冲水位，起播才不会欠载。
                 if wantsPlay || (output?.bufferedAhead ?? 0) < effectiveAudioPrerollSeconds {
                     break
@@ -700,6 +723,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             let request = pendingSeek
             pendingSeek = nil
             let latest = seekRequests
+            let endedNow = ended
             condition.unlock()
 
             if let request {
@@ -718,7 +742,7 @@ public final class PlaybackEngine: @unchecked Sendable {
                 }
                 continue
             }
-            if !ended {
+            if !endedNow {
                 pumpOne(packet)
             }
         }
@@ -953,10 +977,12 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func markEnded() {
-        lock.withLock {
-            guard !ended else { return }
-            ended = true
-        }
+        condition.lock()
+        let alreadyEnded = ended
+        ended = true
+        condition.broadcast()
+        condition.unlock()
+        guard !alreadyEnded else { return }
         tryStartPlayback()
         let snapshot = statistics
         Log.info(
@@ -1054,8 +1080,11 @@ public final class PlaybackEngine: @unchecked Sendable {
             lastVideoPacketPTS = -1
         }
 
+        condition.lock()
+        ended = false
+        condition.broadcast()
+        condition.unlock()
         lock.withLock {
-            ended = false
             stats.drained = false
             stats.seekCount += 1
         }
@@ -1072,10 +1101,11 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func fail(_ message: String) {
-        lock.withLock {
-            stats.failure = message
-            ended = true
-        }
+        condition.lock()
+        ended = true
+        condition.broadcast()
+        condition.unlock()
+        lock.withLock { stats.failure = message }
         output?.pause()
         clock.pause()
     }
@@ -1184,14 +1214,20 @@ public final class PlaybackEngine: @unchecked Sendable {
                     + "显示偏差=\(fmt(snapshot.maxVideoOffset))s 校正=\(snapshot.clockCorrections)"
             )
         }
-        if !ended, ahead < 0.4, tickCount % 20 == 0 {
+        condition.lock()
+        let endedSnapshot = ended
+        condition.unlock()
+        if !endedSnapshot, ahead < 0.4, tickCount % 20 == 0 {
             Log.info(.render, "缓冲偏低 剩余=\(fmt(ahead))s，可能供给不足")
         }
         checkDrained()
     }
 
     private func checkDrained() {
-        guard ended, clock.isPlaying else { return }
+        condition.lock()
+        let endedSnapshot = ended
+        condition.unlock()
+        guard endedSnapshot, clock.isPlaying else { return }
         let audioEmpty = (output?.bufferedAhead ?? 0) < 0.05
         let videoEmpty = (videoRenderer?.bufferedAhead ?? 0) < 0.05
         guard audioEmpty, videoEmpty else { return }

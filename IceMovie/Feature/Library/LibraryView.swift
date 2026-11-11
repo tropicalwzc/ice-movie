@@ -1365,6 +1365,9 @@ struct LibraryView: View {
             var fileExceptions = 0
             var subtitleFirstCues: [Int] = []
             var subtitleMissing = 0
+            var cpuItemAverages: [Double] = []
+            var cpuItemPeaks: [Double] = []
+            var cpuEndHighItems = 0
             for (index, entry) in picks.enumerated() {
                 if Task.isCancelled { return }
                 let elapsed = ProcessInfo.processInfo.systemUptime - began
@@ -1414,6 +1417,8 @@ struct LibraryView: View {
                 // 会话没释放干净（跨会话泄漏），比播放指标更早暴露问题。
                 MemoryFootprint.resetPeak()
                 let sessionStartMB = MemoryFootprint.currentMB
+                var cpuSamples: [Double] = []
+                var cpuPeak = 0.0
                 stressLog(
                     "会话就绪 \(entry.path) 起始内存=\(String(format: "%.0f", sessionStartMB))MB"
                 )
@@ -1485,11 +1490,15 @@ struct LibraryView: View {
                         session.engine.seek(to: forwardTarget)
                         stressLog("二次 seek 前进 \(Int(seekForwardSeconds))s 目标=\(String(format: "%.1f", forwardTarget))s")
                     }
+                    let cpu = max(0, CPUUsage.currentPercent())
+                    cpuSamples.append(cpu)
+                    cpuPeak = max(cpuPeak, cpu)
                     let s = session.engine.statistics
                     stressLog(
                         "采样 t=\(tick * 5)s 位置=\(String(format: "%.1f", session.engine.clock.currentTime))s "
                             + "内存=\(String(format: "%.0f", MemoryFootprint.currentMB))MB "
                             + "峰值=\(String(format: "%.0f", MemoryFootprint.peakMB))MB "
+                            + "CPU=\(String(format: "%.0f", cpu))% "
                             + "下载=\(String(format: "%.1f", session.engine.downloadBytesPerSecond / 1_048_576))MB/s "
                             + "预读=\(String(format: "%.1f", session.engine.bufferedAheadSeconds))s "
                             + "音频领先=\(String(format: "%.1f", session.engine.bufferedAhead))s "
@@ -1522,11 +1531,18 @@ struct LibraryView: View {
                 let syncIssue = !syncOK
                 if syncIssue { syncIssues += 1 }
                 let endMemoryMB = MemoryFootprint.currentMB
+                let cpuEnd = max(0, CPUUsage.currentPercent())
+                cpuSamples.append(cpuEnd)
+                cpuPeak = max(cpuPeak, cpuEnd)
+                let cpuAvg = cpuSamples.isEmpty
+                    ? 0
+                    : cpuSamples.reduce(0, +) / Double(cpuSamples.count)
                 stressLog(
                     "结果 首帧=\(stats.firstVideoMilliseconds)ms 视频=\(video.enqueued) "
                         + "恢复=\(video.recoveries) 缓冲=\(stats.bufferStalls)/\(stats.maxBufferStallsPerMinute) "
                         + "内存=\(String(format: "%.0f", endMemoryMB))MB "
                         + "峰值=\(String(format: "%.0f", MemoryFootprint.peakMB))MB "
+                        + "CPU=\(String(format: "%.0f", cpuAvg))/\(String(format: "%.0f", cpuPeak))% "
                         + "起始=\(String(format: "%.0f", sessionStartMB))MB "
                         + "本会话增=\(String(format: "%+.0f", endMemoryMB - sessionStartMB))MB "
                         + "状态=\(session.renderer.statusDescription)"
@@ -1608,6 +1624,9 @@ struct LibraryView: View {
                         "stressPlaySeconds": itemPlaySeconds,
                         "stressSeekAfter": itemSeekAfter,
                         "stressSeekFraction": itemSeekFraction,
+                        "cpuAvgPercent": cpuAvg,
+                        "cpuMaxPercent": cpuPeak,
+                        "cpuEndPercent": cpuEnd,
                     ]
                 )
                 let subtitleCueCount = session.timeline?.cues.count ?? 0
@@ -1617,6 +1636,9 @@ struct LibraryView: View {
                 } else {
                     subtitleMissing += 1
                 }
+                cpuItemAverages.append(cpuAvg)
+                cpuItemPeaks.append(cpuPeak)
+                if cpuEnd >= 80 { cpuEndHighItems += 1 }
                 closePlayback(report: false)
                 completed += 1
                 if serious {
@@ -1635,7 +1657,10 @@ struct LibraryView: View {
                 syncIssues: syncIssues,
                 fileExceptions: fileExceptions,
                 subtitleFirstCues: subtitleFirstCues,
-                subtitleMissing: subtitleMissing
+                subtitleMissing: subtitleMissing,
+                cpuItemAverages: cpuItemAverages,
+                cpuItemPeaks: cpuItemPeaks,
+                cpuEndHighItems: cpuEndHighItems
             )
             Log.notice(.app, "压力测试结束 完成=\(completed) 条")
         }
@@ -2047,7 +2072,10 @@ struct LibraryView: View {
         syncIssues: Int = 0,
         fileExceptions: Int = 0,
         subtitleFirstCues: [Int] = [],
-        subtitleMissing: Int = 0
+        subtitleMissing: Int = 0,
+        cpuItemAverages: [Double] = [],
+        cpuItemPeaks: [Double] = [],
+        cpuEndHighItems: Int = 0
     ) {
         guard ProcessInfo.processInfo.arguments.contains("-acceptanceReport") else { return }
         let sortedCues = subtitleFirstCues.sorted()
@@ -2057,6 +2085,10 @@ struct LibraryView: View {
         let subtitleAvg = sortedCues.isEmpty
             ? 0
             : sortedCues.reduce(0, +) / sortedCues.count
+        let cpuAvg = cpuItemAverages.isEmpty
+            ? 0
+            : cpuItemAverages.reduce(0, +) / Double(cpuItemAverages.count)
+        let cpuPeak = cpuItemPeaks.max() ?? 0
         let summary: [String: Any] = [
             "reason": "stress-summary",
             "stressDone": true,
@@ -2072,6 +2104,9 @@ struct LibraryView: View {
             "stressSubtitleFirstCueAvg": subtitleAvg,
             "stressSubtitleFirstCueP90": subtitleP90,
             "stressSubtitleFirstCueMax": sortedCues.last ?? 0,
+            "stressCPUAvg": cpuAvg,
+            "stressCPUPeak": cpuPeak,
+            "stressCPUEndHighItems": cpuEndHighItems,
             "capturedAt": ISO8601DateFormatter().string(from: Date()),
         ]
         do {
@@ -2080,7 +2115,8 @@ struct LibraryView: View {
                 .app,
                 "压力测试总结已写入 完成=\(completed) 严重=\(serious) 原因=\(reason) "
                     + "字幕=\(sortedCues.count)条/无字幕=\(subtitleMissing) "
-                    + "首条=\(subtitleAvg)ms/p90=\(subtitleP90)ms"
+                    + "首条=\(subtitleAvg)ms/p90=\(subtitleP90)ms "
+                    + "CPU=\(Int(cpuAvg))/\(Int(cpuPeak))% 结束高=\(cpuEndHighItems)"
             )
         } catch {
             Log.error(.app, "压力测试总结写入失败：\(error.localizedDescription)")

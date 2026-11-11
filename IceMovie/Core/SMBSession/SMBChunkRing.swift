@@ -16,6 +16,8 @@ public final class SMBChunkRing: @unchecked Sendable {
     private var retentionStart: Int64 = 0
     private var retentionFocus: Int64 = 0
     private var retentionEnd: Int64 = .max
+    /// 容器头固定保留区间；`store` 淘汰时也跳过这段，避免 header pin 被容量淘汰。
+    private var headerPinBytes: Int64 = 0
 
     public init(chunkSize: Int = 1 << 20, capacity: Int = 24) {
         self.chunkSize = max(1, chunkSize)
@@ -67,14 +69,24 @@ public final class SMBChunkRing: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// 设置容器头固定保留区间；0 表示清除。
+    public func setHeaderPinBytes(_ bytes: Int64) {
+        lock.lock()
+        headerPinBytes = max(0, bytes)
+        lock.unlock()
+    }
+
     /// 只保留与 `[keepFrom, keepTo)` 有交集的块；部分重叠的块整块保留。
     /// `pinHeaderBytes` 用于固定容器头区间：seek 到文件尾部再回到头部时，
     /// MP4 的 moov / MKV 的 SeekHead 不需要重新走网络。
     public func trim(keepFrom: Int64, keepTo: Int64, pinHeaderBytes: Int64 = 0) {
         lock.lock()
+        if pinHeaderBytes > 0 {
+            headerPinBytes = pinHeaderBytes
+        }
         let victims = chunks.compactMap { start, data -> Int64? in
             let end = start + Int64(data.count)
-            let intersectsPinnedHeader = pinHeaderBytes > 0 && start < pinHeaderBytes
+            let intersectsPinnedHeader = headerPinBytes > 0 && start < headerPinBytes
             guard !intersectsPinnedHeader else { return nil }
             return end <= keepFrom || start >= keepTo ? start : nil
         }
@@ -178,10 +190,22 @@ public final class SMBChunkRing: @unchecked Sendable {
     /// 淘汰顺序：先丢回看窗口之外的远端块，再丢前向窗口之外的远端块，
     /// 最后丢窗口内离 focus 最远的回看块，避免把刚预读的未来数据挤掉。
     private func evictionCandidateLocked() -> Int64? {
+        let pinned = headerPinBytes
+        let eligible = pinned > 0
+            ? chunks.filter { $0.key >= pinned }
+            : chunks
+        if let victim = evictionCandidateLocked(in: eligible) {
+            return victim
+        }
+        // 所有块都在 header pin 内时仍允许淘汰最老的块，避免容量无限增长。
+        return evictionCandidateLocked(in: chunks)
+    }
+
+    private func evictionCandidateLocked(in pool: [Int64: Data]) -> Int64? {
         var outsideBack: Int64?
         var outsideForward: Int64?
         var back: Int64?
-        for (start, data) in chunks {
+        for (start, data) in pool {
             let end = start + Int64(data.count)
             if end <= retentionStart {
                 if outsideBack == nil || start < outsideBack! { outsideBack = start }
@@ -191,7 +215,7 @@ public final class SMBChunkRing: @unchecked Sendable {
                 if back == nil || start < back! { back = start }
             }
         }
-        return outsideBack ?? outsideForward ?? back ?? chunks.keys.min()
+        return outsideBack ?? outsideForward ?? back ?? pool.keys.min()
     }
 }
 

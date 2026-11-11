@@ -13,7 +13,7 @@ set -u
 
 : "${DEVICE_ID:?Set DEVICE_ID to the devicectl device identifier}"
 BUNDLE_ID=${BUNDLE_ID:-com.wangzicheng.icemovie}
-SMB_HOST=${SMB_HOST:-TROPICAL-BIGPC.local}
+SMB_HOST=${SMB_HOST:-tropical-bigpc.lan}
 SHARES=${SHARES:-"sevenshare FiveShare nineshare sensei Videos"}
 COUNT=${COUNT:-16}
 PLAY_SECONDS=${PLAY_SECONDS:-60}

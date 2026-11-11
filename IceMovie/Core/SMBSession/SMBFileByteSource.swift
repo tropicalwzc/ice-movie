@@ -193,6 +193,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         }
         let capacityBytes = Int64(self.ring.capacity) * Int64(self.chunkSize)
         self.ring.setRetentionWindow(start: 0, focus: 0, end: capacityBytes)
+        self.ring.setHeaderPinBytes(self.headerPinBytes)
     }
 
     func read(at offset: Int64, count: Int) async throws -> Data {
@@ -327,6 +328,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
                 remaining -= part.count
             } catch {
                 guard !retried, let reopen else { throw error }
+                if lock.withLock({ closed }) { throw error }
                 retried = true
                 Log.notice(
                     .smb,
@@ -334,8 +336,8 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
                         + error.localizedDescription
                 )
                 let newBox = try await reopen.open()
+                if lock.withLock({ closed }) { throw error }
                 lock.withLock {
-                    guard !closed else { return }
                     handle = newBox.handle
                 }
                 box = newBox
@@ -382,17 +384,19 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
                 remaining -= part.count
             } catch {
                 guard !retried, let reopen else { throw error }
+                if lock.withLock({ closed }) { throw error }
                 retried = true
                 Log.notice(
                     .smb,
                     "精确读失败，重开句柄 偏移=\(cursor) 优先级=\(priority.label) "
                         + error.localizedDescription
                 )
-                box = try await reopen.open()
+                let newBox = try await reopen.open()
+                if lock.withLock({ closed }) { throw error }
                 lock.withLock {
-                    guard !closed else { return }
-                    handle = box.handle
+                    handle = newBox.handle
                 }
+                box = newBox
             }
         }
 

@@ -153,7 +153,7 @@ final class AVIOBridge {
     fileprivate func read(into destination: UnsafeMutablePointer<UInt8>, size: Int) -> Int32 {
         guard size > 0 else { return 0 }
         // FFmpeg 约定：到达末尾必须返回 AVERROR_EOF，返回 0 会让部分 demuxer 反复轮询。
-        guard fillWindowIfNeeded(requested: size) else { return ffmpeg_eof }
+        if let error = fillWindowIfNeeded(requested: size) { return error }
 
         let offsetInWindow = Int(position - windowStart)
         let available = window.count - offsetInWindow
@@ -183,6 +183,10 @@ final class AVIOBridge {
         default:
             return -1
         }
+        guard position >= 0 else {
+            position = previous
+            return -1
+        }
         // 显式通知缓存层：seek 后旧窗口作废，立刻从新位置预读。
         if position != previous {
             currentWindowSize = startWindowSize
@@ -196,23 +200,32 @@ final class AVIOBridge {
 
     // MARK: - 内部
 
-    private func fillWindowIfNeeded(requested: Int) -> Bool {
+    private func fillWindowIfNeeded(requested: Int) -> Int32? {
         let offsetInWindow = position - windowStart
         if offsetInWindow >= 0, offsetInWindow < Int64(window.count) {
-            return true
+            return nil
         }
         if reachedEOF, offsetInWindow >= Int64(window.count) {
-            return false
+            return nil
         }
 
         // 元数据小读按小窗口取；FFmpeg 自己要大块时按请求大小取，不能被窗口截断。
         let readSize = min(max(requested, currentWindowSize), maxWindowSize)
         let previousEnd = windowStart + Int64(window.count)
         let isSequential = !window.isEmpty && position == previousEnd
-        let data = readSynchronously(at: position, count: readSize)
+        let result = readSynchronously(at: position, count: readSize)
+        if let error = result.error {
+            reachedEOF = false
+            Log.error(
+                .demux,
+                "字节源读取失败 offset=\(position) \(error.localizedDescription)"
+            )
+            return ffmpeg_eio
+        }
+        let data = result.data
         if data.isEmpty {
             reachedEOF = true
-            return false
+            return nil
         }
         window = data
         windowStart = position
@@ -228,12 +241,12 @@ final class AVIOBridge {
             currentWindowSize = startWindowSize
         }
         reachedEOF = data.count < readSize
-        return true
+        return nil
     }
 
     /// 在独立任务里调用异步数据源，并在当前线程等待结果。
     /// 这段等待发生在 FFmpeg 自己的线程上，不会占用 Swift 并发池。
-    private func readSynchronously(at offset: Int64, count: Int) -> Data {
+    private func readSynchronously(at offset: Int64, count: Int) -> ReadResult {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ReadResult()
         let source = self.source
@@ -242,18 +255,21 @@ final class AVIOBridge {
                 box.data = try await source.read(at: offset, count: count)
             } catch {
                 Log.error(.demux, "字节源读取失败 offset=\(offset) \(error.localizedDescription)")
-                box.data = Data()
+                box.error = error
             }
             semaphore.signal()
         }
         semaphore.wait()
-        return box.data
+        return box
     }
 }
 
 private final class ReadResult: @unchecked Sendable {
     var data = Data()
+    var error: Error?
 }
+
+private let ffmpeg_eio: Int32 = Int32(-EIO)
 
 private let avioReadCallback: @convention(c) (
     UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt8>?, Int32

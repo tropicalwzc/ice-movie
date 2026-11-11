@@ -30,7 +30,26 @@ private final class RecordingByteSource: ByteSource, ReadStatsProviding, @unchec
     }
 }
 
+private final class FailingByteSource: ByteSource, @unchecked Sendable {
+    let length: Int64? = 1 << 20
+
+    func read(at offset: Int64, count: Int) async throws -> Data {
+        throw ByteSourceError.underlying("测试用读取失败")
+    }
+
+    func close() async {}
+}
+
 final class StartupReadTests: XCTestCase {
+    func testReadFailureReturnsEIOInsteadOfEOF() throws {
+        let source = FailingByteSource()
+        let bridge = try AVIOBridge(source: source, startWindowSize: 64 << 10)
+        let context = try XCTUnwrap(bridge.context)
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4096)
+        defer { buffer.deallocate() }
+
+        XCTAssertEqual(avio_read(context, buffer, 4096), Int32(-EIO))
+    }
     func testAdaptiveWindowStartsSmallAndGrows() throws {
         let source = RecordingByteSource(length: 128 << 20)
         let bridge = try AVIOBridge(source: source, startWindowSize: 64 << 10)

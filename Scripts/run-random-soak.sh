@@ -5,13 +5,15 @@
 # - 每条播放时长在 PLAY_MIN...PLAY_MAX 秒之间随机；
 # - 每条在 SEEK_AFTER_MIN...SEEK_AFTER_MAX 秒后 seek；
 # - seek 落点在 SEEK_FRACTION_MIN...SEEK_FRACTION_MAX 之间随机；
-# - 每个共享默认跑 PER_SHARE_SECONDS（4 小时轮换时 5 个共享各 48 分钟）。
+# - 每个共享每轮跑 PER_SHARE_SECONDS；CYCLES>1 时按 共享列表循环多轮，
+#   例如 5 个共享 × 12 分钟 × 4 轮 = 4 小时，且每个磁盘中间有 48 分钟休息。
 #
 # 必填：
 #   DEVICE_ID=<devicectl 设备 ID>
 # 可选：
-#   SMB_HOST=192.168.5.8
+#   SMB_HOST=tropical-bigpc.lan
 #   SHARES="sevenshare FiveShare nineshare sensei Videos"
+#   CYCLES=1
 #   PER_SHARE_SECONDS=2880
 #   PLAY_MIN=45 PLAY_MAX=150
 #   SEEK_AFTER_MIN=3 SEEK_AFTER_MAX=12
@@ -22,8 +24,9 @@ set -u
 
 : "${DEVICE_ID:?Set DEVICE_ID to the devicectl device identifier}"
 BUNDLE_ID=${BUNDLE_ID:-com.wangzicheng.icemovie}
-SMB_HOST=${SMB_HOST:-192.168.5.8}
+SMB_HOST=${SMB_HOST:-tropical-bigpc.lan}
 SHARES=${SHARES:-"sevenshare FiveShare nineshare sensei Videos"}
+CYCLES=${CYCLES:-1}
 PER_SHARE_SECONDS=${PER_SHARE_SECONDS:-2880}
 PLAY_MIN=${PLAY_MIN:-45}
 PLAY_MAX=${PLAY_MAX:-150}
@@ -45,12 +48,17 @@ app_is_running() {
     | grep -q 'IceMovie.app/IceMovie'
 }
 
+for ((cycle = 1; cycle <= CYCLES; cycle++)); do
 for share in ${=SHARES}; do
-  out="$OUT_DIR/acceptance-${DATE_TAG}-${share}-${STAMP}.json"
-  tmp="/private/tmp/ice-${share}-${STAMP}.json"
+  cycle_tag=""
+  if (( CYCLES > 1 )); then
+    cycle_tag="-c${cycle}"
+  fi
+  out="$OUT_DIR/acceptance-${DATE_TAG}-${share}-${STAMP}${cycle_tag}.json"
+  tmp="/private/tmp/ice-${share}-${STAMP}${cycle_tag}.json"
   rm -f "$tmp" "$out"
 
-  echo "=== [$share] start $(date '+%H:%M:%S') ==="
+  echo "=== [$share] cycle=$cycle/$CYCLES start $(date '+%H:%M:%S') ==="
   xcrun devicectl device process launch \
     --device "$DEVICE_ID" --terminate-existing "$BUNDLE_ID" -- \
     -smbHost "$SMB_HOST" -smbShare "$share" -library \
@@ -105,8 +113,8 @@ for share in ${=SHARES}; do
   if [[ -f "$tmp" ]]; then
     cp "$tmp" "$out"
   fi
-  echo "=== [$share] stop reason=$reason file=$out $(date '+%H:%M:%S') ==="
-  python3 - "$out" "$share" <<'PY'
+  echo "=== [$share] cycle=$cycle/$CYCLES stop reason=$reason file=$out $(date '+%H:%M:%S') ==="
+  python3 - "$out" "$share" "$cycle" "$CYCLES" <<'PY'
 import json, sys
 try:
     data = json.load(open(sys.argv[1]))
@@ -116,7 +124,8 @@ except Exception as exc:
 stress = [x for x in data if x.get("reason") == "stress"]
 summary = next((x for x in data if x.get("stressDone")), {})
 plan = next((x for x in reversed(data) if x.get("reason") == "stress-plan"), {})
-print(f"  {sys.argv[2]}: played={len(stress)} candidates={plan.get('stressAllCount')} "
+print(f"  {sys.argv[2]} c{sys.argv[3]}/{sys.argv[4]}: played={len(stress)} "
+      f"candidates={plan.get('stressAllCount')} "
       f"picked={plan.get('stressPickCount')} stop={summary.get('stressStopReason')} "
       f"serious={summary.get('stressSeriousFound')} "
       f"fileExceptions={sum(1 for x in stress if x.get('stressFileException'))} "
@@ -124,5 +133,6 @@ print(f"  {sys.argv[2]}: played={len(stress)} candidates={plan.get('stressAllCou
 PY
   sleep 20
 done
+done
 
-echo "=== all shares finished $(date '+%H:%M:%S') ==="
+echo "=== all cycles finished $(date '+%H:%M:%S') ==="

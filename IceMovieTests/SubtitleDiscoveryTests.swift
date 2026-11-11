@@ -131,6 +131,90 @@ final class SubtitleDiscoveryTests: XCTestCase {
         XCTAssertTrue(tracks.isEmpty, "同集数视频不唯一，不应匹配无关字幕")
     }
 
+    // MARK: - 一一对应的去重键
+
+    /// 全方括号命名归一化后标题干恒为空串。若拿它去重，不同作品的同集字幕
+    /// 会被算成“一套”，一一对应规则就会把无关字幕也放进来。
+    func testBracketedOtherShowSubtitleRejectedByOneToOne() {
+        let video = "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P].mp4"
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: video,
+            siblings: [
+                video,
+                "[YYDM-11FNAS][Angel Beats][10][BDRIP][720P].ass",
+                "[OtherGroup][天使的脉动][10][BDRIP].ass",
+            ]
+        )
+        XCTAssertEqual(tracks.count, 1, "只应匹配同作品字幕，另一部作品的同集字幕不能借一一对应混进来")
+        XCTAssertTrue(tracks.first?.title.contains("Angel Beats") == true)
+    }
+
+    func testIdentityKeyFallsBackToTokens() {
+        let same = SubtitleDiscovery.identityKey("[A][Show][10].ass")
+        XCTAssertEqual(same, SubtitleDiscovery.identityKey("[B][Show][10].chs.ass"), "同作品不同语言应归一套")
+        XCTAssertTrue(same.hasPrefix("tokens:"))
+
+        let other = SubtitleDiscovery.identityKey("[B][OtherShow][10].ass")
+        XCTAssertNotEqual(same, other, "不同作品必须算两套，否则一一对应会误判唯一")
+    }
+
+    func testIdentityKeyPrefersBaseWhenPresent() {
+        XCTAssertEqual(SubtitleDiscovery.identityKey("Show - 10.chs.ass"), "base:show")
+    }
+
+    /// 既无标题干也无词元（纯集数命名）时退到文件名主干，同集不同语言仍归一套。
+    func testIdentityKeyFallsBackToStem() {
+        XCTAssertEqual(
+            SubtitleDiscovery.identityKey("10.chs.ass"),
+            SubtitleDiscovery.identityKey("10.cht.ass")
+        )
+    }
+
+    // MARK: - 特殊集数（17.5 / SP）
+
+    func testHalfEpisodeParsed() {
+        XCTAssertEqual(
+            SubtitleDiscovery.parse("[Code Geass 反叛的魯路修][17.5][QYQ][1920x1080][BDRIP].mkv").episode,
+            17.5
+        )
+        XCTAssertEqual(SubtitleDiscovery.parse("Some Show - 13.5.mkv").episode, 13.5)
+    }
+
+    /// 真实库回归：第 17.5 集曾把同目录 59 条跨集字幕全部匹配上。
+    /// 根因是 `[17.5]` 解析不出集数，集数否决失效后词元完全一致即命中。
+    func testHalfEpisodeDoesNotSwallowOtherEpisodes() {
+        let video = "[Code Geass 反叛的魯路修][17.5][QYQ][1920x1080][BDRIP].mkv"
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: video,
+            siblings: [
+                video,
+                "[Code Geass 反叛的魯路修][17.5][QYQ][1920x1080][BDRIP].[GB].ssa",
+                "[Code Geass 反叛的魯路修][23][QYQ][1920x1080][BDRIP].[GB][By WLGO].ssa",
+                "[Code Geass 反叛的魯路修][24][QYQ][1920x1080][BDRIP].[BIG5][By WLGO].ssa",
+            ]
+        )
+        XCTAssertEqual(tracks.count, 1, "17.5 集只应匹配自己的字幕，不能吞掉 23/24 集")
+        XCTAssertTrue(tracks.first?.title.contains("17.5") == true)
+    }
+
+    /// 视频集数解析不出来（SP1 等）时，词元一致不能吞掉带集数的字幕。
+    func testVideoWithoutEpisodeDoesNotMatchNumberedSubtitle() {
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: "Some Show - SP1.mkv",
+            siblings: ["Some Show - 01.chs.ass"]
+        )
+        XCTAssertTrue(tracks.isEmpty, "没有集数约束时，不应匹配任意集数的字幕")
+    }
+
+    /// 但视频与字幕都没有集数标记时（OVA/SP 同名），词元一致仍应匹配。
+    func testVideoWithoutEpisodeMatchesUnnumberedSubtitle() {
+        let tracks = SubtitleDiscovery.external(
+            videoFileName: "[Group][Some Show][OVA][BD].mkv",
+            siblings: ["[Group][Some Show][OVA][BD].chs.ass"]
+        )
+        XCTAssertEqual(tracks.count, 1)
+    }
+
     /// 季数不一致时直接否决，避免跨季错配。
     func testSeasonMismatchRejected() {
         let tracks = SubtitleDiscovery.external(

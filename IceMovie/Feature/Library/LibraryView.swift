@@ -163,16 +163,6 @@ final class LibraryPlaybackSession: Identifiable {
     private var shardedLoader: ShardedSubtitleLoader?
     private var collectedCues: [String: SubtitleCue] = [:]
     private var sawSubtitlePackets = false
-    private let shardedThresholdBytes: Int64 = {
-        let arguments = ProcessInfo.processInfo.arguments
-        if let index = arguments.firstIndex(of: "-shardedThresholdMB"),
-           arguments.indices.contains(index + 1),
-           let megabytes = Int64(arguments[index + 1]),
-           megabytes > 0 {
-            return megabytes * 1024 * 1024
-        }
-        return 800 * 1024 * 1024
-    }()
 
     init(
         engine: PlaybackEngine,
@@ -400,15 +390,13 @@ final class LibraryPlaybackSession: Identifiable {
         }
     }
 
-    /// 内封字幕加载策略：
-    /// - ≥800MB 或 SRT/VTT 等文本轨：复用播放泵，避免为字幕整集扫描 SMB；
-    /// - 小文件 ASS：保留完整脚本扫描，以维持 libass 样式。
+    /// 内封文本字幕一律复用播放泵：字幕尽快出现优先于 libass 样式。
+    /// 小文件 ASS 也不再做全片扫描——SMB 上 300–800MB 的 ASS 全扫可达数分钟，
+    /// 远慢于一条 1–2 分钟的验收样本。
     private func playbackCollectedIndex(_ track: SubtitleTrack) -> Int? {
         guard case .embedded(let index) = track.source,
               track.format != .bitmap else { return nil }
-        if entry.size >= shardedThresholdBytes { return index }
-        if track.format != .ass { return index }
-        return nil
+        return index
     }
 
     /// 直接复用播放泵已读到的字幕包，不再为字幕单独扫 SMB。
@@ -1303,6 +1291,26 @@ struct LibraryView: View {
             let rootFolders = max(0, Int(argumentValue("-stressRootFolders") ?? "0") ?? 0)
             let perDirectoryLimit = max(1, Int(argumentValue("-stressPerDirectoryLimit") ?? "3") ?? 3)
             let tolerateFileErrors = arguments.contains("-stressTolerateFileErrors")
+            // 长跑/随机验收：每条播放时长和 seek 位置都随机，而不是整轮固定。
+            let randomize = arguments.contains("-stressRandomize")
+            let playSecondsMin = max(10, Double(argumentValue("-stressPlaySecondsMin") ?? "45") ?? 45)
+            let playSecondsMax = max(
+                playSecondsMin + 10,
+                Double(argumentValue("-stressPlaySecondsMax") ?? "150") ?? 150
+            )
+            let seekAfterMin = max(0, Double(argumentValue("-stressSeekAfterMin") ?? "3") ?? 3)
+            let seekAfterMax = max(
+                seekAfterMin,
+                Double(argumentValue("-stressSeekAfterMax") ?? "12") ?? 12
+            )
+            let seekFractionMin = min(
+                max(0.02, Double(argumentValue("-stressSeekFractionMin") ?? "0.10") ?? 0.10),
+                0.95
+            )
+            let seekFractionMax = min(
+                max(seekFractionMin, Double(argumentValue("-stressSeekFractionMax") ?? "0.85") ?? 0.85),
+                0.98
+            )
             // 定向复现：按 -stressPaths 给定顺序整组播放，不做随机抽样，
             // 用于复现“连续播放若干文件后切到某个文件才出问题”的跨会话缺陷。
             let orderedSequence = arguments.contains("-stressSequence")
@@ -1333,10 +1341,13 @@ struct LibraryView: View {
             for pick in picks.prefix(20) {
                 stressLog("样本 \(pick.path) size=\(pick.size)")
             }
+            let cadence = randomize
+                ? "每条=随机 \(Int(playSecondsMin))-\(Int(playSecondsMax))s "
+                    + "中间点=随机 \(Int(seekFractionMin * 100))-\(Int(seekFractionMax * 100))%"
+                : "每条=\(Int(playSeconds))s 中间点=\(Int(seekFraction * 100))%"
             Log.notice(
                 .app,
-                "压力测试开始 共享文件=\(all.count) 选中=\(picks.count) "
-                    + "每条=\(Int(playSeconds))s 中间点=\(Int(seekFraction * 100))%"
+                "压力测试开始 共享文件=\(all.count) 选中=\(picks.count) " + cadence
             )
             guard !picks.isEmpty else {
                 Log.error(.app, "压力测试没有找到视频")
@@ -1352,6 +1363,8 @@ struct LibraryView: View {
             var bufferExceptions = 0
             var syncIssues = 0
             var fileExceptions = 0
+            var subtitleFirstCues: [Int] = []
+            var subtitleMissing = 0
             for (index, entry) in picks.enumerated() {
                 if Task.isCancelled { return }
                 let elapsed = ProcessInfo.processInfo.systemUptime - began
@@ -1409,15 +1422,50 @@ struct LibraryView: View {
                     "压力测试 [\(index + 1)/\(picks.count)] \(Log.shortPath(entry.path)) "
                         + "大小=\(entry.size / 1024 / 1024)MB"
                 )
-                try? await Task.sleep(for: .seconds(seekAfter))
+                let itemSeekAfter: Double
+                let itemPlaySeconds: Double
+                let itemSeekFraction: Double
+                if randomize {
+                    let maxSeekAfter = min(seekAfterMax, max(1, playSecondsMin - 10))
+                    itemSeekAfter = Double.random(
+                        in: seekAfterMin...max(seekAfterMin, maxSeekAfter)
+                    )
+                    let sampledPlay = Double.random(in: playSecondsMin...playSecondsMax)
+                    let duration = session.engine.duration
+                    let durationCap = duration > 1
+                        ? max(itemSeekAfter + 2, duration - 0.5)
+                        : playSecondsMax
+                    itemPlaySeconds = max(
+                        itemSeekAfter + 1,
+                        min(sampledPlay, durationCap)
+                    )
+                    itemSeekFraction = Double.random(
+                        in: seekFractionMin...seekFractionMax
+                    )
+                    stressLog(
+                        "本条目 计划=\(String(format: "%.1f", itemPlaySeconds))s "
+                            + "seekAfter=\(String(format: "%.1f", itemSeekAfter))s "
+                            + "fraction=\(String(format: "%.2f", itemSeekFraction))"
+                    )
+                } else {
+                    itemSeekAfter = seekAfter
+                    itemPlaySeconds = playSeconds
+                    itemSeekFraction = seekFraction
+                }
+                try? await Task.sleep(for: .seconds(itemSeekAfter))
                 let preSeek = session.engine.statistics
-                let target = session.engine.duration * seekFraction
+                let target = min(
+                    session.engine.duration * itemSeekFraction,
+                    max(0, session.engine.duration - 1)
+                )
                 session.engine.seek(to: target)
                 Log.notice(
                     .app,
-                    "压力测试 seek 目标=\(String(format: "%.1f", target))s"
+                    "压力测试 seek 目标=\(String(format: "%.1f", target))s "
+                        + "比例=\(String(format: "%.0f", itemSeekFraction * 100))% "
+                        + "每条=\(String(format: "%.0f", itemPlaySeconds))s"
                 )
-                let remain = max(1, playSeconds - seekAfter)
+                let remain = max(1, itemPlaySeconds - itemSeekAfter)
                 let until = Date().addingTimeInterval(remain)
                 var tick = 0
                 while Date() < until, !Task.isCancelled {
@@ -1557,8 +1605,18 @@ struct LibraryView: View {
                         "postSeekBufferSeconds": postSeekBufferSeconds,
                         "stressReason": reason,
                         "stressSeekTarget": target,
+                        "stressPlaySeconds": itemPlaySeconds,
+                        "stressSeekAfter": itemSeekAfter,
+                        "stressSeekFraction": itemSeekFraction,
                     ]
                 )
+                let subtitleCueCount = session.timeline?.cues.count ?? 0
+                let subtitleFirstCue = session.subtitleFirstCueMilliseconds
+                if subtitleCueCount > 0, subtitleFirstCue > 0 {
+                    subtitleFirstCues.append(subtitleFirstCue)
+                } else {
+                    subtitleMissing += 1
+                }
                 closePlayback(report: false)
                 completed += 1
                 if serious {
@@ -1575,7 +1633,9 @@ struct LibraryView: View {
                 reason: stopReason,
                 bufferExceptions: bufferExceptions,
                 syncIssues: syncIssues,
-                fileExceptions: fileExceptions
+                fileExceptions: fileExceptions,
+                subtitleFirstCues: subtitleFirstCues,
+                subtitleMissing: subtitleMissing
             )
             Log.notice(.app, "压力测试结束 完成=\(completed) 条")
         }
@@ -1985,9 +2045,18 @@ struct LibraryView: View {
         reason: String,
         bufferExceptions: Int = 0,
         syncIssues: Int = 0,
-        fileExceptions: Int = 0
+        fileExceptions: Int = 0,
+        subtitleFirstCues: [Int] = [],
+        subtitleMissing: Int = 0
     ) {
         guard ProcessInfo.processInfo.arguments.contains("-acceptanceReport") else { return }
+        let sortedCues = subtitleFirstCues.sorted()
+        let subtitleP90 = sortedCues.isEmpty
+            ? 0
+            : sortedCues[min(sortedCues.count - 1, Int(Double(sortedCues.count) * 0.9))]
+        let subtitleAvg = sortedCues.isEmpty
+            ? 0
+            : sortedCues.reduce(0, +) / sortedCues.count
         let summary: [String: Any] = [
             "reason": "stress-summary",
             "stressDone": true,
@@ -1997,13 +2066,21 @@ struct LibraryView: View {
             "stressSyncIssues": syncIssues,
             "stressFileExceptions": fileExceptions,
             "stressStopReason": reason,
+            "stressSubtitleItems": sortedCues.count,
+            "stressSubtitleMissing": subtitleMissing,
+            "stressSubtitleFirstCueMin": sortedCues.first ?? 0,
+            "stressSubtitleFirstCueAvg": subtitleAvg,
+            "stressSubtitleFirstCueP90": subtitleP90,
+            "stressSubtitleFirstCueMax": sortedCues.last ?? 0,
             "capturedAt": ISO8601DateFormatter().string(from: Date()),
         ]
         do {
             try appendAcceptanceReport(summary)
             Log.notice(
                 .app,
-                "压力测试总结已写入 完成=\(completed) 严重=\(serious) 原因=\(reason)"
+                "压力测试总结已写入 完成=\(completed) 严重=\(serious) 原因=\(reason) "
+                    + "字幕=\(sortedCues.count)条/无字幕=\(subtitleMissing) "
+                    + "首条=\(subtitleAvg)ms/p90=\(subtitleP90)ms"
             )
         } catch {
             Log.error(.app, "压力测试总结写入失败：\(error.localizedDescription)")

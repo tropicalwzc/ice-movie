@@ -583,23 +583,52 @@ public actor SMBClient {
         )
 
         let began = Date()
-        do {
-            let addresses = try await SMBHostResolver.resolveAsync(address)
-            Log.info(
-                .smb,
-                "名称解析成功 host=\(address.host) -> \(addresses.joined(separator: ",")) "
-                    + "耗时=\(Self.milliseconds(since: began))"
-            )
-        } catch {
-            Log.error(
-                .smb,
-                "名称解析失败 host=\(address.host) 耗时=\(Self.milliseconds(since: began)) "
-                    + "\(error.localizedDescription)"
-            )
-            throw error
+        var resolved: [String] = []
+        var lastError: Error?
+        for attempt in 1...3 {
+            do {
+                resolved = try await SMBHostResolver.resolveAsync(address)
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                Log.error(
+                    .smb,
+                    "名称解析失败 host=\(address.host) 尝试=\(attempt)/3 "
+                        + "耗时=\(Self.milliseconds(since: began)) \(error.localizedDescription)"
+                )
+                if attempt < 3 {
+                    try? await Task.sleep(for: .milliseconds(600))
+                }
+            }
         }
+        if let lastError {
+            throw lastError
+        }
+        Log.info(
+            .smb,
+            "名称解析成功 host=\(address.host) -> \(resolved.joined(separator: ",")) "
+                + "耗时=\(Self.milliseconds(since: began))"
+        )
 
-        guard let url = address.url else {
+        // IPv4 优先：局域网 SMB 的 IPv4 路径最稳；iOS 的 IPv6 link-local 地址
+        // 常带 scope id，libsmb2 直连容易超时。名称仍每次重新解析，不缓存 IP。
+        let ipv4 = resolved.first {
+            $0.contains(".") && !$0.contains(":") && !$0.hasPrefix("169.254.")
+        } ?? resolved.first { $0.contains(".") && !$0.contains(":") }
+
+        let url: URL?
+        if let ipv4 {
+            var text = "smb://\(ipv4)"
+            if let port = address.port {
+                text += ":\(port)"
+            }
+            url = URL(string: text)
+            Log.info(.smb, "连接地址优先 IPv4 host=\(address.raw) -> \(ipv4)")
+        } else {
+            url = address.url
+        }
+        guard let url else {
             throw SMBConnectionError.invalidAddress(address.raw)
         }
         return (address, url)

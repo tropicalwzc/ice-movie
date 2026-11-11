@@ -134,7 +134,8 @@ public enum SubtitleDiscovery {
     /// 真实库里字幕名往往和视频名不同：视频带 `[Kamigami]`、`[BD 1080p x265]`、
     /// `[YYDM-11FNAS]` 这类标签，字幕常省掉标签甚至换成另一种语言的标题。
     /// 因此匹配分三层，按可信度从高到低：
-    /// 1) 归一化标题完全一致（全方括号命名时两侧标题都为空，退化为集数一致）；
+    /// 1) 归一化标题完全一致（两侧都为空时不算命中——全方括号命名的标题干
+    ///    恒为空，据此放行等于按集数盲配；只有纯集数命名才退化为集数对齐）；
     /// 2) 标题词元模糊重合 ≥60%（括号内的作品名也参与，标签词被剔除）；
     /// 3) 一一对应：同目录同集数的视频只有本片、同集数字幕只有一套时，
     ///    允许标题完全对不上——字幕与剧集一一对应时这就是最强的信号。
@@ -155,18 +156,20 @@ public enum SubtitleDiscovery {
             let videosWithSameEpisode = video.episode.map { target in
                 episodesInDirectory.filter { $0 == target }.count
             } ?? 0
-            let subtitleBasesWithSameEpisode = {
-                var bases: Set<String> = []
-                for name in names {
-                    let ext = (name as NSString).pathExtension.lowercased()
-                    guard subtitleExtensions.contains(ext) else { continue }
-                    let parsed = signature(name)
-                    if let episode = parsed.episode, episode == video.episode {
-                        bases.insert(parsed.base)
-                    }
+            // “同集字幕有几套”必须按能区分作品的特征去重。全方括号命名
+            // （[A][Show][10]、[B][Other][10]）归一化后标题干是空串，直接拿
+            // base 去重会把不同作品合并成一套，让下面的一一对应规则误判为
+            // 唯一，从而把别的作品的同集字幕也放进来。用 identityKey 回退。
+            var subtitleSetsWithSameEpisode: Set<String> = []
+            for name in names {
+                let ext = (name as NSString).pathExtension.lowercased()
+                guard subtitleExtensions.contains(ext) else { continue }
+                let parsed = signature(name)
+                if let episode = parsed.episode, episode == video.episode {
+                    subtitleSetsWithSameEpisode.insert(identityKey(name, signature: parsed))
                 }
-                return bases.count
-            }()
+            }
+            let subtitleSetCount = subtitleSetsWithSameEpisode.count
 
             for name in names {
                 let ext = (name as NSString).pathExtension.lowercased()
@@ -177,7 +180,7 @@ public enum SubtitleDiscovery {
                     video: video,
                     candidate: parsed,
                     videosWithSameEpisode: videosWithSameEpisode,
-                    subtitleBasesWithSameEpisode: subtitleBasesWithSameEpisode
+                    subtitleSetsWithSameEpisode: subtitleSetCount
                 ) else { continue }
 
                 let language = SubtitleLanguage.detect(from: languageToken(of: name))
@@ -210,7 +213,9 @@ public enum SubtitleDiscovery {
     /// 匹配用的归一化特征：标题干、集数、季数、标题词元。
     struct Signature {
         var base: String
-        var episode: Int?
+        /// 集数允许小数：动画常见 17.5、13.5 这类总集篇/特别篇编号。
+        /// 与 `MediaTitleParser` 的 `episode: Double?` 保持一致。
+        var episode: Double?
         var season: Int?
         var tokens: Set<String>
     }
@@ -230,24 +235,63 @@ public enum SubtitleDiscovery {
         video: Signature,
         candidate: Signature,
         videosWithSameEpisode: Int,
-        subtitleBasesWithSameEpisode: Int
+        subtitleSetsWithSameEpisode: Int
     ) -> Bool {
         if let a = video.season, let b = candidate.season, a != b { return false }
         if let a = video.episode, let b = candidate.episode, a != b { return false }
 
-        if candidate.base == video.base {
-            if !candidate.base.isEmpty { return true }
-            // 全方括号命名：去标签后标题为空串，只能靠集数对齐。
-            if video.episode != nil, candidate.episode != nil { return true }
+        if !candidate.base.isEmpty, candidate.base == video.base { return true }
+        // 两侧都没有标题干时不能一律按集数放行：全方括号命名（[YYDM][Artist][10]）
+        // 归一化后 base 恒为空，但文件名里其实带着作品名词元，无条件放行会让
+        // 同目录另一部作品的同集字幕混进来。只有双方都拿不到任何标题信息
+        // （EP01.mkv 对 ep01.chs.ass 这种纯集数命名）时，集数才是唯一信号。
+        if candidate.base.isEmpty, video.base.isEmpty,
+           candidate.tokens.isEmpty, candidate.tokens.isEmpty,
+           video.episode != nil, candidate.episode != nil {
+            return true
         }
 
-        if tokenOverlap(video.tokens, candidate.tokens) >= 0.6 { return true }
+        if tokenOverlap(video.tokens, candidate.tokens) >= 0.6 {
+            // 视频集数解析不出来时（SP1、OVA、未识别的编号），词元一致会把
+            // 同作品所有集数的字幕都吞进来——真实库出现过第 17.5 集把 59 条
+            // 跨集字幕全部匹配上的情况。这种没有集数约束的匹配必须要求候选
+            // 同样不带集数标记，才允许放行。
+            if video.episode == nil, candidate.episode != nil { return false }
+            return true
+        }
 
         if let episode = video.episode, candidate.episode == episode,
-           videosWithSameEpisode == 1, subtitleBasesWithSameEpisode == 1 {
+           videosWithSameEpisode == 1, subtitleSetsWithSameEpisode == 1 {
             return true
         }
         return false
+    }
+
+    /// 字幕“套数”的去重键：用来判断同目录同集字幕是否只有一套。
+    ///
+    /// `base` 只在文件里有括号外标题时才非空；全方括号命名（真实库的动画、
+    /// 压制组资源）归一化后恒为空串，拿它去重会把不同作品合成一套。此时
+    /// 回退到标题词元集合，再退到去掉语言标记的文件名主干：
+    /// - `[A][Show][10].ass` 与 `[B][OtherShow][10].ass` → 词元不同 → 两套（消歧失效）
+    /// - `[A][Show][10].chs.ass` 与 `[B][Show][10].cht.ass` → 词元相同 → 一套（同作品不同语言）
+    static func identityKey(_ name: String, signature parsed: Signature) -> String {
+        if !parsed.base.isEmpty { return "base:\(parsed.base)" }
+        if !parsed.tokens.isEmpty {
+            return "tokens:" + parsed.tokens.sorted().joined(separator: "|")
+        }
+        // 既无标题干也无词元（纯集数、纯标签命名）：退回去掉语言标记的文件名主干，
+        // 让 10.chs.ass 与 10.cht.ass 仍归为同一套。
+        let stem = (name as NSString).deletingPathExtension
+        let cleaned = stem.replacingOccurrences(
+            of: languageTokenPattern,
+            with: " ",
+            options: .regularExpression
+        )
+        return "stem:" + cleaned.lowercased().trimmingCharacters(in: .whitespaces)
+    }
+
+    static func identityKey(_ name: String) -> String {
+        identityKey(name, signature: signature(name))
     }
 
     /// 词元重合度：交集 / 较少一侧的词数；任一侧没有词元时按 0 处理。
@@ -274,6 +318,11 @@ public enum SubtitleDiscovery {
         }
         return nil
     }
+
+    /// 语言/来源标记的完整词匹配，parse 与 identityKey 共用，避免两处规则漂移。
+    /// 只匹配完整词，避免把 School 里的 "sc"、Match 里的 "tc" 之类误删。
+    private static let languageTokenPattern =
+        "(?i)(?<![a-z0-9])(chs|cht|jpn|jap|eng|english|japanese|sc|tc|zh-hans|zh-hant|forced)(?![a-z0-9])"
 
     /// 不参与标题匹配的常见标签/语言/来源词。含数字的标签
     /// （720P、X264、AB43189A、11FNAS 等）在词元阶段已按“含数字”剔除。
@@ -320,25 +369,30 @@ public enum SubtitleDiscovery {
     }
 
     /// 归一化：去标签、去语言标记、抽集数，只留字母数字与汉字。
-    static func parse(_ name: String) -> (base: String, episode: Int?) {
+    ///
+    /// 集数用 `Double`：动画里 17.5、13.5 这类总集篇/特别篇编号很常见，
+    /// 用整数会把它们解析成 nil，进而让集数否决失效（同作品任意集数的字幕
+    /// 都会被词元规则匹配上）。取值规则与 `MediaTitleParser` 对齐。
+    static func parse(_ name: String) -> (base: String, episode: Double?) {
         var stem = (name as NSString).deletingPathExtension
-        var episode: Int?
+        var episode: Double?
         // 集数可能整个包在方括号里（[YYDM-11FNAS][Angel Beats][10][BDRIP]…）。
         // 必须在去括号之前抽取：否则 [10] 会被整段删掉，集数丢失、标题也只剩
         // 空串，这类全方括号命名的视频永远匹配不上外挂字幕（真实库很常见）。
-        if let regex = try? NSRegularExpression(pattern: "\\[0*(\\d{1,3})(?:v\\d+)?\\]"),
+        if let regex = try? NSRegularExpression(
+            pattern: "\\[0*(\\d{1,3}(?:\\.\\d{1,2})?)(?:v\\d+)?\\]"
+        ),
            let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
            let range = Range(match.range(at: 1), in: stem) {
-            episode = Int(stem[range])
+            episode = Double(stem[range])
         }
         for pattern in ["\\[[^\\]]*\\]", "\\([^)]*\\)", "（[^）]*）"] {
             stem = stem.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
         }
         // 语言标记先摘掉，避免 .chs 干扰集数识别与标题比较。
-        // 真实库常见组合后缀：.Chs&Jap / .Cht&Jap / .Jap / .Eng；只匹配完整词，
-        // 避免把 School 里的 "sc"、Match 里的 "tc" 之类误删。
+        // 真实库常见组合后缀：.Chs&Jap / .Cht&Jap / .Jap / .Eng。
         stem = stem.replacingOccurrences(
-            of: "(?i)(?<![a-z0-9])(chs|cht|jpn|jap|eng|english|japanese|sc|tc|zh-hans|zh-hant|forced)(?![a-z0-9])",
+            of: languageTokenPattern,
             with: " ",
             options: .regularExpression
         )
@@ -347,10 +401,12 @@ public enum SubtitleDiscovery {
         if episode == nil {
             // S02E05 这类美剧命名：集数在 E 后面，且整段含数字会被词元阶段剔除，
             // 必须先抽出来，否则 S02E05 与 S02E06 会因词元完全一致而错配。
-            if let regex = try? NSRegularExpression(pattern: "(?i)\\bs\\d{1,2}e0*(\\d{1,3})\\b"),
+            if let regex = try? NSRegularExpression(
+                pattern: "(?i)\\bs\\d{1,2}e0*(\\d{1,3}(?:\\.\\d{1,2})?)\\b"
+            ),
                let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
                let range = Range(match.range(at: 1), in: stem),
-               let value = Int(stem[range]) {
+               let value = Double(stem[range]) {
                 episode = value
                 if let whole = Range(match.range, in: stem) {
                     stem.replaceSubrange(whole, with: " ")
@@ -359,15 +415,15 @@ public enum SubtitleDiscovery {
         }
         if episode == nil {
             let patterns = [
-                "(?i)\\bep?\\s*0*(\\d{1,3})\\b",
-                "第\\s*0*(\\d{1,3})\\s*[集话話]",
-                "[\\s\\-_]0*(\\d{1,3})(?=[\\s.]|$)",
+                "(?i)\\bep?\\s*0*(\\d{1,3}(?:\\.\\d{1,2})?)\\b",
+                "第\\s*0*(\\d{1,3}(?:\\.\\d{1,2})?)\\s*[集话話]",
+                "[\\s\\-_]0*(\\d{1,3}(?:\\.\\d{1,2})?)(?=[\\s.]|$)",
             ]
             for pattern in patterns {
                 guard let regex = try? NSRegularExpression(pattern: pattern),
                       let match = regex.firstMatch(in: stem, range: NSRange(stem.startIndex..., in: stem)),
                       let range = Range(match.range(at: 1), in: stem),
-                      let value = Int(stem[range]) else { continue }
+                      let value = Double(stem[range]) else { continue }
                 episode = value
                 if let whole = Range(match.range, in: stem) {
                     stem.replaceSubrange(whole, with: " ")

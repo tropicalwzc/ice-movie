@@ -120,6 +120,12 @@ def summarize_share(entry):
     first = values(stress, "clickToFirstVideoMilliseconds")
     sync_ok = sum(1 for x in stress if x.get("stressSyncOK") is True)
     stamps = [x.get("capturedAt", "") for x in stress if x.get("capturedAt")]
+    subtitle_items = [x for x in stress if int(num(x, "subtitleCues")) > 0]
+    subtitle_first = [
+        num(x, "subtitleFirstCueMilliseconds")
+        for x in subtitle_items
+        if num(x, "subtitleFirstCueMilliseconds") > 0
+    ]
     return {
         "share": entry["share"],
         "candidates": entry["plan"].get("stressAllCount", "—"),
@@ -132,6 +138,11 @@ def summarize_share(entry):
         "seek_avg": statistics.mean(seek) if seek else 0,
         "seek_p90": q(seek, 0.9),
         "seek_max": max(seek) if seek else 0,
+        "subtitle_items": len(subtitle_items),
+        "subtitle_missing": len(stress) - len(subtitle_items),
+        "subtitle_avg": statistics.mean(subtitle_first) if subtitle_first else 0,
+        "subtitle_p90": q(subtitle_first, 0.9),
+        "subtitle_max": max(subtitle_first) if subtitle_first else 0,
         "file_exceptions": sum(1 for x in stress if x.get("stressFileException") is True),
         "buffer_exceptions": sum(1 for x in stress if x.get("stressBufferException") is True),
         "open_failed": len(entry["open_failed"]),
@@ -155,6 +166,8 @@ def main():
     parser.add_argument("--play-seconds", type=float, default=60)
     parser.add_argument("--seek-after", type=float, default=4)
     parser.add_argument("--seek-fraction", type=float, default=0.5)
+    parser.add_argument("--random", action="store_true",
+                        help="每条播放时长和 seek 位置随机")
     parser.add_argument("--baseline", action="append", default=[],
                         help="label=path/to/older/ice-acceptance.json")
     args = parser.parse_args()
@@ -209,6 +222,30 @@ def main():
     buffer_exceptions = [x for x in all_stress if x.get("stressBufferException") is True]
     serious = sum(1 for x in all_stress if x.get("stressSeriousBug") is True)
     subtitle_errors = [x for x in all_stress if (x.get("subtitleError") or "").strip()]
+    subtitle_items = [x for x in all_stress if int(num(x, "subtitleCues")) > 0]
+    subtitle_track_items = [
+        x for x in all_stress if (x.get("subtitleTrack") or "").strip()
+    ]
+    subtitle_failed = [
+        x for x in subtitle_track_items if int(num(x, "subtitleCues")) == 0
+    ]
+    subtitle_none = len(all_stress) - len(subtitle_track_items)
+    subtitle_first = [
+        num(x, "subtitleFirstCueMilliseconds")
+        for x in subtitle_items
+        if num(x, "subtitleFirstCueMilliseconds") > 0
+    ]
+    subtitle_missing = len(all_stress) - len(subtitle_items)
+    subtitle_under_1s = sum(1 for v in subtitle_first if v <= 1000)
+    subtitle_under_3s = sum(1 for v in subtitle_first if v <= 3000)
+    subtitle_over_5s = sum(1 for v in subtitle_first if v > 5000)
+    total_play_seconds = (
+        sum(num(x, "stressPlaySeconds") for x in all_stress)
+        if args.random
+        else len(all_stress) * args.play_seconds
+    )
+    subtitle_avg_text = ms(statistics.mean(subtitle_first)) if subtitle_first else "—"
+    subtitle_p90_text = ms(q(subtitle_first, 0.9)) if subtitle_first else "—"
     under_1500 = sum(1 for v in click_first if v <= 1500)
     under_2000 = sum(1 for v in click_first if v <= 2000)
     under_5000 = sum(1 for v in click_first if v <= 5000)
@@ -245,6 +282,18 @@ def main():
             violations.append((share, item.get("stressIndex"), label, "seek 后画面时间基跳变",
                                int(num(item, "seekTimebaseJumpCount"))))
 
+    if args.random:
+        test_method = (
+            "每个共享独立启动一进程；随机抽取视频，每条播放 45–150 秒，"
+            "播放 3–12 秒后 seek 到 10%–85% 随机位置"
+        )
+    else:
+        test_method = (
+            "每个共享独立启动一进程；随机抽取视频，播放 "
+            f"{int(args.seek_after)} 秒后 seek 到 {args.seek_fraction * 100:.2f}%，再播放 "
+            f"{max(1, int(args.play_seconds - args.seek_after))} 秒"
+        )
+
     lines = [
         "# 多磁盘轮换随机播放 / 跳转基准测试报告",
         "",
@@ -253,9 +302,7 @@ def main():
         f"- 主机：`{args.host}`",
         f"- 共享（磁盘）轮换顺序：{' → '.join(entry['share'] for entry in entries)}",
         f"- 构建：{args.build}",
-        f"- 测试方式：每个共享独立启动一进程；随机抽取视频，播放 "
-        f"{int(args.seek_after)} 秒后 seek 到 {args.seek_fraction * 100:.2f}%，再播放 "
-        f"{max(1, int(args.play_seconds - args.seek_after))} 秒",
+        f"- 测试方式：{test_method}",
     ]
     if args.args:
         lines.append(f"- 启动参数：`{args.args}`")
@@ -269,7 +316,7 @@ def main():
         f"- 覆盖共享：**{len(entries)}** 个",
         f"- 完成视频：**{len(all_stress)}** 条",
         f"- 计划抽取：{' + '.join(str(s['picked']) for s in summaries)} 条",
-        f"- 有效播放时长：约 {len(all_stress) * args.play_seconds / 60:.0f} 分钟；"
+        f"- 有效播放时长：约 {total_play_seconds / 60:.0f} 分钟；"
         f"抽样影片总时长 {sum(values(all_stress, 'durationSeconds')) / 3600:.1f} 小时",
         f"- 硬件严重问题：{serious}",
         f"- 打开失败（历史路径失效/解码器缺失等）：{len(all_open_failed)}",
@@ -281,6 +328,9 @@ def main():
         f"{click_first_note}",
         f"- seek 命中缓存：{seek_cache_hits}/{len(all_stress)}",
         f"- 字幕错误：{len(subtitle_errors)} 条",
+        f"- 字幕首条 cue：有字幕轨 {len(subtitle_track_items)}/{len(all_stress)}，"
+        f"成功出 cue {len(subtitle_items)}，有轨未出 cue {len(subtitle_failed)}，"
+        f"无字幕轨 {subtitle_none}；平均 {subtitle_avg_text}，p90 {subtitle_p90_text}",
         f"- 时间范围：{summaries[0]['started']} → {summaries[-1]['ended']}",
         "",
         "## 分磁盘结果",
@@ -288,11 +338,13 @@ def main():
     ]
     lines += table(
         ["共享", "候选", "抽取", "完成", "首帧 avg", "首帧 p90", "首帧 max",
-         "同步", "seek avg", "seek max", "文件异常", "缓冲异常", "打开失败", "停止原因"],
+         "同步", "seek avg", "seek max", "文件异常", "缓冲异常", "打开失败",
+         "字幕 avg", "无字幕", "停止原因"],
         [[s["share"], s["candidates"], s["picked"], s["played"],
           ms(s["first_avg"]), ms(s["first_p90"]), ms(s["first_max"]),
           f"{s['sync_ok']}/{s['played']}", ms(s["seek_avg"]), ms(s["seek_max"]),
-          s["file_exceptions"], s["buffer_exceptions"], s["open_failed"], s["stop"]]
+          s["file_exceptions"], s["buffer_exceptions"], s["open_failed"],
+          ms(s["subtitle_avg"]), s["subtitle_missing"], s["stop"]]
          for s in summaries],
     )
     lines += [""]
@@ -307,6 +359,21 @@ def main():
               stat_line("打开阶段读取字节", open_bytes, lambda v: f"{int(v / 1024)}KB"),
               stat_line("容器头缓存命中率", cache_ratio, pct),
               ""]
+
+    lines += ["## 字幕速度", ""]
+    lines += [
+        f"- 有字幕轨：{len(subtitle_track_items)}/{len(all_stress)}；"
+        f"成功出 cue {len(subtitle_items)}；"
+        f"有轨未出 cue {len(subtitle_failed)}；无字幕轨 {subtitle_none}"
+    ]
+    lines += [stat_line("开始加载 → 首条 cue", subtitle_first, ms)]
+    if subtitle_first:
+        lines += [
+            f"- 首条 cue ≤1s：{subtitle_under_1s}/{len(subtitle_first)}；"
+            f"≤3s：{subtitle_under_3s}/{len(subtitle_first)}；"
+            f">5s：{subtitle_over_5s}/{len(subtitle_first)}"
+        ]
+    lines += [""]
 
     lines += ["## 音画同步", ""]
     lines += [stat_line("整体 maxDrift", max_drift, sec),
@@ -361,6 +428,15 @@ def main():
           ms(x.get("streamInfoMilliseconds")), ms(x.get("firstVideoMilliseconds"))]
          for x in sorted(all_stress,
                          key=lambda z: -num(z, "clickToFirstVideoMilliseconds"))[:10]],
+    ) + [""]
+
+    lines += ["## 字幕最慢的 10 条", ""] + table(
+        ["共享", "#", "文件", "首条 cue", "字幕条数", "轨道"],
+        [[x.get("_share", ""), x.get("stressIndex"), short(x.get("path"), 38),
+          ms(x.get("subtitleFirstCueMilliseconds")),
+          int(num(x, "subtitleCues")), x.get("subtitleTrack", "")]
+         for x in sorted(subtitle_items,
+                         key=lambda z: -num(z, "subtitleFirstCueMilliseconds"))[:10]],
     ) + [""]
 
     lines += ["## Seek 最慢的 10 条", ""] + table(

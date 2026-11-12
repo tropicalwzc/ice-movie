@@ -39,4 +39,51 @@ final class PlaybackQueueTests: XCTestCase {
         let folder = entry("白箱", directory: true)
         XCTAssertNil(PlaybackQueue.next(after: folder, in: [folder, entry("01.mkv")]))
     }
+
+    func testDocumentsAreNeverSelected() {
+        let first = entry("Shirobako 01.mkv")
+        let entries = [
+            first,
+            entry("notes.md"),
+            entry("guide.pdf"),
+            entry("Shirobako 02.mkv"),
+        ]
+        XCTAssertEqual(
+            PlaybackQueue.next(after: first, in: entries)?.name,
+            "Shirobako 02.mkv"
+        )
+    }
+
+    func testDocumentNeverAdvances() {
+        let document = entry("notes.md")
+        XCTAssertNil(
+            PlaybackQueue.next(after: document, in: [document, entry("Shirobako 01.mkv")])
+        )
+    }
+
+    func testNoNextVideoAfterLastVideoWithDocuments() {
+        let last = entry("Shirobako 03.mkv")
+        let entries = [last, entry("notes.md"), entry("guide.pdf")]
+        XCTAssertNil(PlaybackQueue.next(after: last, in: entries))
+    }
+
+    func testImagesAreNeverSelected() {
+        let first = entry("Shirobako 01.mkv")
+        let entries = [
+            first,
+            entry("IMG_0001.HEIC"),
+            entry("Shirobako 02.mkv"),
+        ]
+        XCTAssertEqual(
+            PlaybackQueue.next(after: first, in: entries)?.name,
+            "Shirobako 02.mkv"
+        )
+    }
+
+    func testImageNeverAdvances() {
+        let image = entry("IMG_0001.HEIC")
+        XCTAssertNil(
+            PlaybackQueue.next(after: image, in: [image, entry("Shirobako 01.mkv")])
+        )
+    }
 }

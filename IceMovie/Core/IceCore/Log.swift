@@ -141,7 +141,11 @@ public enum Log {
     }
 
     private static let fileQueue = DispatchQueue(label: "icemovie.log.file")
+    /// 单个日志文件上限；保留当前文件与一个 `.1` 轮转文件。
+    private static let maximumFileBytes: Int64 = 4 * 1024 * 1024
     nonisolated(unsafe) private static var fileHandle: FileHandle?
+    nonisolated(unsafe) private static var fileURL: URL?
+    nonisolated(unsafe) private static var fileBytes: Int64 = 0
 
     /// `-debugLog` 时把日志同步落盘，便于真机复现后取回。
     public static func enableFileLogging(fileName: String = "ice-playback.log") {
@@ -153,6 +157,9 @@ public enum Log {
                 for: .documentDirectory,
                 in: .userDomainMask
             )[0].appendingPathComponent(fileName)
+            if fileSize(url) > maximumFileBytes {
+                rotateFile(at: url)
+            }
             if !FileManager.default.fileExists(atPath: url.path) {
                 FileManager.default.createFile(atPath: url.path, contents: nil)
             }
@@ -164,19 +171,40 @@ public enum Log {
                 return
             }
             fileHandle = handle
+            fileURL = url
+            fileBytes = fileSize(url)
         }
+    }
+
+    private static func fileSize(_ url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return Int64(values?.fileSize ?? 0)
+    }
+
+    /// 当前文件改名到 `.1`，旧 `.1` 删除；总占用最多两份。
+    private static func rotateFile(at url: URL) {
+        let backup = url.appendingPathExtension("1")
+        try? FileManager.default.removeItem(at: backup)
+        try? FileManager.default.moveItem(at: url, to: backup)
+        FileManager.default.createFile(atPath: url.path, contents: nil)
     }
 
     private static func write(_ level: LogLevel, _ category: LogCategory, _ message: String) {
         guard level >= LogStore.shared.minimumLevel else { return }
         LogStore.shared.append(level: level, category: category, message: message)
         fileQueue.async {
-            guard let fileHandle else { return }
+            guard let fileHandle, let fileURL else { return }
             let stamp = ISO8601DateFormatter().string(from: Date())
             let line = "\(stamp) [\(level.label)] [\(category.rawValue)] \(message)\n"
-            if let data = line.data(using: .utf8) {
-                try? fileHandle.write(contentsOf: data)
-            }
+            guard let data = line.data(using: .utf8) else { return }
+            try? fileHandle.write(contentsOf: data)
+            fileBytes += Int64(data.count)
+            guard fileBytes > maximumFileBytes else { return }
+            try? fileHandle.close()
+            rotateFile(at: fileURL)
+            guard let rotated = try? FileHandle(forWritingTo: fileURL) else { return }
+            Self.fileHandle = rotated
+            fileBytes = 0
         }
         guard let logger = loggers[category] else { return }
         switch level {

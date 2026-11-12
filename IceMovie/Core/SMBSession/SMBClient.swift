@@ -40,12 +40,13 @@ public enum SMBConnectionError: LocalizedError, Sendable {
     case authenticationFailed(String)
     case staleHandle(String)
     case notConnected
+    case alreadyExists(String)
     case failed(String)
 
     /// 认证与地址类错误重试没有意义；网络与句柄类错误可以尝试重连后重试一次。
     public var isRecoverable: Bool {
         switch self {
-        case .authenticationFailed, .invalidAddress, .nameNotResolved:
+        case .authenticationFailed, .invalidAddress, .nameNotResolved, .alreadyExists:
             false
         case .unreachable, .staleHandle, .notConnected, .failed:
             true
@@ -66,6 +67,8 @@ public enum SMBConnectionError: LocalizedError, Sendable {
             "文件句柄已失效，会话可能已断开：\(detail)"
         case .notConnected:
             "尚未连接共享"
+        case .alreadyExists(let path):
+            "目标文件已存在，未覆盖：\(path)"
         case .failed(let detail):
             "连接失败：\(detail)"
         }
@@ -402,6 +405,388 @@ public actor SMBClient {
         }
     }
 
+    /// 覆盖共享内的文件。
+    ///
+    /// 先写临时文件并校验大小，再把原文件移到备份、临时文件改名到目标；
+    /// 任一步失败都会尽量恢复原文件，避免留下半截照片。
+    public func overwriteFile(
+        path: String,
+        data: Data,
+        modified: Date?
+    ) async throws {
+        try await ensureManager()
+        do {
+            try await performOverwrite(path: path, data: data, modified: modified)
+        } catch {
+            let mapped = (error as? SMBConnectionError)
+                ?? Self.map(error, host: connectedHost ?? "")
+            guard mapped.isRecoverable else { throw mapped }
+            Log.notice(.smb, "覆盖写入失败，重连后重试一次 \(Log.shortPath(path))")
+            try await reconnectNow()
+            do {
+                try await performOverwrite(path: path, data: data, modified: modified)
+            } catch {
+                throw (error as? SMBConnectionError)
+                    ?? Self.map(error, host: connectedHost ?? "")
+            }
+        }
+    }
+
+    /// 创建一个新文件，绝不覆盖已有文件。
+    ///
+    /// 先写同目录临时文件并校验大小，再改名为最终文件；任一步失败都会清理临时文件。
+    /// 可恢复错误会重连后重试一次；如果重试时发现最终文件已经完整存在，视为上次
+    /// 已成功改名，只是响应丢失。
+    /// 读取小型文件（索引/缩略图），带大小上限与重连重试。
+    public func readFile(
+        path: String,
+        maxBytes: Int64,
+        priority: SMBReadPriority = .subtitle
+    ) async throws -> Data {
+        let source: any ByteSource
+        do {
+            source = try await openByteSource(path: path, priority: priority)
+        } catch {
+            throw (error as? SMBConnectionError)
+                ?? Self.map(error, host: connectedHost ?? "")
+        }
+        do {
+            guard let length = source.length else {
+                await source.close()
+                throw SMBConnectionError.failed("无法读取文件大小 \(Log.shortPath(path))")
+            }
+            guard length >= 0, length <= maxBytes else {
+                await source.close()
+                throw SMBConnectionError.failed(
+                    "文件过大 \(Log.shortPath(path)) \(length)/\(maxBytes) 字节"
+                )
+            }
+            var data = Data()
+            data.reserveCapacity(Int(length))
+            var offset: Int64 = 0
+            while offset < length {
+                try Task.checkCancellation()
+                let chunk = try await source.read(
+                    at: offset,
+                    count: min(1024 * 1024, Int(length - offset))
+                )
+                guard !chunk.isEmpty else { break }
+                data.append(chunk)
+                offset += Int64(chunk.count)
+            }
+            await source.close()
+            guard data.count == Int(length) else {
+                throw SMBConnectionError.failed(
+                    "读取不完整 \(Log.shortPath(path)) \(data.count)/\(length) 字节"
+                )
+            }
+            return data
+        } catch {
+            await source.close()
+            if Task.isCancelled { throw CancellationError() }
+            throw (error as? SMBConnectionError)
+                ?? Self.map(error, host: connectedHost ?? "")
+        }
+    }
+
+    /// 创建目录及其父目录；已存在时直接返回。
+    public func createDirectory(path: String) async throws {
+        try await ensureManager()
+        do {
+            try await performCreateDirectory(path: path)
+        } catch {
+            let mapped = (error as? SMBConnectionError)
+                ?? Self.map(error, host: connectedHost ?? "")
+            guard mapped.isRecoverable else { throw mapped }
+            Log.notice(.smb, "创建目录失败，重连后重试一次 \(Log.shortPath(path))")
+            try await reconnectNow()
+            try await performCreateDirectory(path: path)
+        }
+    }
+
+    public func fileExists(path: String) async throws -> Bool {
+        try await ensureManager()
+        guard let manager else { throw SMBConnectionError.notConnected }
+        return await fileExists(atPath: path, manager: manager)
+    }
+
+    private func performCreateDirectory(path: String) async throws {
+        guard let manager else { throw SMBConnectionError.notConnected }
+        let components = path.split(separator: "/", omittingEmptySubsequences: true)
+        guard !components.isEmpty else { return }
+        var current = ""
+        for component in components {
+            current += current.isEmpty ? String(component) : "/\(component)"
+            if await fileExists(atPath: current, manager: manager) {
+                continue
+            }
+            do {
+                try await manager.createDirectory(atPath: current)
+                Log.debug(.smb, "创建目录成功 \(Log.shortPath(current))")
+            } catch {
+                // 并发创建或其他客户端已建好时，存在即视为成功。
+                if await fileExists(atPath: current, manager: manager) {
+                    continue
+                }
+                throw error
+            }
+        }
+    }
+
+    public func createFile(
+        path: String,
+        data: Data,
+        modified: Date?,
+        onProgress: (@Sendable (Int64) -> Bool)?
+    ) async throws {
+        try await ensureManager()
+        do {
+            try await performCreate(
+                path: path,
+                data: data,
+                modified: modified,
+                onProgress: onProgress
+            )
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            let mapped = (error as? SMBConnectionError)
+                ?? Self.map(error, host: connectedHost ?? "")
+            guard mapped.isRecoverable else { throw mapped }
+            Log.notice(.smb, "创建文件失败，重连后重试一次 \(Log.shortPath(path))")
+            try await reconnectNow()
+            do {
+                try await performCreate(
+                    path: path,
+                    data: data,
+                    modified: modified,
+                    onProgress: onProgress
+                )
+            } catch {
+                if Task.isCancelled { throw CancellationError() }
+                if let manager,
+                   let actual = try? await fileSize(atPath: path, manager: manager),
+                   actual == Int64(data.count) {
+                    Log.info(
+                        .smb,
+                        "重试时发现文件已完整存在，视为创建成功 \(Log.shortPath(path)) \(actual)B"
+                    )
+                    return
+                }
+                throw (error as? SMBConnectionError)
+                    ?? Self.map(error, host: connectedHost ?? "")
+            }
+        }
+    }
+
+    private func performCreate(
+        path: String,
+        data: Data,
+        modified: Date?,
+        onProgress: (@Sendable (Int64) -> Bool)?
+    ) async throws {
+        guard let manager else { throw SMBConnectionError.notConnected }
+        guard !(await fileExists(atPath: path, manager: manager)) else {
+            throw SMBConnectionError.alreadyExists(path)
+        }
+
+        let tempPath = "\(path).icemovie-tmp-\(UUID().uuidString)"
+        let progressState = ProgressAbortState()
+        do {
+            let progress: @Sendable (Int64) -> Bool = { bytes in
+                let shouldContinue = onProgress?(bytes) ?? true
+                if !shouldContinue {
+                    progressState.markAborted()
+                }
+                return shouldContinue
+            }
+            try await manager.write(
+                data: data,
+                toPath: tempPath,
+                progress: progress
+            )
+            if progressState.isAborted || Task.isCancelled {
+                throw CancellationError()
+            }
+
+            let attributes = try await manager.attributesOfItem(atPath: tempPath)
+            let actualSize = (attributes[.fileSizeKey] as? NSNumber)?.int64Value
+                ?? (attributes[.fileSizeKey] as? Int64)
+                ?? Int64(data.count)
+            guard actualSize == Int64(data.count) else {
+                throw SMBConnectionError.failed(
+                    "写入后大小不一致：\(actualSize)/\(data.count) 字节"
+                )
+            }
+
+            guard !(await fileExists(atPath: path, manager: manager)) else {
+                throw SMBConnectionError.alreadyExists(path)
+            }
+            try await manager.moveItem(atPath: tempPath, toPath: path)
+            if let modified {
+                try? await manager.setAttributes(
+                    attributes: [.contentModificationDateKey: modified],
+                    ofItemAtPath: path
+                )
+            }
+            Log.info(
+                .smb,
+                "创建文件成功 \(Log.shortPath(path)) \(data.count)B "
+                    + "修改时间=\(modified?.description ?? "保持")"
+            )
+        } catch {
+            try? await manager.removeItem(atPath: tempPath)
+            Log.error(
+                .smb,
+                "创建文件失败 \(Log.shortPath(path)) \(error.localizedDescription) 临时文件已清理"
+            )
+            if Task.isCancelled { throw CancellationError() }
+            throw error
+        }
+    }
+
+    private func fileExists(atPath path: String, manager: SMB2Manager) async -> Bool {
+        do {
+            _ = try await manager.attributesOfItem(atPath: path)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// 诊断/清理用：删除共享内的单个文件。只应删除调用方明确创建的文件。
+    public func removeFile(path: String) async throws {
+        try await ensureManager()
+        guard let manager else { throw SMBConnectionError.notConnected }
+        do {
+            try await manager.removeItem(atPath: path)
+            Log.info(.smb, "删除文件成功 \(Log.shortPath(path))")
+        } catch {
+            let mapped = (error as? SMBConnectionError)
+                ?? Self.map(error, host: connectedHost ?? "")
+            Log.error(.smb, "删除文件失败 \(Log.shortPath(path)) \(mapped.localizedDescription)")
+            throw mapped
+        }
+    }
+
+    private func fileSize(atPath path: String, manager: SMB2Manager) async throws -> Int64? {
+        let attributes = try await manager.attributesOfItem(atPath: path)
+        return (attributes[.fileSizeKey] as? NSNumber)?.int64Value
+            ?? (attributes[.fileSizeKey] as? Int64)
+    }
+
+    private func performOverwrite(
+        path: String,
+        data: Data,
+        modified: Date?
+    ) async throws {
+        guard let manager else { throw SMBConnectionError.notConnected }
+        let suffix = UUID().uuidString
+        let tempPath = "\(path).icemovie-tmp-\(suffix)"
+        let backupPath = "\(path).icemovie-bak-\(suffix)"
+        var originalMoved = false
+
+        do {
+            try await manager.write(
+                data: data,
+                toPath: tempPath,
+                progress: { _ in true }
+            )
+
+            let attributes = try await manager.attributesOfItem(atPath: tempPath)
+            let actualSize = (attributes[.fileSizeKey] as? NSNumber)?.int64Value
+                ?? (attributes[.fileSizeKey] as? Int64)
+                ?? Int64(data.count)
+            guard actualSize == Int64(data.count) else {
+                throw SMBConnectionError.failed(
+                    "写入后大小不一致：\(actualSize)/\(data.count) 字节"
+                )
+            }
+
+            try await manager.moveItem(atPath: path, toPath: backupPath)
+            originalMoved = true
+
+            do {
+                try await manager.moveItem(atPath: tempPath, toPath: path)
+            } catch {
+                if originalMoved {
+                    try? await manager.moveItem(atPath: backupPath, toPath: path)
+                    originalMoved = false
+                }
+                throw error
+            }
+
+            originalMoved = false
+            try? await manager.removeItem(atPath: backupPath)
+            if let modified {
+                try? await manager.setAttributes(
+                    attributes: [.contentModificationDateKey: modified],
+                    ofItemAtPath: path
+                )
+            }
+            Log.info(
+                .smb,
+                "覆盖写入成功 \(Log.shortPath(path)) \(data.count)B 修改时间=\(modified?.description ?? "保持")"
+            )
+        } catch {
+            try? await manager.removeItem(atPath: tempPath)
+            if originalMoved {
+                // 恢复失败时保留备份，绝不删除唯一副本。
+                try? await manager.moveItem(atPath: backupPath, toPath: path)
+            }
+            Log.error(.smb, "覆盖写入失败 \(Log.shortPath(path)) \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// 真机验收用：在指定目录创建临时文件、覆盖一次、再删除。
+    /// 只操作带 `__icemovie_write_probe_` 前缀的新文件，不触碰用户照片。
+    @discardableResult
+    public func runWriteProbe(
+        directoryPath: String,
+        payload: Data
+    ) async throws -> Int64 {
+        guard let manager else { throw SMBConnectionError.notConnected }
+        let prefix = directoryPath.isEmpty ? "" : directoryPath + "/"
+        let path = "\(prefix)__icemovie_write_probe_\(UUID().uuidString).png"
+        let replacement = Data(repeating: 0x5A, count: max(256, payload.count))
+        do {
+            try await manager.write(
+                data: payload,
+                toPath: path,
+                progress: { _ in true }
+            )
+            let firstAttributes = try await manager.attributesOfItem(atPath: path)
+            let firstSize = (firstAttributes[.fileSizeKey] as? NSNumber)?.int64Value
+                ?? Int64(payload.count)
+            guard firstSize == Int64(payload.count) else {
+                throw SMBConnectionError.failed("探针首次写入大小不一致")
+            }
+
+            try await overwriteFile(
+                path: path,
+                data: replacement,
+                modified: Date()
+            )
+            let secondAttributes = try await manager.attributesOfItem(atPath: path)
+            let secondSize = (secondAttributes[.fileSizeKey] as? NSNumber)?.int64Value
+                ?? Int64(replacement.count)
+            guard secondSize == Int64(replacement.count) else {
+                throw SMBConnectionError.failed("探针覆盖后大小不一致")
+            }
+
+            try await manager.removeItem(atPath: path)
+            Log.info(
+                .smb,
+                "写入探针成功 \(Log.shortPath(path)) 首次=\(payload.count)B 覆盖=\(replacement.count)B 已删除"
+            )
+            return Int64(replacement.count)
+        } catch {
+            try? await manager.removeItem(atPath: path)
+            Log.error(.smb, "写入探针失败 \(error.localizedDescription)")
+            throw error
+        }
+    }
+
     /// 打开共享内的文件作为随机可读字节源。默认按播放优先级读取。
     public func openByteSource(path: String) async throws -> any ByteSource {
         try await openByteSource(path: path, priority: .playback)
@@ -690,6 +1075,25 @@ public actor SMBClient {
 
     static func milliseconds(since date: Date) -> String {
         String(format: "%.0fms", Date().timeIntervalSince(date) * 1000)
+    }
+}
+
+/// 写入进度回调返回 false 时，AMSMB2 可能已经写完当前整块并正常返回。
+/// 用独立标记让 createFile 在 rename 前中止，避免把“已取消”的文件发布为最终文件。
+final class ProgressAbortState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var aborted = false
+
+    var isAborted: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return aborted
+    }
+
+    func markAborted() {
+        lock.lock()
+        aborted = true
+        lock.unlock()
     }
 }
 

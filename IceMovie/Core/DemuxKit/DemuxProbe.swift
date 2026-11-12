@@ -143,7 +143,8 @@ public enum DemuxProbe {
     public static func thumbnail(
         path: String,
         maxWidth: Int = 480,
-        position: Double? = nil
+        position: Double? = nil,
+        positionFraction: Double? = nil
     ) throws -> ThumbnailImage {
         var context: UnsafeMutablePointer<AVFormatContext>?
         let opened = avformat_open_input(&context, path, nil, nil)
@@ -152,7 +153,13 @@ public enum DemuxProbe {
 
         let info = avformat_find_stream_info(format, nil)
         guard info >= 0 else { throw DemuxError.streamInfoFailed(info) }
-        return try thumbnail(format: format, maxWidth: maxWidth, label: path, position: position)
+        return try thumbnail(
+            format: format,
+            maxWidth: maxWidth,
+            label: path,
+            position: position,
+            positionFraction: positionFraction
+        )
     }
 
     /// 通过字节源生成缩略图，供 SMB 媒体库使用。
@@ -160,7 +167,8 @@ public enum DemuxProbe {
         source: any ByteSource,
         label: String,
         maxWidth: Int = 480,
-        position: Double? = nil
+        position: Double? = nil,
+        positionFraction: Double? = nil
     ) throws -> ThumbnailImage {
         let bridge = try AVIOBridge(source: source)
         guard let context = avformat_alloc_context() else {
@@ -186,14 +194,21 @@ public enum DemuxProbe {
 
         let info = avformat_find_stream_info(format, nil)
         guard info >= 0 else { throw DemuxError.streamInfoFailed(info) }
-        return try thumbnail(format: format, maxWidth: maxWidth, label: label, position: position)
+        return try thumbnail(
+            format: format,
+            maxWidth: maxWidth,
+            label: label,
+            position: position,
+            positionFraction: positionFraction
+        )
     }
 
     private static func thumbnail(
         format: UnsafeMutablePointer<AVFormatContext>,
         maxWidth: Int,
         label: String,
-        position: Double? = nil
+        position: Double? = nil,
+        positionFraction: Double? = nil
     ) throws -> ThumbnailImage {
         let began = ProcessInfo.processInfo.systemUptime
         if let picture = attachedPictureData(format: format),
@@ -215,7 +230,8 @@ public enum DemuxProbe {
             format: format,
             maxWidth: maxWidth,
             label: label,
-            position: position
+            position: position,
+            positionFraction: positionFraction
         )
         let elapsed = Int((ProcessInfo.processInfo.systemUptime - began) * 1000)
         Log.info(
@@ -262,7 +278,8 @@ public enum DemuxProbe {
         format: UnsafeMutablePointer<AVFormatContext>,
         maxWidth: Int,
         label: String,
-        position: Double? = nil
+        position: Double? = nil,
+        positionFraction: Double? = nil
     ) throws -> (data: Data, width: Int, height: Int) {
         guard let videoIndex = videoStreamIndex(format: format) else {
             throw DemuxError.noVideoStream
@@ -280,6 +297,10 @@ public enum DemuxProbe {
         let target: Double
         if let position {
             target = max(0, position)
+        } else if let positionFraction, duration > 0 {
+            // 目录封面取“中间帧”：按片长比例定位，避免片头黑场。
+            let fraction = min(1, max(0, positionFraction))
+            target = min(duration * fraction, max(0, duration - 0.5))
         } else if duration > 3 {
             target = min(max(duration * 0.1, 1), max(0, duration - 1))
         } else {

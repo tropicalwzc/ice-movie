@@ -7,6 +7,11 @@ import IceCore
 /// 不写入；容量按文件最近访问做 LRU，单文件与全局都有上限。
 public actor ContainerHeaderCache {
     public static let pageSize = 64 * 1024
+    /// 容器头/尾页只影响二次打开速度，磁盘预算控制在几十 MB。
+    public static let defaultCapacityBytes: Int64 = 48 * 1024 * 1024
+    public static let defaultPerFileBytes: Int64 = 24 * 1024 * 1024
+    /// 预算或页格式变化时递增，旧缓存会在启动时整体重建。
+    private static let formatVersion = 3
     public static let shared: ContainerHeaderCache? = try? ContainerHeaderCache()
 
     public struct Key: Hashable, Sendable {
@@ -31,13 +36,21 @@ public actor ContainerHeaderCache {
         }
     }
 
+    /// 页在缓存文件中的紧凑槽位；不再按原文件偏移写稀疏文件，
+    /// 避免 APFS 为稀疏区间分配远超 64KB 的磁盘块。
+    private struct PageSlot: Codable {
+        var slot: Int
+        var bytes: Int
+    }
+
     private struct Entry: Codable {
         var namespace: String
         var path: String
         var size: Int64
         var modified: TimeInterval
         var fingerprint: UInt64
-        var pages: Set<Int>
+        var pages: [Int: PageSlot]
+        var nextSlot: Int
         var bytes: Int64
         var lastAccess: TimeInterval
     }
@@ -54,8 +67,8 @@ public actor ContainerHeaderCache {
 
     public init(
         directory: URL? = nil,
-        capacityBytes: Int64 = 512 * 1024 * 1024,
-        perFileBytes: Int64 = 64 * 1024 * 1024
+        capacityBytes: Int64 = defaultCapacityBytes,
+        perFileBytes: Int64 = defaultPerFileBytes
     ) throws {
         let base = directory ?? FileManager.default.urls(
             for: .cachesDirectory,
@@ -70,7 +83,23 @@ public actor ContainerHeaderCache {
             at: dataDirectory,
             withIntermediateDirectories: true
         )
-        entries = Self.loadIndex(indexURL: indexURL, dataDirectory: dataDirectory)
+        // 旧版本的 512MB 稀疏页在裁剪后仍可能保留已分配块；
+        // 版本变化时整目录重建，确保升级后实际占用立即降下来。
+        Self.resetIfVersionChanged(
+            base: base,
+            dataDirectory: dataDirectory,
+            indexURL: indexURL
+        )
+        var loaded = Self.loadIndex(indexURL: indexURL, dataDirectory: dataDirectory)
+        // 升级后或上次异常退出时可能留下超限数据/孤儿文件；启动时先收敛到新预算。
+        Self.prune(
+            entries: &loaded,
+            dataDirectory: dataDirectory,
+            indexURL: indexURL,
+            capacityBytes: self.capacityBytes,
+            perFileBytes: self.perFileBytes
+        )
+        entries = loaded
     }
 
     public func totalBytes() -> Int64 {
@@ -86,7 +115,7 @@ public actor ContainerHeaderCache {
     ) -> Data? {
         guard let entry = entries.values.first(where: {
             $0.namespace == namespace && $0.path == path &&
-                $0.size == size && $0.modified == modified && $0.pages.contains(0)
+                $0.size == size && $0.modified == modified && $0.pages[0] != nil
         }) else { return nil }
         let key = Key(
             namespace: entry.namespace,
@@ -99,7 +128,9 @@ public actor ContainerHeaderCache {
     }
 
     public func cachedPage(for key: Key, page: Int) -> Data? {
-        guard page >= 0, let entry = entry(for: key), entry.pages.contains(page) else {
+        guard page >= 0,
+              let entry = entry(for: key),
+              let stored = entry.pages[page] else {
             return nil
         }
         let url = dataURL(for: key)
@@ -109,9 +140,11 @@ public actor ContainerHeaderCache {
         }
         defer { try? handle.close() }
         do {
-            try handle.seek(toOffset: UInt64(page * ContainerHeaderCache.pageSize))
-            let data = try handle.read(upToCount: ContainerHeaderCache.pageSize) ?? Data()
-            guard !data.isEmpty else {
+            try handle.seek(
+                toOffset: UInt64(stored.slot * ContainerHeaderCache.pageSize)
+            )
+            let data = try handle.read(upToCount: stored.bytes) ?? Data()
+            guard data.count == stored.bytes else {
                 entryPagesRemove(key: key, page: page)
                 return nil
             }
@@ -131,7 +164,8 @@ public actor ContainerHeaderCache {
             size: key.size,
             modified: key.modified,
             fingerprint: key.fingerprint,
-            pages: [],
+            pages: [:],
+            nextSlot: 0,
             bytes: 0,
             lastAccess: nextAccess()
         )
@@ -144,18 +178,23 @@ public actor ContainerHeaderCache {
             FileManager.default.createFile(atPath: url.path, contents: nil)
         }
         guard let handle = try? FileHandle(forWritingTo: url) else { return }
+        let existing = entry.pages[page]
+        let slot = existing?.slot ?? entry.nextSlot
         do {
-            try handle.seek(toOffset: UInt64(page * ContainerHeaderCache.pageSize))
+            try handle.seek(toOffset: UInt64(slot * ContainerHeaderCache.pageSize))
             try handle.write(contentsOf: data)
             try handle.close()
         } catch {
             try? handle.close()
             return
         }
-        if !entry.pages.contains(page) {
-            entry.bytes += Int64(data.count)
+        if let existing {
+            entry.bytes = max(0, entry.bytes - Int64(existing.bytes))
+        } else {
+            entry.nextSlot += 1
         }
-        entry.pages.insert(page)
+        entry.bytes += Int64(data.count)
+        entry.pages[page] = PageSlot(slot: slot, bytes: data.count)
         entry.lastAccess = nextAccess()
         entries[storageKey(for: key)] = entry
         trimIfNeeded()
@@ -201,8 +240,9 @@ public actor ContainerHeaderCache {
 
     private func entryPagesRemove(key: Key, page: Int) {
         let name = storageKey(for: key)
-        guard var entry = entries[name], entry.pages.remove(page) != nil else { return }
-        entry.bytes = max(0, entry.bytes - Int64(ContainerHeaderCache.pageSize))
+        guard var entry = entries[name],
+              let removed = entry.pages.removeValue(forKey: page) else { return }
+        entry.bytes = max(0, entry.bytes - Int64(removed.bytes))
         entries[name] = entry
     }
 
@@ -234,25 +274,116 @@ public actor ContainerHeaderCache {
     }
 
     private func dataURL(for key: Key) -> URL {
-        dataURL(forName: stableHash(storageKey(for: key)))
+        dataURL(forName: Self.stableHash(storageKey(for: key)))
     }
 
     private func dataURL(forEntry entry: Entry) -> URL {
-        let key = "\(entry.namespace)|\(entry.path)|\(entry.size)|\(entry.modified)|\(entry.fingerprint)"
-        return dataURL(forName: stableHash(key))
+        Self.dataURL(forEntry: entry, in: dataDirectory)
     }
 
     private func dataURL(forName name: UInt64) -> URL {
         dataDirectory.appendingPathComponent(String(format: "%016llx.bin", name))
     }
 
-    private func stableHash(_ text: String) -> UInt64 {
+    private static func dataURL(forEntry entry: Entry, in dataDirectory: URL) -> URL {
+        let key = "\(entry.namespace)|\(entry.path)|\(entry.size)|\(entry.modified)|\(entry.fingerprint)"
+        return dataDirectory.appendingPathComponent(
+            String(format: "%016llx.bin", stableHash(key))
+        )
+    }
+
+    private static func stableHash(_ text: String) -> UInt64 {
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in text.utf8 {
             hash ^= UInt64(byte)
             hash = hash &* 0x100000001b3
         }
         return hash
+    }
+
+    /// 启动时收敛容量并清理孤儿页文件；索引与实际文件不一致时以索引为准。
+    private static func prune(
+        entries: inout [String: Entry],
+        dataDirectory: URL,
+        indexURL: URL,
+        capacityBytes: Int64,
+        perFileBytes: Int64
+    ) {
+        var changed = false
+
+        let missing = entries.filter { name, entry in
+            !FileManager.default.fileExists(
+                atPath: dataURL(forEntry: entry, in: dataDirectory).path
+            )
+        }
+        for name in missing.keys {
+            entries.removeValue(forKey: name)
+            changed = true
+        }
+
+        let oversized = entries.filter { $0.value.bytes > perFileBytes }
+        for (name, entry) in oversized {
+            entries.removeValue(forKey: name)
+            try? FileManager.default.removeItem(
+                at: dataURL(forEntry: entry, in: dataDirectory)
+            )
+            changed = true
+        }
+
+        var total = entries.values.reduce(Int64(0)) { $0 + $1.bytes }
+        if total > capacityBytes {
+            for (name, entry) in entries.sorted(by: { $0.value.lastAccess < $1.value.lastAccess }) {
+                guard total > capacityBytes else { break }
+                entries.removeValue(forKey: name)
+                total -= entry.bytes
+                try? FileManager.default.removeItem(
+                    at: dataURL(forEntry: entry, in: dataDirectory)
+                )
+                changed = true
+            }
+        }
+
+        let referenced = Set(
+            entries.values.map {
+                dataURL(forEntry: $0, in: dataDirectory).lastPathComponent
+            }
+        )
+        if let urls = try? FileManager.default.contentsOfDirectory(
+            at: dataDirectory,
+            includingPropertiesForKeys: nil
+        ) {
+            for url in urls where !referenced.contains(url.lastPathComponent) {
+                try? FileManager.default.removeItem(at: url)
+                changed = true
+            }
+        }
+
+        if changed, let data = try? JSONEncoder().encode(Array(entries.values)) {
+            try? data.write(to: indexURL, options: .atomic)
+        }
+    }
+
+    private static func resetIfVersionChanged(
+        base: URL,
+        dataDirectory: URL,
+        indexURL: URL
+    ) {
+        let versionURL = base.appendingPathComponent("version")
+        let stored = (try? String(contentsOf: versionURL, encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard stored != String(formatVersion) else { return }
+
+        try? FileManager.default.removeItem(at: dataDirectory)
+        try? FileManager.default.createDirectory(
+            at: dataDirectory,
+            withIntermediateDirectories: true
+        )
+        try? FileManager.default.removeItem(at: indexURL)
+        try? String(formatVersion).write(
+            to: versionURL,
+            atomically: true,
+            encoding: .utf8
+        )
     }
 
     private static func loadIndex(

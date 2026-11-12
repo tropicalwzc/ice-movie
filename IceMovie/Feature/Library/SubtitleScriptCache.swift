@@ -12,8 +12,8 @@ enum SubtitleScriptCache {
     private static let directoryName = "SubtitleScripts"
     /// 缓存内容版本：解析/降级逻辑变化时递增，升级后旧缓存自动失效。
     private static let formatVersion = 2
-    /// 与缩略图缓存合计控制在 200MB 内：缩略图 150MB + 字幕 50MB。
-    nonisolated(unsafe) private static let capacityBytes: Int64 = 50 * 1024 * 1024
+    /// 与缩略图、容器头缓存合计控制在 200MB 以内：字幕 16MB。
+    nonisolated(unsafe) private static let capacityBytes: Int64 = 16 * 1024 * 1024
     private static let lock = NSLock()
 
     static func load(entry: MediaEntry, streamIndex: Int, namespace: String) -> String? {
@@ -49,6 +49,13 @@ enum SubtitleScriptCache {
         } catch {
             Log.error(.subtitle, "字幕缓存写入失败：\(error.localizedDescription)")
         }
+    }
+
+    /// 启动时按当前上限修剪，兼容升级前写入的超限缓存。
+    static func trimToLimit() {
+        lock.lock()
+        defer { lock.unlock() }
+        evictIfNeeded()
     }
 
     static func removeAll() {

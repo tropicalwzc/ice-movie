@@ -36,7 +36,23 @@ public struct LibrarySearchIndex: Sendable {
         directories.insert(directoryPath)
         for entry in newEntries where !entry.isDirectory {
             entries[entry.path] = entry
-            titles[entry.path] = MediaTitleParser.parse(entry.name)
+            if let image = ImageMetadata(entry: entry) {
+                // 图片不参与季集解析：相机文件名的数字不是集号。
+                titles[entry.path] = MediaTitle(
+                    title: image.title,
+                    season: nil,
+                    episode: nil
+                )
+            } else if let document = DocumentMetadata(entry: entry) {
+                // 文档不参与季集解析：文件名中的 P0/P1、日期等不是集号。
+                titles[entry.path] = MediaTitle(
+                    title: document.title,
+                    season: nil,
+                    episode: nil
+                )
+            } else {
+                titles[entry.path] = MediaTitleParser.parse(entry.name)
+            }
         }
     }
 

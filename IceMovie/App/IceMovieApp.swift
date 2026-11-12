@@ -1,6 +1,8 @@
+import Foundation
 import IceCore
 import PersistenceKit
 import SwiftUI
+import ThumbnailKit
 
 @main
 struct IceMovieApp: App {
@@ -16,13 +18,41 @@ struct IceMovieApp: App {
         if ProcessInfo.processInfo.arguments.contains("-logDebug") {
             Log.minimumLevel = .debug
         }
+
+        // 升级后首次启动立即把旧版本遗留的超大缓存收敛到新预算。
+        CacheMaintenance.runAtLaunch()
+        if ProcessInfo.processInfo.arguments.contains("-cacheReport") {
+            emitCacheReport()
+        }
+    }
+
+    /// 真机排查：`-cacheReport` 把各缓存模块的实际占用写到 stdout，
+    /// 可通过 `devicectl device process launch --console` 直接读取。
+    private func emitCacheReport() {
+        Task.detached(priority: .utility) {
+            if let thumbnails = try? ThumbnailStore() {
+                await thumbnails.evictIfNeeded()
+            }
+            let report = CacheUsageReport.text()
+            FileHandle.standardOutput.write(Data((report + "\n").utf8))
+            await MainActor.run {
+                Log.info(.app, "缓存占用\n\(report)")
+            }
+        }
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: [SavedHost.self, PlaybackProgressRecord.self])
+        .modelContainer(
+            for: [
+                SavedHost.self,
+                PlaybackProgressRecord.self,
+                PhotoLibraryTarget.self,
+                FavoritePhoto.self,
+            ]
+        )
         .commands {
             CommandMenu("播放") {
                 Button("播放 / 暂停") {

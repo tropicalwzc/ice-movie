@@ -15,6 +15,8 @@ public enum LibraryEntryBuilder {
         let prefix = directoryPath.isEmpty ? "" : directoryPath + "/"
         let entries = items.compactMap { item -> MediaEntry? in
             guard !item.name.isEmpty else { return nil }
+            // 共享侧车缓存和系统隐藏文件不进入媒体库。
+            guard !item.name.hasPrefix(".") else { return nil }
             let entry = MediaEntry(
                 path: prefix + item.name,
                 name: item.name,

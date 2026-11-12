@@ -160,6 +160,26 @@ targets:
         SWIFT_INCLUDE_PATHS:
           - $(SRCROOT)/IceMovie/Core/CLibass
 
+  ImageKit:
+    type: framework
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: IceMovie/Core/ImageKit
+    dependencies:
+      - target: IceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.imagekit
+        PRODUCT_NAME: ImageKit
+        MACH_O_TYPE: staticlib
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lz
+
   ThumbnailKit:
     type: framework
     platform: iOS
@@ -169,6 +189,7 @@ targets:
     dependencies:
       - target: IceCore
       - target: DemuxKit
+      - target: ImageKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wangzicheng.icemovie.thumbnail
@@ -220,10 +241,16 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: IceMovieTests
+        excludes:
+          - "Fixtures/**"
+      - path: IceMovieTests/Fixtures/ImageGallery
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: IceCore
       - target: SubtitleKit
       - target: MediaLibraryKit
+      - target: ImageKit
       - target: ThumbnailKit
       - target: PersistenceKit
       - target: SMBSession
@@ -261,6 +288,7 @@ targets:
           - -lfreetype
           - -lfribidi
           - -liconv
+          - -lz
           - -lc++
           - -framework
           - CoreText
@@ -282,6 +310,8 @@ targets:
         embed: false
       - target: SubtitleKit
         embed: false
+      - target: ImageKit
+        embed: false
       - target: ThumbnailKit
         embed: false
       - target: MediaLibraryKit
@@ -299,6 +329,7 @@ targets:
           - "Core/DemuxKit/**"
           - "Core/RenderKit/**"
           - "Core/SubtitleKit/**"
+          - "Core/ImageKit/**"
           - "Core/ThumbnailKit/**"
           - "Core/PersistenceKit/**"
           - "Feature/LibraryKit/**"
@@ -328,6 +359,7 @@ targets:
           - -lfreetype
           - -lfribidi
           - -liconv
+          - -lz
           - -lc++
           - -framework
           - CoreText
@@ -352,6 +384,9 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: IceMovieUITests
+      - path: IceMovieTests/Fixtures/ImageGallery
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: IceMovie
     settings:

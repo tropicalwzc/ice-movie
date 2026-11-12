@@ -90,7 +90,10 @@ public enum MediaTitleParser {
     ]
 
     public static func parse(_ rawName: String) -> MediaTitle {
-        let base = (rawName as NSString).deletingPathExtension
+        let rawBase = (rawName as NSString).deletingPathExtension
+        // `_yyyyMMddHHmmss` 紧跟在集号后会让 `Show - 01_2024...` 的集号解析失败；
+        // 先去掉合法拍摄时间后缀，再提取标题与季集。
+        let base = removingCaptureTimestamp(rawBase, rawName: rawName)
         guard !base.isEmpty else {
             return MediaTitle(title: rawName, season: nil, episode: nil)
         }
@@ -171,6 +174,17 @@ public enum MediaTitleParser {
         return nil
     }
 
+    private static func removingCaptureTimestamp(
+        _ base: String,
+        rawName: String
+    ) -> String {
+        guard PhotoTimestampParser.parse(filename: rawName) != nil,
+              let underscore = base.lastIndex(of: "_") else {
+            return base
+        }
+        return String(base[..<underscore])
+    }
+
     private static func parseEpisode(_ text: String) -> Double? {
         let range = NSRange(text.startIndex..., in: text)
         for pattern in episodePatterns {
@@ -226,15 +240,23 @@ public enum MediaTitleParser {
             for match in matches.reversed() {
                 guard let range = Range(match.range, in: result) else { continue }
                 let content = String(result[range])
-                let inner = content.dropFirst().dropLast()
+                let inner = String(content.dropFirst().dropLast())
                 let isLeadingGroup = match.range.location == 0
-                let isMetadata = isMetadataGroup(String(inner))
-                if isLeadingGroup || isMetadata {
+                let isMetadata = isMetadataGroup(inner)
+                // 番剧发布常见的 8 位 CRC，如 `(1A9723D4)`；它不是标题的一部分。
+                let isCRC = inner.count == 8 && inner.allSatisfy(\.isHexDigit)
+                if isLeadingGroup || isMetadata || isCRC {
                     result.replaceSubrange(range, with: " ")
                 }
             }
         }
+        // 保留的作品名组可能自带方括号，如 `[CLANNAD-AfterStory-]`；
+        // 去掉括号后再交给标题清理，避免每集标题因括号位置不同而分组失败。
         return result
+            .replacingOccurrences(of: "[", with: " ")
+            .replacingOccurrences(of: "]", with: " ")
+            .replacingOccurrences(of: "【", with: " ")
+            .replacingOccurrences(of: "】", with: " ")
     }
 
     private static func isMetadataGroup(_ inner: String) -> Bool {
@@ -273,31 +295,150 @@ public enum MediaTitleParser {
     }
 }
 
-/// 网格内的稳定排序：目录在前，视频按集号自然排序，其余按标题。
+/// 网格内的稳定排序：目录在前，视频按集号自然排序，图片按原始文件名自然排序，文档最后。
 public enum MediaOrdering {
+    private struct EpisodeRank {
+        let title: String
+        let season: Int
+        let episode: Double
+    }
+
     public static func sorted(_ entries: [MediaEntry]) -> [MediaEntry] {
-        entries.sorted(by: areInIncreasingOrder)
+        // 多集剧集目录按集数升序，集号覆盖拍摄时间；单集/照片目录保持时间倒序。
+        guard usesEpisodeOrder(entries) else {
+            return entries.sorted(by: areInIncreasingOrder)
+        }
+        return entries.sorted(by: episodeFirstOrder)
+    }
+
+    /// 至少两条视频解析出集号，且至少两条共享同一解析标题，才判定为多集目录。
+    /// 避免把普通视频或单条带数字的文件误判成剧集。
+    private static func usesEpisodeOrder(_ entries: [MediaEntry]) -> Bool {
+        var counts: [String: Int] = [:]
+        for entry in entries {
+            guard let rank = episodeRank(entry) else { continue }
+            let key = rank.title.lowercased()
+            let count = (counts[key] ?? 0) + 1
+            if count >= 2 { return true }
+            counts[key] = count
+        }
+        return false
+    }
+
+    private static func episodeRank(_ entry: MediaEntry) -> EpisodeRank? {
+        guard entry.kind == .video else { return nil }
+        let parsed = MediaTitleParser.parse(entry.name)
+        guard let episode = parsed.episode else { return nil }
+        return EpisodeRank(
+            title: comparisonKey(entry),
+            season: parsed.season ?? 0,
+            episode: episode
+        )
+    }
+
+    /// 剧集优先总序：目录 → 剧集（标题、季、集升序）→ 非剧集媒体（原时间排序）→ 文档。
+    /// 分块比较避免逐对忽略时间造成的排序环。
+    private static func episodeFirstOrder(_ lhs: MediaEntry, _ rhs: MediaEntry) -> Bool {
+        if lhs.isDirectory != rhs.isDirectory {
+            return lhs.isDirectory
+        }
+        if lhs.isDocument != rhs.isDocument {
+            return !lhs.isDocument
+        }
+        if lhs.isDocument, rhs.isDocument {
+            return compareNames(lhs, rhs)
+        }
+
+        switch (episodeRank(lhs), episodeRank(rhs)) {
+        case let (left?, right?):
+            if left.title != right.title {
+                return left.title.localizedStandardCompare(right.title) == .orderedAscending
+            }
+            if left.season != right.season {
+                return left.season < right.season
+            }
+            if left.episode != right.episode {
+                return left.episode < right.episode
+            }
+            return compareNames(lhs, rhs)
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            return areInIncreasingOrder(lhs, rhs)
+        }
     }
 
     public static func areInIncreasingOrder(_ lhs: MediaEntry, _ rhs: MediaEntry) -> Bool {
         if lhs.isDirectory != rhs.isDirectory {
             return lhs.isDirectory
         }
-        if !lhs.isDirectory {
-            let left = MediaTitleParser.parse(lhs.name)
-            let right = MediaTitleParser.parse(rhs.name)
-            if let le = left.episode, let re = right.episode, le != re {
-                if left.season == right.season || left.season == nil || right.season == nil {
-                    return le < re
-                }
+        // 文档排在媒体之后，避免资料文件插进剧集/照片列表；文档内部按文件名自然排序。
+        if lhs.isDocument != rhs.isDocument {
+            return !lhs.isDocument
+        }
+        if lhs.isDocument, rhs.isDocument {
+            return compareNames(lhs, rhs)
+        }
+        // 文件名带拍摄时间时，最新的媒体排在前面；无时间戳的排在后面。
+        let leftTimestamp = lhs.captureTimestamp
+        let rightTimestamp = rhs.captureTimestamp
+        if leftTimestamp != nil || rightTimestamp != nil {
+            switch (leftTimestamp, rightTimestamp) {
+            case let (left?, right?):
+                if left != right { return left > right }
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                break
             }
         }
-        let leftTitle = lhs.isDirectory ? lhs.name : MediaTitleParser.parse(lhs.name).title
-        let rightTitle = rhs.isDirectory ? rhs.name : MediaTitleParser.parse(rhs.name).title
-        let compared = leftTitle.localizedStandardCompare(rightTitle)
+        // 先按展示标题比较，图片与视频混排时才能保持严格弱序；
+        // 下划线视作空格，避免 `IMG_0001` 与 `IMG 0002` 因标点顺序颠倒。
+        let compared = comparisonKey(lhs).localizedStandardCompare(comparisonKey(rhs))
         if compared != .orderedSame {
             return compared == .orderedAscending
         }
-        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        // 标题相同后使用与“比较双方类型”无关的稳定键：季 → 集 → 文件名 → 路径。
+        // 非视频使用固定哨兵值，保证同标题的图片与视频之间也只有一种比较结果。
+        let leftKey = tieBreakKey(lhs)
+        let rightKey = tieBreakKey(rhs)
+        if leftKey.season != rightKey.season {
+            return leftKey.season < rightKey.season
+        }
+        if leftKey.episode != rightKey.episode {
+            return leftKey.episode < rightKey.episode
+        }
+        return compareNames(lhs, rhs)
+    }
+
+    /// 所有条目共用的平局键。视频使用解析出的季/集，其他条目使用哨兵值。
+    private static func tieBreakKey(_ entry: MediaEntry) -> (season: Int, episode: Double) {
+        guard !entry.isImage, !entry.isDirectory else {
+            return (Int.max, .greatestFiniteMagnitude)
+        }
+        let parsed = MediaTitleParser.parse(entry.name)
+        return (parsed.season ?? 0, parsed.episode ?? .greatestFiniteMagnitude)
+    }
+
+    private static func displayKey(_ entry: MediaEntry) -> String {
+        if entry.isDirectory { return entry.name }
+        if let image = ImageMetadata(entry: entry) { return image.title }
+        return MediaTitleParser.parse(entry.name).title
+    }
+
+    private static func comparisonKey(_ entry: MediaEntry) -> String {
+        displayKey(entry).replacingOccurrences(of: "_", with: " ")
+    }
+
+    private static func compareNames(_ lhs: MediaEntry, _ rhs: MediaEntry) -> Bool {
+        let compared = lhs.name.localizedStandardCompare(rhs.name)
+        if compared != .orderedSame {
+            return compared == .orderedAscending
+        }
+        return lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
     }
 }

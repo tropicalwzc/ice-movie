@@ -10,6 +10,7 @@ struct DiagnosticsView: View {
     @State private var category: LogCategory?
     @State private var showDebug = false
     @State private var query = ""
+    @State private var cacheReport: String?
 
     var body: some View {
         NavigationStack {
@@ -57,6 +58,9 @@ struct DiagnosticsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button("缓存占用", systemImage: "internaldrive") {
+                            cacheReport = CacheUsageReport.text()
+                        }
                         Button("复制全部", systemImage: "doc.on.doc") { copyAll() }
                         Button("清空", systemImage: "trash", role: .destructive) {
                             LogStore.shared.clear()
@@ -71,6 +75,30 @@ struct DiagnosticsView: View {
                 }
             }
             .task { await poll() }
+            .sheet(
+                isPresented: Binding(
+                    get: { cacheReport != nil },
+                    set: { if !$0 { cacheReport = nil } }
+                )
+            ) {
+                NavigationStack {
+                    ScrollView {
+                        Text(cacheReport ?? "")
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    }
+                    .navigationTitle("缓存占用")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("完成") { cacheReport = nil }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
 

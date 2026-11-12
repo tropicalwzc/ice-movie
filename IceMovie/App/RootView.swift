@@ -1,11 +1,13 @@
 import AVFAudio
 import IceCore
+import MediaLibraryKit
 import PersistenceKit
 import RenderKit
 import SMBSession
 import SubtitleKit
 import SwiftData
 import SwiftUI
+import ThumbnailKit
 import UIKit
 
 /// 工程骨架阶段的占位界面。
@@ -18,6 +20,7 @@ struct RootView: View {
     @State private var showDiagnostics = ProcessInfo.processInfo.arguments.contains("-diagnostics")
     @State private var videoSession = VideoTestSession.shared
     @State private var libraryStore: LibraryStore?
+    @State private var photoSyncModel: PhotoSyncModel?
     @State private var isRestoringConnection = false
     @State private var connectionPrefill: ConnectionPrefill?
     @State private var connectionMessage: String?
@@ -34,8 +37,10 @@ struct RootView: View {
                     isFullscreen: playerFullscreen,
                     onToggleFullscreen: { playerFullscreen.toggle() }
                 )
-            } else if let libraryStore {
-                LibraryView(store: libraryStore) {
+            } else if let libraryStore, let photoSyncModel {
+                LibraryView(store: libraryStore, photoSync: photoSyncModel) {
+                    photoSyncModel.cancelForDisconnect()
+                    self.photoSyncModel = nil
                     self.libraryStore = nil
                     self.connectionMessage = nil
                 }
@@ -110,6 +115,20 @@ struct RootView: View {
             PlaybackProgressStore(context: modelContext).removeAll()
             Log.info(.app, "续播记录已重置（自检）")
         }
+        if arguments.contains("-photoSyncResetTarget") {
+            try? PhotoLibraryTargetStore(context: modelContext).removeAll()
+            if let support = try? FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ) {
+                try? FileManager.default.removeItem(
+                    at: support.appendingPathComponent("PhotoSync", isDirectory: true)
+                )
+            }
+            Log.info(.app, "照片同步目标与清单已重置（自检）")
+        }
         if arguments.contains("-resetAcceptanceReport") {
             let url = FileManager.default.urls(
                 for: .documentDirectory,
@@ -137,7 +156,79 @@ struct RootView: View {
         if let forgetHost = value(for: "-forgetHost", in: arguments) {
             forgetHostRecord(host: forgetHost)
         }
-        if let localPath = value(for: "-libraryLocal", in: arguments) {            installLibrary(
+        if arguments.contains("-smbWriteProbe"),
+           let host = value(for: "-smbHost", in: arguments),
+           let share = value(for: "-smbShare", in: arguments) {
+            let directory = value(for: "-libraryPath", in: arguments) ?? ""
+            let credential = savedCredential(for: host)
+            Task {
+                await SMBWriteSelfTest.run(
+                    host: host,
+                    share: share,
+                    directory: directory,
+                    credential: credential
+                )
+            }
+        }
+        if arguments.contains("-photoSyncSMBProbe"),
+           let host = value(for: "-smbHost", in: arguments),
+           let share = value(for: "-smbShare", in: arguments) {
+            let explicitUser = value(for: "-smbUser", in: arguments)
+            let explicitPassword = value(for: "-smbPassword", in: arguments)
+            let credential = (explicitUser == nil && explicitPassword == nil)
+                ? savedCredential(for: host)
+                : nil
+            if let user = explicitUser ?? credential?.username,
+               let password = explicitPassword ?? credential?.password {
+                Task {
+                    await PhotoSyncSMBWriteSelfTest.run(
+                        host: host,
+                        share: share,
+                        user: user,
+                        password: password
+                    )
+                }
+            } else {
+                Log.error(
+                    .smb,
+                    "PHOTOSYNC_SMB_PROBE 跳过：没有可用的 SMB 凭据 host=\(host)"
+                )
+            }
+        }
+        if arguments.contains("-photoSyncFixture"),
+           value(for: "-libraryLocal", in: arguments) == nil {
+            let documents = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            )[0]
+            let prefix = "PhotoSyncFixtureLibrary-"
+            if let old = try? FileManager.default.contentsOfDirectory(
+                at: documents,
+                includingPropertiesForKeys: nil
+            ) {
+                for url in old where url.lastPathComponent.hasPrefix(prefix) {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+            let root = documents.appendingPathComponent(
+                "\(prefix)\(UUID().uuidString)",
+                isDirectory: true
+            )
+            try? FileManager.default.createDirectory(
+                at: root,
+                withIntermediateDirectories: true
+            )
+            try? FileManager.default.createDirectory(
+                at: root.appendingPathComponent("Sub", isDirectory: true),
+                withIntermediateDirectories: true
+            )
+            let localSource = LocalLibrarySource(rootURL: root)
+            let source: any LibrarySource = arguments.contains("-photoSyncUnwritableTarget")
+                ? UnwritablePhotoSyncSource(base: localSource)
+                : localSource
+            installLibrary(source: source, initialPath: "")
+        } else if let localPath = value(for: "-libraryLocal", in: arguments) {
+            installLibrary(
                 source: LocalLibrarySource(rootURL: URL(fileURLWithPath: localPath)),
                 initialPath: value(for: "-libraryPath", in: arguments) ?? ""
             )
@@ -313,6 +404,7 @@ struct RootView: View {
             "-diagnostics", "-skipRestore", "-library", "-libraryLocal",
             "-smbHost", "-smbAutoConnect", "-smbPath", "-seedHost",
             "-forgetHost",
+            "-documentSelfTest",
             "-demuxTest", "-thumbnailProbe", "-audioTest", "-audioPauseTest",
             "-subtitleOverlay", "-subtitleScan", "-seekBurstTest", "-seekTest",
             "-videoSmb", "-videoTest",
@@ -443,12 +535,14 @@ struct RootView: View {
 
     private func installLibrary(source: any LibrarySource, initialPath: String) {
         let arguments = ProcessInfo.processInfo.arguments
-        let limitMB = value(for: "-thumbnailCacheLimitMB", in: arguments).flatMap(Int64.init) ?? 150
+        let requestedMB = value(for: "-thumbnailCacheLimitMB", in: arguments).flatMap(Int64.init)
+        let cacheBytes = ThumbnailStore.clampedCapacityBytes(requestedMB: requestedMB)
         do {
             let store = try LibraryStore(
                 source: source,
                 initialPath: initialPath,
-                cacheCapacityBytes: max(1, limitMB) * 1024 * 1024
+                cacheCapacityBytes: cacheBytes,
+                favoriteProvider: FavoritePhotoStore(context: modelContext)
             )
             // 目录切换成功后把最近路径写回 SwiftData；本地示例不会命中主机记录。
             let records = HostRecordStore(context: modelContext)
@@ -460,6 +554,130 @@ struct RootView: View {
                 )
             }
             libraryStore = store
+            let syncModel = PhotoSyncModel(
+                store: store,
+                targetStore: .swiftData(
+                    PhotoLibraryTargetStore(context: modelContext)
+                ),
+                client: makePhotoLibraryClient(arguments),
+                uploadLimit: value(for: "-photoSyncUploadLimit", in: arguments)
+                    .flatMap(Int.init)
+            )
+            photoSyncModel = syncModel
+            if arguments.contains("-libraryDiagnostics") {
+                Task { [weak store] in
+                    for _ in 0..<40 {
+                        guard let store else { return }
+                        if !store.isLoading, !store.currentEntries.isEmpty { break }
+                        try? await Task.sleep(for: .milliseconds(500))
+                    }
+                    guard let store else { return }
+                    let entries = store.currentEntries
+                    let images = entries.filter(\.isImage)
+                    let timestamped = images.filter { $0.captureTimestamp != nil }
+                    let latest = timestamped.compactMap(\.captureTimestamp).max()
+                    let oldest = timestamped.compactMap(\.captureTimestamp).min()
+                    Log.info(
+                        .app,
+                        "LIBDIAG 条目=\(entries.count) 图片=\(images.count) "
+                            + "带时间戳=\(timestamped.count) 最新=\(latest?.displayTime ?? "-") "
+                            + "最旧=\(oldest?.displayTime ?? "-")"
+                    )
+                    let directories = entries.filter(\.isDirectory)
+                    Log.info(
+                        .app,
+                        "LIBDIAG 目录=\(directories.count) "
+                            + directories.map(\.name).joined(separator: " | ")
+                    )
+                    let videos = entries.filter { $0.kind == .video }
+                    let videoOrder = videos.prefix(12).map {
+                        let episode = MediaTitleParser.parse($0.name).episode
+                        return "\($0.name) [集=\(episode.map { String(format: "%g", $0) } ?? "-")]"
+                    }
+                    Log.info(
+                        .app,
+                        "LIBDIAG 视频顺序=\(videoOrder.joined(separator: " | "))"
+                    )
+                    let autumnNames = entries.filter {
+                        $0.name.range(
+                            of: "_2026(09|10|11)",
+                            options: .regularExpression
+                        ) != nil
+                    }
+                    Log.info(
+                        .app,
+                        "LIBDIAG 2026年9-11月文件名=\(autumnNames.count) "
+                            + autumnNames.prefix(20).map(\.name).joined(separator: " | ")
+                    )
+                    let recentModified = entries
+                        .filter { $0.modified != nil }
+                        .sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
+                        .prefix(12)
+                    for entry in recentModified {
+                        Log.info(
+                            .app,
+                            "LIBDIAG 最近修改 \(entry.name) "
+                                + "modified=\(entry.modified?.description ?? "-") "
+                                + "isDir=\(entry.isDirectory)"
+                        )
+                    }
+                    for entry in images.prefix(12) {
+                        Log.info(
+                            .app,
+                            "LIBDIAG 首段 \(entry.name) ts=\(entry.captureTimestamp?.displayTime ?? "-") "
+                                + "modified=\(entry.modified?.description ?? "-")"
+                        )
+                    }
+                    for entry in images.suffix(12) {
+                        Log.info(
+                            .app,
+                            "LIBDIAG 尾段 \(entry.name) ts=\(entry.captureTimestamp?.displayTime ?? "-") "
+                                + "modified=\(entry.modified?.description ?? "-")"
+                        )
+                    }
+                    let calendar = store.photoCalendar
+                    Log.info(
+                        .app,
+                        "LIBDIAG 日历 years=\(calendar.years) "
+                            + "months=\(calendar.years.map { "\($0):\(calendar.months(in: $0))" })"
+                    )
+                    if let raw = try? await store.source.listAllEntries(path: "") {
+                        let unsupported = raw.filter {
+                            !$0.isDirectory && !MediaKind.isVisible(entry: $0)
+                        }
+                        let grouped = Dictionary(grouping: unsupported, by: \.fileExtension)
+                            .map { "\($0.key):\($0.value.count)" }
+                            .sorted()
+                        Log.info(
+                            .app,
+                            "LIBDIAG 原始条目=\(raw.count) 不可见文件=\(unsupported.count) "
+                                + "扩展=\(grouped.joined(separator: ","))"
+                        )
+                        let rawAutumn = raw.filter {
+                            $0.name.range(
+                                of: "_2026(09|10|11)",
+                                options: .regularExpression
+                            ) != nil
+                        }
+                        Log.info(
+                            .app,
+                            "LIBDIAG 原始9-11月=\(rawAutumn.count) "
+                                + rawAutumn.prefix(20).map(\.name).joined(separator: " | ")
+                        )
+                        let unsupportedAutumn = unsupported.filter {
+                            $0.name.range(
+                                of: "_2026(09|10|11)",
+                                options: .regularExpression
+                            ) != nil
+                        }
+                        Log.info(
+                            .app,
+                            "LIBDIAG 不可见9-11月=\(unsupportedAutumn.count) "
+                                + unsupportedAutumn.prefix(20).map(\.name).joined(separator: " | ")
+                        )
+                    }
+                }
+            }
             if let seconds = value(for: "-smbDropAfter", in: arguments).flatMap(Double.init) {
                 Task {
                     try? await Task.sleep(for: .seconds(seconds))
@@ -472,11 +690,10 @@ struct RootView: View {
                     // 等目录与缩略图任务先起来，再开始播放，制造并发读竞争。
                     try? await Task.sleep(for: .seconds(2))
                     let preferred = value(for: "-libraryAutoPlayName", in: arguments)
-                    let first = store.currentEntries.first {
-                        guard !$0.isDirectory else { return false }
-                        guard let preferred, !preferred.isEmpty else { return true }
-                        return $0.name.localizedCaseInsensitiveContains(preferred)
-                    } ?? store.currentEntries.first(where: { !$0.isDirectory })
+                    let first = LibraryPlaybackSelection.firstVideo(
+                        in: store.currentEntries,
+                        preferredName: preferred
+                    )
                     guard let first else {
                         Log.notice(.app, "自动播放跳过：当前目录没有视频")
                         return
@@ -496,11 +713,22 @@ struct RootView: View {
                 .app,
                 "媒体库就绪 host=\(source.hostName) share=\(source.shareName) "
                     + "初始路径=\(Log.shortPath(initialPath.isEmpty ? "/" : initialPath)) "
-                    + "缩略图上限=\(max(1, limitMB))MB"
+                    + "缩略图上限=\(cacheBytes / (1024 * 1024))MB"
             )
         } catch {
             Log.error(.app, "媒体库初始化失败 \(error.localizedDescription)")
         }
+    }
+
+    private func makePhotoLibraryClient(_ arguments: [String]) -> any PhotoLibraryClient {
+        if arguments.contains("-photoSyncFixture") {
+            return FixturePhotoLibraryClient(
+                slow: arguments.contains("-photoSyncSlow"),
+                failFirst: arguments.contains("-photoSyncFixtureFail"),
+                denied: arguments.contains("-photoSyncDenied")
+            )
+        }
+        return PhotoKitLibraryClient()
     }
 
     private func value(for flag: String, in arguments: [String]) -> String? {

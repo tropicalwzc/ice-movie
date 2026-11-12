@@ -545,6 +545,7 @@ final class LibraryPlaybackSession: Identifiable {
 /// 两种外壳共享同一个 `LibraryStore`，切换时不重建目录与滚动状态。
 struct LibraryView: View {
     @Bindable var store: LibraryStore
+    @Bindable var photoSync: PhotoSyncModel
     var onDisconnect: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -556,6 +557,7 @@ struct LibraryView: View {
     @State private var playback: LibraryPlaybackSession?
     /// 点击后立即出现的准备态；与 `playback` 互斥，失败时保留并就地展示错误。
     @State private var pendingPlayback: PendingPlayback?
+    @State private var imageGallery: ImageGallerySession?
     @State private var isPlayerFullscreen = false
     @State private var inlineGeneration = 0
     @State private var currentShell: LibraryShell = .compact
@@ -566,6 +568,7 @@ struct LibraryView: View {
     @State private var resumeNotice: String?
     @State private var resumeNoticeTask: Task<Void, Never>?
     @State private var stressTask: Task<Void, Never>?
+    @State private var documentSelfTestStarted = false
 
     var body: some View {
         ZStack {
@@ -588,12 +591,17 @@ struct LibraryView: View {
                     store.onPlaybackRequested = { entry in
                         openPlayback(entry)
                     }
+                    store.onImageGalleryRequested = { session in
+                        presentImageGallery(session)
+                    }
                     store.onShareWillChange = {
-                        closePlayback()
+                        imageGallery = nil
+                        closePlayback(restoreOrientation: false)
                     }
                     applyLaunchSearchIfNeeded()
                     openLaunchPlaybackIfNeeded()
                     startStressTestIfRequested()
+                    startDocumentSelfTestIfRequested()
                 }
             }
 
@@ -607,15 +615,24 @@ struct LibraryView: View {
                     .ignoresSafeArea()
                     .zIndex(10)
             }
+
+            if let imageGallery {
+                ImageGalleryView(session: imageGallery, onClose: closeImageGallery)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .zIndex(20)
+                    .transition(.opacity)
+            }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .environment(store)
+        .environment(photoSync)
         .sheet(isPresented: $showDiagnostics) {
             DiagnosticsView()
         }
         .onChange(of: scenePhase) { _, phase in
             // 退到后台或切换应用时立即落盘，避免依赖下一次 5 秒轮询。
             if phase != .active { saveProgress() }
+            photoSync.handleScenePhase(phase)
         }
         .alert(
             store.playbackFailure?.title ?? "无法播放",
@@ -850,6 +867,7 @@ struct LibraryView: View {
     private var disconnectAction: (() -> Void)? {
         guard let onDisconnect else { return nil }
         return {
+            imageGallery = nil
             closePlayback()
             onDisconnect()
         }
@@ -863,7 +881,9 @@ struct LibraryView: View {
         return LibraryShell(rawValue: arguments[index + 1])
     }
 
-    private func openPlayback(_ entry: MediaEntry, fullscreen: Bool = true) {
+    private func openPlayback(_ entry: MediaEntry, fullscreen: Bool? = nil) {
+        let wantsFullscreen = fullscreen
+            ?? !ProcessInfo.processInfo.arguments.contains("-libraryInlinePlayback")
         if let playback {
             writeAcceptanceReport(playback, reason: "replaced")
         }
@@ -899,8 +919,8 @@ struct LibraryView: View {
             requestedAt: ProcessInfo.processInfo.systemUptime
         )
         pendingPlayback = pending
-        isPlayerFullscreen = fullscreen
-        if fullscreen {
+        isPlayerFullscreen = wantsFullscreen
+        if wantsFullscreen {
             // 旋转与 I/O 并行；不再等 prepare 完成后才请求横屏。
             AppOrientation.request(.landscape, delay: .milliseconds(50))
         }
@@ -975,7 +995,7 @@ struct LibraryView: View {
             playback = session
             Log.debug(
                 .app,
-                "播放会话已建立 请求全屏=\(fullscreen) 当前全屏状态=\(isPlayerFullscreen) "
+                "播放会话已建立 请求全屏=\(wantsFullscreen) 当前全屏状态=\(isPlayerFullscreen) "
                     + "播放页出现=\(startup.playerPresentedMilliseconds)ms "
                     + "会话=\(playback != nil)"
             )
@@ -1019,7 +1039,7 @@ struct LibraryView: View {
 
             Log.info(
                 .app,
-                "\(fullscreen ? "全屏" : "内联")播放开始 \(Log.shortPath(entry.path)) "
+                "\(wantsFullscreen ? "全屏" : "内联")播放开始 \(Log.shortPath(entry.path)) "
                     + "音频=\(prepared.engine.audioCodecName) "
                     + "视频=\(prepared.engine.videoCodecName) 字幕=\(prepared.selectedTrack?.title ?? "无")"
             )
@@ -1264,6 +1284,24 @@ struct LibraryView: View {
               arguments.indices.contains(index + 1),
               let rate = Float(arguments[index + 1]) else { return }
         playback?.engine.setRate(rate)
+    }
+
+    /// 文档验收：递归遍历当前共享/目录中的 Markdown 与 PDF，
+    /// 逐个渲染、检查表格/代码块并把结果写入 Documents。
+    private func startDocumentSelfTestIfRequested() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard !documentSelfTestStarted, arguments.contains("-documentSelfTest") else { return }
+        documentSelfTestStarted = true
+        let root = argumentValue("-documentSelfTestRoot") ?? store.currentPath
+        let limit = argumentValue("-documentSelfTestLimit").flatMap(Int.init)
+        Task { @MainActor in
+            let runner = DocumentSelfTestRunner(
+                source: store.source,
+                root: root,
+                limit: limit
+            )
+            await runner.run()
+        }
     }
 
     /// 随机抽样压力测试：从共享根目录递归抽取视频，每条约 1 分钟起播，
@@ -1672,6 +1710,10 @@ struct LibraryView: View {
         let line = "[\(stamp)] \(message)\n"
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ice-stress.log")
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        if size > 4 * 1024 * 1024 {
+            try? FileManager.default.removeItem(at: url)
+        }
         if let handle = try? FileHandle(forWritingTo: url) {
             try? handle.seekToEnd()
             try? handle.write(contentsOf: Data(line.utf8))
@@ -2138,7 +2180,7 @@ struct LibraryView: View {
         }
     }
 
-    private func closePlayback(report: Bool = true) {
+    private func closePlayback(report: Bool = true, restoreOrientation: Bool = true) {
         if report, let playback {
             writeAcceptanceReport(playback, reason: "closed")
         }
@@ -2158,8 +2200,29 @@ struct LibraryView: View {
         playback = nil
         isPlayerFullscreen = false
         resumeNotice = nil
-        AppOrientation.request(.portrait, delay: .milliseconds(900))
+        if restoreOrientation {
+            AppOrientation.request(.portrait, delay: .milliseconds(900))
+        }
         Log.info(.app, "播放已关闭，返回媒体库")
+    }
+
+    private func presentImageGallery(_ session: ImageGallerySession) {
+        // 相册是独立的全屏浏览态：先停掉内联视频，避免图片读取和播放读取争用同一共享。
+        closePlayback(restoreOrientation: false)
+        imageGallery = session
+        AppOrientation.request(.allButUpsideDown, delay: .milliseconds(50))
+        Log.info(
+            .app,
+            "打开图片相册 \(Log.shortPath(session.initialEntry?.path ?? "")) "
+                + "共\(session.entries.count)张 起始=\(session.initialIndex)"
+        )
+    }
+
+    private func closeImageGallery() {
+        guard imageGallery != nil else { return }
+        imageGallery = nil
+        AppOrientation.request(.portrait, delay: .milliseconds(500))
+        Log.info(.app, "关闭图片相册")
     }
 
     private func applyLaunchSearchIfNeeded() {
@@ -2181,14 +2244,13 @@ struct LibraryView: View {
             arguments.indices.contains(index + 1) ? arguments[index + 1] : nil
         }
         Task { @MainActor in
-            for _ in 0..<40 where store.currentEntries.allSatisfy(\.isDirectory) {
+            for _ in 0..<40 where !store.currentEntries.contains(where: { $0.kind == .video }) {
                 try? await Task.sleep(for: .milliseconds(500))
             }
-            let entry = store.currentEntries.first {
-                guard !$0.isDirectory else { return false }
-                guard let preferred, !preferred.isEmpty else { return true }
-                return $0.name.localizedCaseInsensitiveContains(preferred)
-            } ?? store.currentEntries.first { !$0.isDirectory }
+            let entry = LibraryPlaybackSelection.firstVideo(
+                in: store.currentEntries,
+                preferredName: preferred
+            )
             guard let entry else {
                 Log.notice(.app, "自动打开跳过：当前目录没有视频")
                 return
@@ -2201,6 +2263,7 @@ struct LibraryView: View {
 
 struct LibraryContentPage: View {
     @Bindable var store: LibraryStore
+    @Environment(PhotoSyncModel.self) private var photoSync
     @Binding var showDiagnostics: Bool
     var onDisconnect: (() -> Void)?
     @State private var showSettings = false
@@ -2210,13 +2273,36 @@ struct LibraryContentPage: View {
     }
 
     var body: some View {
-        Group {
-            if isSearching {
-                LibrarySearchResultsView()
-            } else {
-                LibraryGridView()
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                if !isSearching,
+                   !store.favoritesOnly,
+                   store.mediaFilterIsApplicable
+                    || store.hasPhotoCalendar
+                    || store.isCurrentDirectoryPhotoLibraryTarget {
+                    LibraryMediaFilterBar(store: store)
+                }
+
+                if !isSearching, let prewarm = store.prewarmController {
+                    ThumbnailPrewarmBanner(controller: prewarm)
+                }
+
+                Group {
+                    if isSearching {
+                        LibrarySearchResultsView()
+                    } else {
+                        LibraryGridView()
+                    }
+                }
+            }
+
+            if photoSync.isStatusStripVisible {
+                PhotoSyncStatusBar()
+                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
+        .animation(.easeOut(duration: 0.15), value: photoSync.isStatusStripVisible)
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(store.currentTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -2232,12 +2318,32 @@ struct LibraryContentPage: View {
             // 与右侧“更多”对称的左侧返回按钮；系统会自动套用玻璃按钮样式。
             ToolbarItem(placement: .topBarLeading) {
                 Button {
-                    store.goBack()
+                    if store.favoritesOnly {
+                        store.toggleFavoritesOnly()
+                    } else {
+                        store.goBack()
+                    }
                 } label: {
                     Image(systemName: "chevron.left")
                 }
-                .disabled(!store.canGoBack)
-                .accessibilityLabel("返回上一级")
+                .disabled(!store.favoritesOnly && !store.canGoBack)
+                .accessibilityLabel(store.favoritesOnly ? "退出收藏夹" : "返回上一级")
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    if !store.searchText.isEmpty {
+                        store.applySearch("")
+                    }
+                    store.toggleFavoritesOnly()
+                } label: {
+                    Image(systemName: store.favoritesOnly ? "heart.fill" : "heart")
+                        .foregroundStyle(
+                            store.favoritesOnly ? Color.accentColor : Color.primary
+                        )
+                }
+                .accessibilityIdentifier("library.favorites")
+                .accessibilityLabel(store.favoritesOnly ? "退出收藏夹" : "收藏夹")
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -2273,6 +2379,27 @@ struct LibraryContentPage: View {
                         Task { await store.clearCaches() }
                     } label: {
                         Label("清空缓存", systemImage: "trash")
+                    }
+
+                    Divider()
+
+                    if photoSync.isTarget(path: store.currentPath) {
+                        Button(role: .destructive) {
+                            photoSync.unmarkCurrentDirectory()
+                        } label: {
+                            Label("取消照片库标记", systemImage: "photo.stack")
+                        }
+                        .accessibilityIdentifier("photoSync.menu.unmark")
+                    } else {
+                        Button {
+                            photoSync.requestMarkCurrentDirectory()
+                        } label: {
+                            Label(
+                                photoSync.target == nil ? "设为照片库路径" : "改设为照片库路径",
+                                systemImage: "photo.stack"
+                            )
+                        }
+                        .accessibilityIdentifier("photoSync.menu.mark")
                     }
 
                     if let onDisconnect {
@@ -2311,6 +2438,57 @@ struct LibraryContentPage: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { photoSync.isSheetPresented },
+                set: { photoSync.isSheetPresented = $0 }
+            )
+        ) {
+            PhotoSyncSheetView()
+                .environment(photoSync)
+        }
+        .alert(
+            item: Binding(
+                get: { photoSync.alert },
+                set: { photoSync.alert = $0 }
+            )
+        ) { alert in
+            if alert.showsSettings {
+                return Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    primaryButton: .default(Text("去设置")) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    },
+                    secondaryButton: .cancel(Text("取消"))
+                )
+            }
+            return Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("好"))
+            )
+        }
+        .confirmationDialog(
+            "替换照片库路径？",
+            isPresented: Binding(
+                get: { photoSync.isReplaceConfirmationPresented },
+                set: { photoSync.isReplaceConfirmationPresented = $0 }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("替换", role: .destructive) {
+                photoSync.confirmReplaceTarget()
+            }
+            .accessibilityIdentifier("photoSync.replace.confirm")
+            Button("取消", role: .cancel) {
+                photoSync.cancelReplaceTarget()
+            }
+        } message: {
+            Text("同一共享只保留一个照片库路径；替换后旧路径的标记会移除，已上传照片不会删除。")
         }
         .task(id: store.currentPath) {
             await store.loadCurrent()

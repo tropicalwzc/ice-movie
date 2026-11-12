@@ -483,6 +483,10 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         let line = "[\(stamp)] \(message)\n"
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ice-smb.log")
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        if size > 4 * 1024 * 1024 {
+            try? FileManager.default.removeItem(at: url)
+        }
         if let handle = try? FileHandle(forWritingTo: url) {
             try? handle.seekToEnd()
             try? handle.write(contentsOf: Data(line.utf8))

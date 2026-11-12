@@ -23,10 +23,19 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>用于连接局域网内的 SMB 共享主机，浏览并播放其中的视频。</string>
+	<string>用于连接局域网内的 SMB 共享主机，浏览并播放其中的视频与图片。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于把旋转后的图片保存到系统照片库。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于读取系统相册中的照片并同步到 SMB 照片库路径。</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.wangzicheng.icemovie.thumbnail-prewarm</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

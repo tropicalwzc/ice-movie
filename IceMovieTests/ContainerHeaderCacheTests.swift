@@ -77,6 +77,73 @@ final class ContainerHeaderCacheTests: XCTestCase {
         XCTAssertNotNil(secondHit)
     }
 
+    func testInitializerEnforcesBudgetAndRemovesOrphanFiles() async throws {
+        let first = try ContainerHeaderCache(
+            directory: directory,
+            capacityBytes: 1024 * 1024,
+            perFileBytes: 1024 * 1024
+        )
+        let page = Data(repeating: 1, count: ContainerHeaderCache.pageSize)
+        let older = makeKey(path: "a.mkv")
+        let newer = makeKey(path: "b.mkv")
+        for index in 0..<6 {
+            await first.storePage(for: older, page: index, data: page)
+        }
+        for index in 0..<6 {
+            await first.storePage(for: newer, page: index, data: page)
+        }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let orphan = dataDirectory.appendingPathComponent("orphan.bin")
+        try Data([1, 2, 3]).write(to: orphan)
+
+        let trimmed = try ContainerHeaderCache(
+            directory: directory,
+            capacityBytes: Int64(8 * ContainerHeaderCache.pageSize),
+            perFileBytes: 1024 * 1024
+        )
+        let total = await trimmed.totalBytes()
+        XCTAssertLessThanOrEqual(total, Int64(8 * ContainerHeaderCache.pageSize))
+
+        let olderHit = await trimmed.cachedPage(for: older, page: 0)
+        let newerHit = await trimmed.cachedPage(for: newer, page: 0)
+        XCTAssertNil(olderHit, "重新打开时应淘汰超出预算的最久未使用文件")
+        XCTAssertNotNil(newerHit)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: orphan.path),
+            "索引外的孤儿页文件应在启动时清理"
+        )
+    }
+
+    func testVersionChangeRebuildsOldCache() async throws {
+        let cache = try ContainerHeaderCache(
+            directory: directory,
+            capacityBytes: 1024 * 1024,
+            perFileBytes: 1024 * 1024
+        )
+        await cache.storePage(
+            for: makeKey(),
+            page: 0,
+            data: Data(repeating: 1, count: ContainerHeaderCache.pageSize)
+        )
+        let stored = await cache.totalBytes()
+        XCTAssertGreaterThan(stored, 0)
+
+        // 模拟旧版本没有版本标记：升级后应整体重建，不能保留旧稀疏块。
+        try FileManager.default.removeItem(
+            at: directory.appendingPathComponent("version")
+        )
+        let rebuilt = try ContainerHeaderCache(
+            directory: directory,
+            capacityBytes: 1024 * 1024,
+            perFileBytes: 1024 * 1024
+        )
+        let rebuiltTotal = await rebuilt.totalBytes()
+        XCTAssertEqual(rebuiltTotal, 0)
+        let hit = await rebuilt.cachedPage(for: makeKey(), page: 0)
+        XCTAssertNil(hit)
+    }
+
     func testCorruptIndexRecoversEmpty() async throws {
         try Data("not json".utf8).write(
             to: directory.appendingPathComponent("index.json"),

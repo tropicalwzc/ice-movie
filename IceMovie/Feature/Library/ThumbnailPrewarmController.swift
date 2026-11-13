@@ -120,10 +120,12 @@ final class ThumbnailPrewarmController {
                 lastFlushed = completed
                 await onFlush?()
             }
-            if completed % 100 == 0 {
+            if completed % 10 == 0 {
                 Log.info(
                     .thumbnail,
-                    "缩略图预热进度 \(completed)/\(total)"
+                    "缩略图预热进度 \(completed)/\(total) "
+                        + "内存=\(String(format: "%.0f", MemoryFootprint.currentMB))MB "
+                        + "峰值=\(String(format: "%.0f", MemoryFootprint.peakMB))MB"
                 )
             }
         }

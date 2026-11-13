@@ -41,30 +41,30 @@ final class PlaybackControlsUITests: XCTestCase {
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(time.waitForExistence(timeout: 3), "时间标签应可访问")
         let beforeForward = seconds(from: time.label)
-        app.buttons["快进 10 秒"].tap()
+        app.buttons["快进 90 秒"].tap()
         sleep(1)
         let afterForward = seconds(from: time.label)
         XCTAssertEqual(
             afterForward - beforeForward,
-            10,
-            accuracy: 2,
-            "快进 10 秒后时间应前进约 10 秒"
+            90,
+            accuracy: 3,
+            "快进 90 秒后时间应前进约 90 秒"
         )
 
-        app.buttons["快退 10 秒"].tap()
+        app.buttons["快退 90 秒"].tap()
         sleep(1)
         let afterBackward = seconds(from: time.label)
         XCTAssertEqual(
             afterBackward,
             beforeForward,
-            accuracy: 2,
-            "快退 10 秒后应回到原位置"
+            accuracy: 3,
+            "快退 90 秒后应回到原位置"
         )
 
         play.tap()
         XCTAssertTrue(pause.waitForExistence(timeout: 3), "恢复后应显示暂停按钮")
 
-        // 暂停后用双击验证 ±10 秒的精确落点；同时检查手势提示。
+        // 暂停后用双击验证 ±90 秒的精确落点；同时检查手势提示。
         pause.tap()
         XCTAssertTrue(play.waitForExistence(timeout: 3))
         let pausedTime = seconds(from: time.label)
@@ -77,9 +77,9 @@ final class PlaybackControlsUITests: XCTestCase {
         sleep(1)
         XCTAssertEqual(
             seconds(from: time.label),
-            pausedTime + 10,
+            pausedTime + 90,
             accuracy: 2,
-            "右侧双击应快进 10 秒"
+            "右侧双击应快进 90 秒"
         )
 
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.45)).doubleTap()
@@ -88,7 +88,7 @@ final class PlaybackControlsUITests: XCTestCase {
             seconds(from: time.label),
             pausedTime,
             accuracy: 2,
-            "左侧双击应快退 10 秒"
+            "左侧双击应快退 90 秒"
         )
 
         // 右半屏竖向拖动调音量，左半屏调亮度。
@@ -328,15 +328,15 @@ final class PlaybackControlsUITests: XCTestCase {
         sleep(1)
         XCTAssertGreaterThanOrEqual(
             seconds(from: time.label),
-            before + 8,
-            "右方向键应快进约 10 秒"
+            before + 88,
+            "右方向键应快进约 90 秒"
         )
 
         app.typeKey(XCUIKeyboardKey.leftArrow, modifierFlags: [])
         sleep(1)
         XCTAssertLessThan(
             seconds(from: time.label),
-            before + 8,
+            before + 88,
             "左方向键应快退"
         )
 
@@ -367,6 +367,13 @@ final class PlaybackControlsUITests: XCTestCase {
         video.tap()
 
         XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 12), "应开始播放")
+        let status = app.descendants(matching: .any)
+            .matching(identifier: "player.status")
+            .firstMatch
+        XCTAssertTrue(
+            status.waitForExistence(timeout: 3),
+            "iPhone 播放页点击唤出控件后，右上角应显示电量与网速"
+        )
         let subtitle = app.descendants(matching: .any)
             .matching(identifier: "subtitle.libass")
             .firstMatch

@@ -103,15 +103,15 @@ final class NowPlayingCoordinator {
             return .success
         }
 
-        center.skipForwardCommand.preferredIntervals = [10]
-        center.skipBackwardCommand.preferredIntervals = [10]
+        center.skipForwardCommand.preferredIntervals = [NSNumber(value: PlaybackSeek.step)]
+        center.skipBackwardCommand.preferredIntervals = [NSNumber(value: PlaybackSeek.step)]
         add(center.skipForwardCommand) { [weak self] event in
-            let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? 10
+            let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? PlaybackSeek.step
             self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) + interval)
             return .success
         }
         add(center.skipBackwardCommand) { [weak self] event in
-            let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? 10
+            let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? PlaybackSeek.step
             self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) - interval)
             return .success
         }

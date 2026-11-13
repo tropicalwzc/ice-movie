@@ -1,6 +1,7 @@
 import Foundation
 import IceCore
 import PersistenceKit
+import RenderKit
 import SwiftUI
 import ThumbnailKit
 
@@ -60,13 +61,13 @@ struct IceMovieApp: App {
                 }
                 .keyboardShortcut(.space, modifiers: [])
 
-                Button("快退 10 秒") {
-                    PlayerCommands.shared.seek(by: -10)
+                Button("快退 \(Int(PlaybackSeek.step)) 秒") {
+                    PlayerCommands.shared.seek(by: -PlaybackSeek.step)
                 }
                 .keyboardShortcut(.leftArrow, modifiers: [])
 
-                Button("快进 10 秒") {
-                    PlayerCommands.shared.seek(by: 10)
+                Button("快进 \(Int(PlaybackSeek.step)) 秒") {
+                    PlayerCommands.shared.seek(by: PlaybackSeek.step)
                 }
                 .keyboardShortcut(.rightArrow, modifiers: [])
 

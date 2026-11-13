@@ -181,6 +181,11 @@ private struct PlayerSurface: View {
         UIDevice.current.userInterfaceIdiom == .pad
     }
 
+    /// 压测/性能验收：右上角常驻网速、内存与 CPU，且内嵌播放时也要显示。
+    private var showsStatusDetails: Bool {
+        ProcessInfo.processInfo.arguments.contains("-playerStatusDetails")
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
@@ -323,32 +328,36 @@ private struct PlayerSurface: View {
                     .allowsHitTesting(false)
             }
 
-            if let onClose {
+            // 右上角状态条 + 关闭按钮。状态条默认跟随控件显隐；
+            // 压测加 `-playerStatusDetails` 时常驻，并展开内存/CPU，便于持续观察。
+            if onClose != nil || showsStatusDetails {
                 VStack {
                     HStack(spacing: 12) {
                         Spacer()
-                        if isPad {
-                            PlayerStatusBadge(engine: engine)
+                        PlayerStatusBadge(engine: engine)
+                            .opacity(showsStatusDetails || controlsVisible ? 1 : 0)
+                            .allowsHitTesting(false)
+                        if let onClose {
+                            Button {
+                                onClose()
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .frame(width: 34, height: 34)
+                                    .background(.black.opacity(0.55))
+                                    .clipShape(Circle())
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(controlsVisible ? 1 : 0)
+                            .allowsHitTesting(controlsVisible)
+                            .accessibilityLabel("关闭播放")
+                            .accessibilityIdentifier("player.close")
                         }
-                        Button {
-                            onClose()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .frame(width: 34, height: 34)
-                                .background(.black.opacity(0.55))
-                                .clipShape(Circle())
-                                .foregroundStyle(.white)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("关闭播放")
-                        .accessibilityIdentifier("player.close")
                     }
                     Spacer()
                 }
                 .padding(14)
-                .opacity(controlsVisible ? 1 : 0)
-                .allowsHitTesting(controlsVisible)
                 .animation(.easeInOut(duration: 0.2), value: controlsVisible)
             }
 
@@ -570,14 +579,14 @@ private struct PlayerGestureLayer: View {
     private func handleDoubleTap(x: CGFloat) {
         let forward = x > UIScreen.main.bounds.midX
         let target = min(
-            max(0, engine.clock.currentTime + (forward ? 10 : -10)),
+            max(0, engine.clock.currentTime + (forward ? PlaybackSeek.step : -PlaybackSeek.step)),
             max(0, engine.duration - 0.05)
         )
         onInteraction()
         let id = engine.seek(to: target)
         showHint(
-            text: forward ? "快进 10 秒" : "快退 10 秒",
-            symbol: forward ? "goforward.10" : "gobackward.10",
+            text: PlaybackSeek.label(forward: forward),
+            symbol: forward ? PlaybackSeek.forwardSymbol : PlaybackSeek.backwardSymbol,
             value: nil
         )
         Log.info(.render, "双击\(forward ? "快进" : "快退") id=\(id) 目标=\(format(target))")
@@ -764,15 +773,19 @@ private struct SubtitlePanel: View {
     }
 }
 
-/// iPad 全屏播放器右上角状态：实时下载速度 + 进程内存 + 电量。
+/// 播放器右上角状态：实时下载速度 + 电量，iPhone 与 iPad 使用同一套紧凑样式。
 ///
-/// 内存这一格是给泄漏排查用的：引擎/显示层没释放时播放指标全都正常，
-/// 只有内存会一路抬高，所以把当前占用摆出来，涨得异常就变色报警。
+/// 内存/CPU 是排查泄漏用的额外指标，默认不展示；需要时用
+/// `-playerStatusDetails` 启动参数打开，布局会加宽并补上这两格。
 private struct PlayerStatusBadge: View {
     let engine: PlaybackEngine
 
     /// 进入播放页时的内存基线，用来区分“本次会话自身增长”与进程历史占用。
     @State private var baselineMB: Double?
+
+    private var showsDetails: Bool {
+        ProcessInfo.processInfo.arguments.contains("-playerStatusDetails")
+    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -782,48 +795,51 @@ private struct PlayerStatusBadge: View {
             let battery = BatteryStatus.current
             let memoryTint = tint(for: memory)
             let cpuTint = tint(forCPU: cpu)
-            HStack(spacing: 9) {
+            HStack(spacing: showsDetails ? 9 : 7) {
                 Image(systemName: "wifi")
                     .font(.caption2)
                 Text(speedLabel(speed))
                     .monospacedDigit()
+                if showsDetails {
+                    Rectangle()
+                        .fill(.white.opacity(0.25))
+                        .frame(width: 1, height: 12)
+                    Image(systemName: "memorychip")
+                        .font(.caption2)
+                    Text(MemoryFootprint.label(memory))
+                        .monospacedDigit()
+                        .foregroundStyle(memoryTint)
+                    Rectangle()
+                        .fill(.white.opacity(0.25))
+                        .frame(width: 1, height: 12)
+                    Image(systemName: "cpu")
+                        .font(.caption2)
+                    Text(CPUUsage.label(cpu))
+                        .monospacedDigit()
+                        .foregroundStyle(cpuTint)
+                }
                 Rectangle()
                     .fill(.white.opacity(0.25))
                     .frame(width: 1, height: 12)
-                Image(systemName: "memorychip")
-                    .font(.caption2)
-                Text(MemoryFootprint.label(memory))
-                    .monospacedDigit()
-                    .foregroundStyle(memoryTint)
-                Rectangle()
-                    .fill(.white.opacity(0.25))
-                    .frame(width: 1, height: 12)
-                Image(systemName: "cpu")
-                    .font(.caption2)
-                Text(CPUUsage.label(cpu))
-                    .monospacedDigit()
-                    .foregroundStyle(cpuTint)
-                Rectangle()
-                    .fill(.white.opacity(0.25))
-                    .frame(width: 1, height: 12)
-                Image(systemName: battery.symbol)
-                    .font(.caption)
-                    .foregroundStyle(battery.low ? .red : .white)
+                batteryIcon(battery)
                 Text(battery.label)
                     .monospacedDigit()
                     .foregroundStyle(battery.low ? .red : .white)
             }
-            .font(.caption.weight(.medium))
+            .font(showsDetails ? .caption.weight(.medium) : .caption2.weight(.medium))
             .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, showsDetails ? 12 : 10)
+            .padding(.vertical, showsDetails ? 7 : 6)
             .background(.black.opacity(0.55))
             .clipShape(Capsule())
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("player.status")
             .accessibilityLabel(
-                "\(speedLabel(speed))，内存 \(MemoryFootprint.label(memory))，"
-                    + "CPU \(CPUUsage.label(cpu))，电量 \(battery.label)"
+                "\(speedLabel(speed))，"
+                    + (showsDetails
+                        ? "内存 \(MemoryFootprint.label(memory))，CPU \(CPUUsage.label(cpu))，"
+                        : "")
+                    + "电量 \(battery.label)\(battery.isCharging ? "，充电中" : "")"
             )
         }
         .onAppear {
@@ -832,6 +848,22 @@ private struct PlayerStatusBadge: View {
                 baselineMB = MemoryFootprint.currentMB
             }
         }
+    }
+
+    /// 充电时电池图标染绿，并在图标上叠一个小闪电；低电量且未充电时保持红色。
+    private func batteryIcon(_ battery: BatteryStatus) -> some View {
+        ZStack {
+            Image(systemName: battery.symbol)
+                .font(.caption)
+                .foregroundStyle(battery.isCharging ? .green : (battery.low ? .red : .white))
+            if battery.isCharging {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white)
+                    .offset(x: -0.5)
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     /// 当前占用高、或相对进入时涨得多，都判为异常并变色。
@@ -867,13 +899,19 @@ private struct BatteryStatus {
     let label: String
     let symbol: String
     let low: Bool
+    let isCharging: Bool
 
     static var current: BatteryStatus {
         UIDevice.current.isBatteryMonitoringEnabled = true
         let level = UIDevice.current.batteryLevel
         let state = UIDevice.current.batteryState
         guard level >= 0 else {
-            return BatteryStatus(label: "--%", symbol: "battery.0", low: false)
+            return BatteryStatus(
+                label: "--%",
+                symbol: "battery.0",
+                low: false,
+                isCharging: false
+            )
         }
         let percent = Int((level * 100).rounded())
         let symbol: String
@@ -885,9 +923,10 @@ private struct BatteryStatus {
         }
         let charging = state == .charging || state == .full
         return BatteryStatus(
-            label: charging ? "\(percent)% ⚡" : "\(percent)%",
+            label: "\(percent)%",
             symbol: symbol,
-            low: percent <= 20 && !charging
+            low: percent <= 20 && !charging,
+            isCharging: charging
         )
     }
 }

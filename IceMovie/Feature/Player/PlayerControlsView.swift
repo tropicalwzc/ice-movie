@@ -3,7 +3,7 @@ import RenderKit
 import SubtitleKit
 import SwiftUI
 
-/// 底部播放控件：进度条、播放/暂停、±10 秒、全屏。
+/// 底部播放控件：进度条、播放/暂停、±90 秒、全屏。
 ///
 /// 只负责底部这一条；点按、双击与音量/亮度手势由 `PlayerGestureLayer` 处理，
 /// 这样按钮与滑块的触摸不会被全屏手势层抢走。
@@ -36,9 +36,12 @@ struct PlayerControlsView: View {
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
             VStack(spacing: 14) {
                 HStack(spacing: 16) {
-                    button("gobackward.10", label: "快退 10 秒") {
+                    button(
+                        PlaybackSeek.backwardSymbol,
+                        label: PlaybackSeek.label(forward: false)
+                    ) {
                         onInteraction()
-                        engine.seek(to: time - 10)
+                        engine.seek(to: time - PlaybackSeek.step)
                     }
                     button(
                         engine.isPlaying ? "pause.fill" : "play.fill",
@@ -48,9 +51,12 @@ struct PlayerControlsView: View {
                         engine.isPlaying ? engine.pause() : engine.play()
                     }
                     .font(.system(size: 34))
-                    button("goforward.10", label: "快进 10 秒") {
+                    button(
+                        PlaybackSeek.forwardSymbol,
+                        label: PlaybackSeek.label(forward: true)
+                    ) {
                         onInteraction()
-                        engine.seek(to: time + 10)
+                        engine.seek(to: time + PlaybackSeek.step)
                     }
                     if let onToggleFullscreen {
                         button(

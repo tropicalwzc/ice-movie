@@ -38,7 +38,8 @@ public struct SharedThumbnailIndex: Codable, Sendable, Equatable {
         }
     }
 
-    public static let currentVersion = 1
+    /// 2：侧车缩略图从 384px 提升到 512px，旧索引需重建。
+    public static let currentVersion = 2
 
     public var version: Int
     public var entries: [String: Entry]
@@ -73,12 +74,21 @@ public enum SharedThumbnailKey {
 /// 负责索引加载、命中读取、生成后写回与批量落盘；所有失败都只降级为本地缓存，
 /// 不向调用方抛出，避免影响网格显示。
 public actor SharedThumbnailCache {
-    public static let maxPixelSize = 384
+    public static let maxPixelSize = 512
+    /// 索引条目上限。超出后保留源文件修改时间较新的条目，避免 index.json
+    /// 无限增长并撞上侧车读取上限，导致整个会话静默降级。
+    public static let maxIndexEntries = 30_000
+    private static let flushDelay: Duration = .seconds(5)
 
     private let provider: any ThumbnailSidecarProviding
     private var index: SharedThumbnailIndex?
     private var dirtyEntries = 0
-    private var lastFlush = Date.distantPast
+    /// 每次索引变更递增；flush 完成时用它判断等待期间是否有新条目。
+    private var mutationGeneration: UInt64 = 0
+    private var flushTask: Task<Void, Never>?
+    /// 同一时间只允许一个索引写入/删除操作，避免旧快照覆盖新状态。
+    private var persisting = false
+    private var persistWaiters: [CheckedContinuation<Void, Never>] = []
     private var writable = true
     private var available = true
 
@@ -153,8 +163,13 @@ public actor SharedThumbnailCache {
                 modified: modifiedTime(modified)
             )
             dirtyEntries += 1
-            if dirtyEntries >= 20 || Date().timeIntervalSince(lastFlush) >= 5 {
+            mutationGeneration &+= 1
+            if dirtyEntries >= 20 {
                 await flush()
+            } else {
+                // 稀疏写入时不在每张图后重写整个 JSON；合并到 5 秒后的
+                // 一次 flush，避免预热每 6 秒来一张也产生一次全量写。
+                scheduleFlush()
             }
         } catch {
             writable = false
@@ -166,21 +181,66 @@ public actor SharedThumbnailCache {
     }
 
     public func flush() async {
-        guard dirtyEntries > 0, writable, var index else { return }
-        index.version = SharedThumbnailIndex.currentVersion
-        guard let data = try? JSONEncoder().encode(index) else { return }
-        do {
-            try await provider.storeIndex(data)
-            self.index = index
-            dirtyEntries = 0
-            lastFlush = Date()
-        } catch {
-            writable = false
-            Log.notice(
-                .thumbnail,
-                "共享缩略图索引写入失败，本次会话降级为本地缓存：\(error.localizedDescription)"
-            )
+        flushTask?.cancel()
+        flushTask = nil
+        // 两个 flush 并发时，后一个不等待前一个；前一个会在循环里继续
+        // 把等待期间新增的 dirtyEntries 写掉。
+        guard !persisting else { return }
+        persisting = true
+        defer { finishPersisting() }
+        while dirtyEntries > 0, writable {
+            guard var snapshot = index else { return }
+            let generation = mutationGeneration
+            let dirtyAtStart = dirtyEntries
+            trimIndexIfNeeded(&snapshot)
+            snapshot.version = SharedThumbnailIndex.currentVersion
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            do {
+                try await provider.storeIndex(data)
+            } catch {
+                writable = false
+                Log.notice(
+                    .thumbnail,
+                    "共享缩略图索引写入失败，本次会话降级为本地缓存：\(error.localizedDescription)"
+                )
+                return
+            }
+            if mutationGeneration == generation {
+                // 等待 SMB 写盘期间没有新变更：可以安全用带裁剪/版本号的快照替换内存索引。
+                self.index = snapshot
+                dirtyEntries = 0
+            } else {
+                // 期间有新的 store/remove：保留内存索引里的新状态，只扣掉本次已写入的条目数，
+                // 然后继续循环把剩余变更写盘，避免旧快照覆盖新条目。
+                dirtyEntries = max(0, dirtyEntries - dirtyAtStart)
+            }
         }
+    }
+
+    private func scheduleFlush() {
+        guard flushTask == nil else { return }
+        flushTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.flushDelay)
+            guard !Task.isCancelled else { return }
+            await self?.flushScheduled()
+        }
+    }
+
+    private func flushScheduled() async {
+        flushTask = nil
+        await flush()
+    }
+
+    private func trimIndexIfNeeded(_ index: inout SharedThumbnailIndex) {
+        guard index.entries.count > Self.maxIndexEntries else { return }
+        let kept = index.entries
+            .sorted { $0.value.modified > $1.value.modified }
+            .prefix(Self.maxIndexEntries)
+        index.entries = Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
+        Log.notice(
+            .thumbnail,
+            "共享缩略图索引超过上限，已裁剪到 \(Self.maxIndexEntries) 条"
+        )
     }
 
     public func entry(
@@ -216,23 +276,47 @@ public actor SharedThumbnailCache {
         guard await ensureLoaded(), let entry = index?.entries.removeValue(forKey: path) else {
             return
         }
+        // 先记录变更再等待网络删除；否则 flush 可能在本函数等待期间把已删条目写回内存索引。
+        dirtyEntries += 1
+        mutationGeneration &+= 1
         if let thumb = entry.thumb {
             try? await provider.removeThumbnail(relativePath: thumb)
         }
-        dirtyEntries += 1
         await flush()
     }
 
     public func removeAll() async {
+        flushTask?.cancel()
+        flushTask = nil
+        // 等正在写盘的旧快照结束后再删除，否则旧 flush 可能在 removeAll 之后
+        // 把索引重新写回来。
+        await waitForPersisting()
+        persisting = true
+        defer { finishPersisting() }
         try? await provider.removeAll()
         index = SharedThumbnailIndex()
         dirtyEntries = 0
-        lastFlush = .distantPast
+        mutationGeneration &+= 1
         writable = true
         available = true
     }
 
     // MARK: - 内部
+
+    private func waitForPersisting() async {
+        while persisting {
+            await withCheckedContinuation { persistWaiters.append($0) }
+        }
+    }
+
+    private func finishPersisting() {
+        persisting = false
+        let waiters = persistWaiters
+        persistWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
 
     private func ensureLoaded() async -> Bool {
         guard available else { return false }
@@ -258,10 +342,10 @@ public actor SharedThumbnailCache {
         }
 
         if let data,
-           let decoded = try? JSONDecoder().decode(SharedThumbnailIndex.self, from: data),
+           var decoded = try? JSONDecoder().decode(SharedThumbnailIndex.self, from: data),
            decoded.version == SharedThumbnailIndex.currentVersion {
+            trimIndexIfNeeded(&decoded)
             index = decoded
-            lastFlush = Date()
             return true
         }
 
@@ -271,7 +355,6 @@ public actor SharedThumbnailCache {
             Log.notice(.thumbnail, "共享缩略图索引无效，已重建")
         }
         index = SharedThumbnailIndex()
-        lastFlush = Date()
         return true
     }
 

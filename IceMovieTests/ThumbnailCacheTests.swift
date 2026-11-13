@@ -193,6 +193,66 @@ final class ThumbnailCacheTests: XCTestCase {
         XCTAssertEqual(opens, 1, "图片缩略图应命中缓存，不重复读取")
     }
 
+    /// A 等 T1 时被 cancel，C 创建 T2；A 恢复后不得把 T2 从 in-flight 表里清掉。
+    func testCancelDoesNotDropNewerInFlightRequest() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "ThumbnailCacheTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = try ThumbnailStore(directory: directory, capacityBytes: 4 * 1024 * 1024)
+        let service = ThumbnailService(store: store)
+        let provider = GatedProvider(url: try fixtureURL(name: "sample.jpg"))
+        let path = "Photos/race-\(UUID().uuidString).jpg"
+
+        let first = Task {
+            await service.thumbnail(
+                path: path,
+                size: 1,
+                modified: nil,
+                contentKind: .image,
+                provider: provider
+            )
+        }
+        await provider.waitForOpenCount(1)
+        await service.cancel(path: path, size: 1, modified: nil)
+
+        let second = Task {
+            await service.thumbnail(
+                path: path,
+                size: 1,
+                modified: nil,
+                contentKind: .image,
+                provider: provider
+            )
+        }
+        await provider.waitForOpenCount(2)
+
+        // 放行被取消的 A；它返回后不能把 C 的 T2 从 in-flight 表里抹掉。
+        await provider.releaseOpen(1)
+        _ = await first.value
+
+        let third = Task {
+            await service.thumbnail(
+                path: path,
+                size: 1,
+                modified: nil,
+                contentKind: .image,
+                provider: provider
+            )
+        }
+        try await Task.sleep(for: .milliseconds(150))
+        let opensWhileWaiting = await provider.openCount()
+        XCTAssertEqual(
+            opensWhileWaiting,
+            2,
+            "第三个请求应加入 T2，而不是重新打开原图"
+        )
+
+        await provider.releaseOpen(2)
+        _ = await second.value
+        _ = await third.value
+    }
+
     private func fixtureURL(name: String) throws -> URL {
         let bundle = Bundle(for: ThumbnailCacheTests.self)
         let pathExtension = (name as NSString).pathExtension
@@ -379,6 +439,57 @@ final class ThumbnailCacheTests: XCTestCase {
         )
         XCTAssertNotNil(outcome)
         XCTAssertGreaterThan(outcome?.data.count ?? 0, 0)
+    }
+}
+
+/// 每次 open 都阻塞，直到测试显式放行，用来稳定复现 in-flight 竞态。
+private actor GatedProvider: ThumbnailByteSourceProvider {
+    private let url: URL
+    private var opens = 0
+    private var released: Set<Int> = []
+    private var gates: [Int: CheckedContinuation<Void, Never>] = [:]
+    private var waiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    init(url: URL) {
+        self.url = url
+    }
+
+    func openByteSource(path: String) async throws -> any ByteSource {
+        try LocalFileByteSource(url: url)
+    }
+
+    func openThumbnailByteSource(path: String) async throws -> any ByteSource {
+        opens += 1
+        let index = opens
+        wakeWaiters()
+        if !released.contains(index) {
+            await withCheckedContinuation { gates[index] = $0 }
+        }
+        return try LocalFileByteSource(url: url)
+    }
+
+    func openCount() -> Int { opens }
+
+    func waitForOpenCount(_ count: Int) async {
+        guard opens < count else { return }
+        await withCheckedContinuation { waiters.append((count, $0)) }
+    }
+
+    func releaseOpen(_ index: Int) {
+        released.insert(index)
+        gates.removeValue(forKey: index)?.resume()
+    }
+
+    private func wakeWaiters() {
+        var remaining: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
+        for waiter in waiters {
+            if opens >= waiter.target {
+                waiter.continuation.resume()
+            } else {
+                remaining.append(waiter)
+            }
+        }
+        waiters = remaining
     }
 }
 

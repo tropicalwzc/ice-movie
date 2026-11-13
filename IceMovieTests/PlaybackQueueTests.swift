@@ -12,6 +12,43 @@ final class PlaybackQueueTests: XCTestCase {
         )
     }
 
+    func testPreviousVideoInNaturalOrder() {
+        let first = entry("Shirobako 01.mkv")
+        let second = entry("Shirobako 02.mkv")
+        let third = entry("Shirobako 03.mkv")
+        let entries = [entry("Bonus", directory: true), first, second, third]
+
+        XCTAssertEqual(PlaybackQueue.previous(before: third, in: entries)?.path, second.path)
+        XCTAssertEqual(PlaybackQueue.previous(before: second, in: entries)?.path, first.path)
+        XCTAssertNil(PlaybackQueue.previous(before: first, in: entries))
+    }
+
+    func testPreviousSkipsDirectoriesAndMissingEntry() {
+        let first = entry("Shirobako 01.mkv")
+        let second = entry("Shirobako 02.mkv")
+        let entries = [first, entry("Subs", directory: true), second]
+
+        XCTAssertEqual(PlaybackQueue.previous(before: second, in: entries)?.path, first.path)
+
+        let missing = entry("Not In List.mkv")
+        XCTAssertNil(PlaybackQueue.previous(before: missing, in: entries))
+    }
+
+    func testPreviousSkipsDocumentsAndImages() {
+        let first = entry("Shirobako 01.mkv")
+        let second = entry("Shirobako 02.mkv")
+        let entries = [
+            first,
+            entry("notes.md"),
+            entry("guide.pdf"),
+            entry("IMG_0001.HEIC"),
+            second,
+        ]
+
+        XCTAssertEqual(PlaybackQueue.previous(before: second, in: entries)?.path, first.path)
+        XCTAssertNil(PlaybackQueue.previous(before: entry("notes.md"), in: entries))
+    }
+
     func testNextVideoInNaturalOrder() {
         let first = entry("Shirobako 01.mkv")
         let second = entry("Shirobako 02.mkv")

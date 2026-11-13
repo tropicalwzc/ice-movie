@@ -39,6 +39,18 @@ final class ThumbnailSidecarTests: XCTestCase {
         XCTAssertNil(removed)
     }
 
+    func testSidecarOverwritesExistingThumbnailAfterSizeUpgrade() async throws {
+        let provider = LocalThumbnailSidecar(rootURL: root)
+        try await provider.prepare()
+        let relativePath = "thumbs/ab/x.jpg"
+
+        try await provider.storeThumbnail(Data([1, 2, 3]), relativePath: relativePath)
+        try await provider.storeThumbnail(Data([4, 5, 6]), relativePath: relativePath)
+
+        let thumb = try await provider.loadThumbnail(relativePath: relativePath)
+        XCTAssertEqual(thumb, Data([4, 5, 6]), "索引重建后必须用新尺寸覆盖旧文件")
+    }
+
     func testCacheUsesLocalSidecarAndInvalidatesOnSizeChange() async throws {
         let provider = LocalThumbnailSidecar(rootURL: root)
         let cache = SharedThumbnailCache(provider: provider)

@@ -43,6 +43,15 @@ public actor ThumbnailStore {
     public nonisolated let directory: URL
     public nonisolated let capacityBytes: Int64
 
+    private struct Entry {
+        var bytes: Int64
+        var lastAccess: Date
+    }
+
+    /// 内存里的 LRU 表。命中只更新时间戳，不再每次 stat + 写文件元数据。
+    private var entries: [String: Entry] = [:]
+    /// 限制 mtime 刷新频率，保留跨启动的 LRU 信息，又避免滚动时大量元数据写入。
+    private var lastStamped: [String: Date] = [:]
     private var totalBytes: Int64 = 0
 
     public init(
@@ -54,7 +63,9 @@ public actor ThumbnailStore {
         self.directory = target
         // 在缓存边界强制硬上限，避免未来调用方绕过启动参数直接传入更大值。
         self.capacityBytes = min(max(0, capacityBytes), Self.maximumDiskBytes)
-        self.totalBytes = Self.directorySize(target)
+        let scanned = Self.scanEntries(target)
+        self.entries = scanned
+        self.totalBytes = scanned.values.reduce(0) { $0 + $1.bytes }
     }
 
     public nonisolated static func defaultDirectory() -> URL {
@@ -71,29 +82,44 @@ public actor ThumbnailStore {
     public static let folderCoverCapacityBytes: Int64 = 16 * 1024 * 1024
 
     public func snapshot() -> Snapshot {
-        Snapshot(count: fileURLs().count, bytes: totalBytes, capacityBytes: capacityBytes)
+        Snapshot(count: entries.count, bytes: totalBytes, capacityBytes: capacityBytes)
     }
 
-    /// 命中时刷新访问时间，作为 LRU 依据。
+    /// 命中时只更新内存 LRU；文件 mtime 最多每 60 秒刷新一次，避免滚动时写放大。
     public func cachedData(forKey key: String) -> Data? {
         let url = fileURL(forKey: key)
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        try? FileManager.default.setAttributes(
-            [.modificationDate: Date()],
-            ofItemAtPath: url.path
-        )
+        guard let data = try? Data(contentsOf: url) else {
+            if let stale = entries.removeValue(forKey: key) {
+                totalBytes = max(0, totalBytes - stale.bytes)
+            }
+            return nil
+        }
+        let now = Date()
+        let previous = entries[key]?.bytes ?? 0
+        totalBytes += Int64(data.count) - previous
+        entries[key] = Entry(bytes: Int64(data.count), lastAccess: now)
+        if lastStamped[key].map({ now.timeIntervalSince($0) >= 60 }) ?? true {
+            try? FileManager.default.setAttributes(
+                [.modificationDate: now],
+                ofItemAtPath: url.path
+            )
+            lastStamped[key] = now
+        }
         return data
     }
 
     public func save(_ data: Data, forKey key: String) throws {
         let url = fileURL(forKey: key)
-        let previous = Self.fileSize(url)
+        let previous = entries[key]?.bytes ?? Self.fileSize(url)
         try data.write(to: url, options: .atomic)
+        let now = Date()
+        totalBytes += Int64(data.count) - previous
+        entries[key] = Entry(bytes: Int64(data.count), lastAccess: now)
+        lastStamped[key] = now
         try? FileManager.default.setAttributes(
-            [.modificationDate: Date()],
+            [.modificationDate: now],
             ofItemAtPath: url.path
         )
-        totalBytes += Int64(data.count) - previous
         evictIfNeeded()
     }
 
@@ -101,24 +127,25 @@ public actor ThumbnailStore {
         for url in fileURLs() {
             try? FileManager.default.removeItem(at: url)
         }
+        entries.removeAll()
+        lastStamped.removeAll()
         totalBytes = 0
     }
 
     /// 仅用于验证：把上限临时调小后可直接观察淘汰行为。
+    ///
+    /// LRU 表在内存里，淘汰不再扫描整个目录；排序本身足够便宜。
     public func evictIfNeeded() {
         guard totalBytes > capacityBytes else { return }
-        let candidates = fileURLs().compactMap { url -> (URL, Int64, Date)? in
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-            guard let size = values?.fileSize else { return nil }
-            return (url, Int64(size), values?.contentModificationDate ?? .distantPast)
-        }
-        .sorted { $0.2 < $1.2 }
+        let candidates = entries.sorted { $0.value.lastAccess < $1.value.lastAccess }
 
         var evicted = 0
-        for candidate in candidates {
+        for (key, entry) in candidates {
             guard totalBytes > capacityBytes else { break }
-            try? FileManager.default.removeItem(at: candidate.0)
-            totalBytes -= candidate.1
+            try? FileManager.default.removeItem(at: fileURL(forKey: key))
+            totalBytes = max(0, totalBytes - entry.bytes)
+            entries[key] = nil
+            lastStamped[key] = nil
             evicted += 1
         }
         if evicted > 0 {
@@ -145,14 +172,26 @@ public actor ThumbnailStore {
         return Int64(values?.fileSize ?? 0)
     }
 
-    private static func directorySize(_ directory: URL) -> Int64 {
+    /// 启动时扫描一次，之后 LRU 完全在内存里维护。
+    private static func scanEntries(_ directory: URL) -> [String: Entry] {
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.fileSizeKey]
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]
         )) ?? []
-        return urls.reduce(into: Int64(0)) { total, url in
-            total += fileSize(url)
+        var result: [String: Entry] = [:]
+        result.reserveCapacity(urls.count)
+        for url in urls {
+            let values = try? url.resourceValues(
+                forKeys: [.fileSizeKey, .contentModificationDateKey]
+            )
+            guard let size = values?.fileSize else { continue }
+            let key = url.deletingPathExtension().lastPathComponent
+            result[key] = Entry(
+                bytes: Int64(size),
+                lastAccess: values?.contentModificationDate ?? .distantPast
+            )
         }
+        return result
     }
 }
 
@@ -196,11 +235,19 @@ public actor ThumbnailService {
     private let maxConcurrent: Int
 
     private var failedKeys: Set<String> = []
-    private var inFlight: [String: Task<Outcome?, Never>] = [:]
+    private var inFlight: [String: InFlight] = [:]
     private var activeCount = 0
+
+    private final class InFlight {
+        let task: Task<Outcome?, Never>
+
+        init(task: Task<Outcome?, Never>) {
+            self.task = task
+        }
+    }
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    public init(store: ThumbnailStore, maxWidth: Int = 384, maxConcurrent: Int = 3) {
+    public init(store: ThumbnailStore, maxWidth: Int = 512, maxConcurrent: Int = 3) {
         self.store = store
         self.maxWidth = maxWidth
         self.maxConcurrent = max(1, maxConcurrent)
@@ -211,6 +258,12 @@ public actor ThumbnailService {
         await store.removeAll()
         failedKeys.removeAll()
         Log.info(.thumbnail, "缩略图缓存已清空")
+    }
+
+    /// 目录刷新/重连成功后允许失败条目重试，避免一次网络抖动把整批照片
+    /// 在当前会话里永久标记为“无预览”。
+    public func clearFailures() {
+        failedKeys.removeAll()
     }
 
     /// 启动时按当前上限立即修剪一次，避免调低上限后旧缓存继续占盘。
@@ -248,7 +301,7 @@ public actor ThumbnailService {
             modified: modified,
             namespace: namespace
         )
-        inFlight.removeValue(forKey: key)?.cancel()
+        inFlight.removeValue(forKey: key)?.task.cancel()
     }
 
     public func isKnownFailure(        path: String,
@@ -305,7 +358,7 @@ public actor ThumbnailService {
         }
 
         if let existing = inFlight[key] {
-            return await existing.value
+            return await existing.task.value
         }
 
         let task: Task<Outcome?, Never> = Task.detached(priority: .utility) { [store, maxWidth, maxConcurrent, contentKind, sidecar, positionFraction] () -> Outcome? in
@@ -359,17 +412,19 @@ public actor ThumbnailService {
                        let fast = try? await ImageDecoder.thumbnailFromPrefix(
                            source: source,
                            maxPixelSize: maxWidth,
-                           label: path
+                           label: path,
+                           includeJPEG: sidecar != nil
                        ) {
                         // 手机上大部分 3–10MB JPEG 在前 384KB 里就有可用预览图。
                         image = fast
                         await source.close()
                     } else {
                         do {
-                            image = try ImageDecoder.thumbnail(
+                            image = try await ImageDecoder.thumbnail(
                                 source: source,
                                 maxPixelSize: maxWidth,
-                                label: path
+                                label: path,
+                                includeJPEG: sidecar != nil
                             )
                             await source.close()
                         } catch {
@@ -406,7 +461,7 @@ public actor ThumbnailService {
                     if Task.isCancelled { return nil }
                     try? await store.save(image.data, forKey: key)
                     if let sidecar,
-                       let jpeg = ImageDecoder.encodeJPEG(image.data) {
+                       let jpeg = image.jpegData ?? ImageDecoder.encodeJPEG(image.data) {
                         await sidecar.store(
                             thumbnailData: jpeg,
                             width: image.width,
@@ -424,12 +479,13 @@ public actor ThumbnailService {
                     let image = try ImageDecoder.thumbnail(
                         data: still,
                         maxPixelSize: maxWidth,
-                        label: path
+                        label: path,
+                        includeJPEG: sidecar != nil
                     )
                     await source.close()
                     try? await store.save(image.data, forKey: key)
                     if let sidecar,
-                       let jpeg = ImageDecoder.encodeJPEG(image.data) {
+                       let jpeg = image.jpegData ?? ImageDecoder.encodeJPEG(image.data) {
                         await sidecar.store(
                             thumbnailData: jpeg,
                             width: image.width,
@@ -450,9 +506,14 @@ public actor ThumbnailService {
             }
         }
 
-        inFlight[key] = task
+        let box = InFlight(task: task)
+        inFlight[key] = box
         let outcome = await task.value
-        inFlight[key] = nil
+        // 等待期间可能已被 cancel + 新请求替换；只清理自己写入的那一个，
+        // 否则会把新任务从表里抹掉，导致同一张图被多路并发读取。
+        if inFlight[key] === box {
+            inFlight[key] = nil
+        }
         return outcome
     }
 
@@ -474,6 +535,10 @@ public actor ThumbnailService {
     }
 
     private func markFailed(_ key: String) {
+        // 超大目录长期滚动时失败集合也要有界；丢最早插入的任意一条即可。
+        if failedKeys.count >= 4096, let first = failedKeys.first {
+            failedKeys.remove(first)
+        }
         failedKeys.insert(key)
     }
 
@@ -485,13 +550,14 @@ public actor ThumbnailService {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             waiters.append(continuation)
         }
-        activeCount += 1
+        // 许可由 releaseSlot 直接转交，这里不再自增，避免和新进入的请求叠加超限。
     }
 
     private func releaseSlot() {
+        if !waiters.isEmpty {
+            waiters.removeFirst().resume()
+            return
+        }
         activeCount = max(0, activeCount - 1)
-        guard !waiters.isEmpty else { return }
-        let next = waiters.removeFirst()
-        next.resume()
     }
 }

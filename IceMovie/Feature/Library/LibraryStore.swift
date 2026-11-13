@@ -147,10 +147,10 @@ final class LibraryStore {
     private let thumbnails: ThumbnailService
     /// 目录封面独立单并发，避免读取内部视频时挤占可见视频封面的并发槽。
     private let folderCoverThumbnails: ThumbnailService
-    /// 网格封面只需覆盖 2x/3x 屏幕的单元格宽度，480px 对 iPad 明显过大且更耗带宽。
-    private static let thumbnailMaxWidth = 384
+    /// 512px 覆盖 3x iPhone 两列（约 520px）的单元格宽度；再大对 iPad 预热带宽收益很小。
+    private static let thumbnailMaxWidth = SharedThumbnailCache.maxPixelSize
     /// 缩略图生成逻辑版本；变化时换命名空间并清掉旧文件。
-    private static let thumbnailVariant = "thumb\(thumbnailMaxWidth)p3"
+    private static let thumbnailVariant = "thumb\(thumbnailMaxWidth)p4"
     /// 缩略图分辨率/生成逻辑变化后必须换缓存命名空间，避免继续命中旧文件。
     private var thumbnailNamespace: String {
         "\(source.cacheNamespace)|\(Self.thumbnailVariant)"
@@ -177,6 +177,10 @@ final class LibraryStore {
     /// 当前目录的全量预热；仅在有共享侧车且存在缺失缩略图时创建。
     private(set) var prewarmController: ThumbnailPrewarmController?
     @ObservationIgnored private var prewarmTask: Task<Void, Never>?
+    /// 相册/播放等独占浏览态会暂停预热；即使预热还处在启动延迟里也要生效。
+    @ObservationIgnored private var prewarmSuspended = false
+    @ObservationIgnored private var prewarmWasPausedBeforeSuspend = false
+    @ObservationIgnored private var prewarmDeferred = false
     private var loadGeneration = 0
     private var indexTask: Task<Void, Never>?
     private var playbackTask: Task<Void, Never>?
@@ -443,13 +447,13 @@ final class LibraryStore {
         imageCache.totalCostLimit = 64 * 1024 * 1024
         aspectRatios = Self.loadAspectRatios()
         folderCoverSelections = Self.loadFolderCoverSelections()
-        Self.purgeThumbnailsIfVariantChanged(store: thumbnailStore)
+        Self.purgeThumbnailsIfVariantChanged(stores: [thumbnailStore, folderCoverStore])
         reloadFavorites()
         ThumbnailPrewarmBackground.attach(self)
     }
 
-    /// 缩略图算法升级后旧文件可能包含半截图，首次启动直接清空，避免继续被误用。
-    private static func purgeThumbnailsIfVariantChanged(store: ThumbnailStore) {
+    /// 缩略图算法/尺寸升级后旧文件可能包含半截图或旧分辨率，首次启动直接清空。
+    private static func purgeThumbnailsIfVariantChanged(stores: [ThumbnailStore]) {
         let url = FileManager.default.urls(
             for: .cachesDirectory,
             in: .userDomainMask
@@ -458,7 +462,9 @@ final class LibraryStore {
         guard stored != thumbnailVariant else { return }
         Log.info(.thumbnail, "缩略图版本变化，清空旧缓存 variant=\(thumbnailVariant)")
         Task {
-            await store.removeAll()
+            for store in stores {
+                await store.removeAll()
+            }
             try? thumbnailVariant.write(to: url, atomically: true, encoding: .utf8)
         }
     }
@@ -582,6 +588,10 @@ final class LibraryStore {
     }
 
     func refresh() async {
+        // 下拉刷新/重试通常意味着网络已恢复；清掉上一轮的超时失败，
+        // 让“无预览”的条目有机会重新生成。
+        await thumbnails.clearFailures()
+        await folderCoverThumbnails.clearFailures()
         await loadCurrent(force: true)
     }
 
@@ -890,7 +900,7 @@ final class LibraryStore {
         }
     }
 
-    private func persistAspectRatiosIfNeeded() {
+    func persistAspectRatiosIfNeeded() {
         guard aspectRatiosDirty else { return }
         aspectRatiosDirty = false
         guard let data = try? JSONEncoder().encode(aspectRatios) else { return }
@@ -929,6 +939,17 @@ final class LibraryStore {
             return [:]
         }
         return decoded
+    }
+
+    /// 已知失败条目不需要再等 400ms 重试；刷新/重连会清空失败集合。
+    func isKnownThumbnailFailure(for entry: MediaEntry) async -> Bool {
+        guard entry.kind == .video || entry.kind == .image else { return false }
+        return await thumbnails.isKnownFailure(
+            path: entry.path,
+            size: entry.size,
+            modified: entry.modified,
+            namespace: thumbnailNamespace
+        )
     }
 
     func thumbnail(
@@ -1327,9 +1348,32 @@ final class LibraryStore {
         prewarmController?.resume()
     }
 
+    /// 全屏相册/播放等独占浏览态：暂停预热，关闭后只恢复本态打开前正在运行的任务，
+    /// 不覆盖用户手动点下的“暂停”。
+    func suspendThumbnailPrewarmForOverlay() {
+        guard !prewarmSuspended else { return }
+        prewarmSuspended = true
+        prewarmWasPausedBeforeSuspend = prewarmController?.isPaused ?? false
+        prewarmController?.pause()
+    }
+
+    func resumeThumbnailPrewarmAfterOverlay() {
+        guard prewarmSuspended else { return }
+        prewarmSuspended = false
+        if !prewarmWasPausedBeforeSuspend {
+            prewarmController?.resume()
+        }
+        prewarmWasPausedBeforeSuspend = false
+        if prewarmDeferred {
+            prewarmDeferred = false
+            startThumbnailPrewarmIfNeeded()
+        }
+    }
+
     func cancelThumbnailPrewarm() {
         prewarmTask?.cancel()
         prewarmTask = nil
+        prewarmDeferred = false
         prewarmController?.cancel()
         prewarmController = nil
         folderCoverPrefetchTask?.cancel()
@@ -1337,6 +1381,10 @@ final class LibraryStore {
     }
 
     func startThumbnailPrewarmIfNeeded() {
+        guard !prewarmSuspended else {
+            prewarmDeferred = true
+            return
+        }
         scheduleFolderCoverPrefetch()
         guard let sidecar = thumbnailSidecarCache else {
             Log.debug(.thumbnail, "缩略图预热跳过：数据源没有共享侧车")
@@ -1347,6 +1395,10 @@ final class LibraryStore {
             // 先让首屏可见封面抢到 SMB，再开始全量队列。
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled, let self else { return }
+            guard !self.prewarmSuspended else {
+                self.prewarmDeferred = true
+                return
+            }
             let available = await sidecar.isAvailable
             let writable = await sidecar.isWritable
             guard available, writable else {
@@ -1602,6 +1654,8 @@ final class LibraryStore {
             startup.headerCacheHitBytes = opened.reader.headerCacheHitBytes
             startup.headerCacheHitRatio = opened.reader.headerCacheHitRatio
             startup.subtitleScanMilliseconds = subtitleMilliseconds
+            // 档位在 play() 时才真正决定；这里先解析，保证验收快照记录的是实际档位。
+            engine.resolveStartupPrerollMode()
             startup.startupPrerollMode = engine.startupPrerollMode
             startup.resumeLocated = resumeLocated
             return PreparedPlayback(

@@ -5,14 +5,18 @@ import ImageIO
 import UniformTypeIdentifiers
 
 public struct ThumbnailOutput: Sendable, Equatable {
+    /// 本地磁盘缓存使用的 PNG。
     public let data: Data
     public let width: Int
     public let height: Int
+    /// 共享侧车使用的 JPEG。只有调用方明确需要时才生成，避免无侧车时多一次编码。
+    public let jpegData: Data?
 
-    public init(data: Data, width: Int, height: Int) {
+    public init(data: Data, width: Int, height: Int, jpegData: Data? = nil) {
         self.data = data
         self.width = width
         self.height = height
+        self.jpegData = jpegData
     }
 }
 
@@ -23,7 +27,8 @@ public enum ImageDecoder {
     public static func thumbnail(
         data: Data,
         maxPixelSize: Int,
-        label: String = ""
+        label: String = "",
+        includeJPEG: Bool = false
     ) throws -> ThumbnailOutput {
         guard !data.isEmpty else { throw ImageDecodeError.emptyData }
         guard let source = CGImageSourceCreateWithData(
@@ -37,14 +42,42 @@ public enum ImageDecoder {
             maxPixelSize: maxPixelSize,
             label: label
         )
-        guard let png = encodePNG(image) else { throw ImageDecodeError.encodeFailed }
-        return ThumbnailOutput(data: png, width: image.width, height: image.height)
+        return try output(
+            image: image,
+            includeJPEG: includeJPEG
+        )
     }
 
+    /// 远程源解码会阻塞等待 `ByteSource`，放到专用队列执行，
+    /// 避免占住 Swift 并发的协作线程。
     public static func thumbnail(
         source: any ByteSource,
         maxPixelSize: Int,
-        label: String
+        label: String,
+        includeJPEG: Bool = false
+    ) async throws -> ThumbnailOutput {
+        try await withCheckedThrowingContinuation { continuation in
+            remoteDecodeQueue.async {
+                do {
+                    let output = try thumbnailSynchronously(
+                        source: source,
+                        maxPixelSize: maxPixelSize,
+                        label: label,
+                        includeJPEG: includeJPEG
+                    )
+                    continuation.resume(returning: output)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private static func thumbnailSynchronously(
+        source: any ByteSource,
+        maxPixelSize: Int,
+        label: String,
+        includeJPEG: Bool
     ) throws -> ThumbnailOutput {
         let remote = try RemoteImageDataProvider(source: source, label: label)
         guard let imageSource = CGImageSourceCreateWithDataProvider(
@@ -58,13 +91,32 @@ public enum ImageDecoder {
             maxPixelSize: maxPixelSize,
             label: label
         )
-        guard let png = encodePNG(image) else { throw ImageDecodeError.encodeFailed }
+        let result = try output(image: image, includeJPEG: includeJPEG)
         Log.debug(
             .thumbnail,
             "图片缩略图 \(Log.shortPath(label)) \(image.width)x\(image.height) "
                 + "读取=\(remote.bytesRead)B/\(remote.networkReadCount)次"
         )
-        return ThumbnailOutput(data: png, width: image.width, height: image.height)
+        return result
+    }
+
+    private static let remoteDecodeQueue = DispatchQueue(
+        label: "icemovie.image.remote-decode",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    private static func output(
+        image: CGImage,
+        includeJPEG: Bool
+    ) throws -> ThumbnailOutput {
+        guard let png = encodePNG(image) else { throw ImageDecodeError.encodeFailed }
+        return ThumbnailOutput(
+            data: png,
+            width: image.width,
+            height: image.height,
+            jpegData: includeJPEG ? encodeJPEG(image, quality: 0.8) : nil
+        )
     }
 
     /// JPEG 快速路径：只读取文件前缀，直接解 EXIF 里那张完整的内嵌缩略图。
@@ -76,6 +128,7 @@ public enum ImageDecoder {
         source: any ByteSource,
         maxPixelSize: Int,
         label: String,
+        includeJPEG: Bool = false,
         prefixBytes: Int = 512 * 1024
     ) async throws -> ThumbnailOutput? {
         guard let length = source.length, length > 64 * 1024 else {
@@ -91,7 +144,8 @@ public enum ImageDecoder {
         let output = try thumbnail(
             data: thumbnailData,
             maxPixelSize: maxPixelSize,
-            label: label
+            label: label,
+            includeJPEG: includeJPEG
         )
         let ratio = CGFloat(output.width) / CGFloat(max(1, output.height))
         guard output.width >= 48,
@@ -229,22 +283,8 @@ public enum ImageDecoder {
         return try thumbnailImage(source: source, maxPixelSize: maxPixelSize, label: label)
     }
 
-    public static func displayImage(
-        source: any ByteSource,
-        maxPixelSize: Int,
-        label: String
-    ) throws -> CGImage {
-        let remote = try RemoteImageDataProvider(source: source, label: label)
-        guard let imageSource = CGImageSourceCreateWithDataProvider(
-            remote.provider,
-            [kCGImageSourceShouldCache: false] as CFDictionary
-        ) else {
-            throw ImageDecodeError.invalidImage
-        }
-        return try thumbnailImage(source: imageSource, maxPixelSize: maxPixelSize, label: label)
-    }
-
     /// 把已生成的 PNG 缩略图转成共享侧车使用的 JPEG。
+    /// 新链路应优先使用 `ThumbnailOutput.jpegData`，避免重新解码 PNG。
     public static func encodeJPEG(_ data: Data, quality: CGFloat = 0.8) -> Data? {
         guard let source = CGImageSourceCreateWithData(
             data as CFData,
@@ -257,6 +297,10 @@ public enum ImageDecoder {
         ) else {
             return nil
         }
+        return encodeJPEG(image, quality: quality)
+    }
+
+    private static func encodeJPEG(_ image: CGImage, quality: CGFloat) -> Data? {
         if let data = encodeJPEGData(image, quality: quality) {
             return data
         }

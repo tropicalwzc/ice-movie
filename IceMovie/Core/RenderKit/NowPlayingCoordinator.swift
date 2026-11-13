@@ -139,7 +139,10 @@ final class NowPlayingCoordinator {
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyPlaybackDuration: max(0, engine.duration),
             MPNowPlayingInfoPropertyElapsedPlaybackTime: max(0, engine.clock.currentTime),
-            MPNowPlayingInfoPropertyPlaybackRate: engine.isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyPlaybackRate: engine.isPlaying
+                ? Double(engine.clock.rate)
+                : 0.0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
         ]
         info[MPNowPlayingInfoPropertyIsLiveStream] = false

@@ -60,6 +60,41 @@ final class MediaTitleTests: XCTestCase {
         )
     }
 
+    func testPlaybackTitleCandidatesKeepEpisodeWhenWordsAreDropped() {
+        let label = "Tensei Shitara Slime Datta Ken 2nd Season · 第 25 集"
+        let candidates = PlaybackTitleFitter.candidates(for: label)
+
+        XCTAssertEqual(candidates.first, label)
+        XCTAssertTrue(
+            candidates.contains("Tensei Shitara… · 第 25 集"),
+            "应按词逐步缩短，实际=\(candidates)"
+        )
+        XCTAssertEqual(candidates.last, "第 25 集")
+        // 候选从长到短，不能出现更长的候选排在后面。
+        for (shorter, longer) in zip(candidates.dropFirst(), candidates) {
+            XCTAssertLessThanOrEqual(shorter.count, longer.count, "候选应逐级变短")
+        }
+    }
+
+    func testPlaybackTitleCandidatesWithoutEpisode() {
+        let label = "Kono Kaisha ni Suki na Hito ga Imasu"
+        let candidates = PlaybackTitleFitter.candidates(for: label)
+
+        XCTAssertEqual(candidates.first, label)
+        XCTAssertTrue(candidates.contains("Kono…"), "实际=\(candidates)")
+        XCTAssertEqual(candidates.last, "Kono…")
+    }
+
+    func testPlaybackTitleSplitEpisodeSuffix() {
+        let split = PlaybackTitleFitter.splitEpisode("冰海战记 第二季 · 第 1 集")
+        XCTAssertEqual(split.title, "冰海战记 第二季")
+        XCTAssertEqual(split.episode, "第 1 集")
+
+        let noEpisode = PlaybackTitleFitter.splitEpisode("大逃杀")
+        XCTAssertEqual(noEpisode.title, "大逃杀")
+        XCTAssertNil(noEpisode.episode)
+    }
+
     func testDirectoryDisplayNameRemovesReleaseTags() {
         XCTAssertEqual(
             MediaTitleParser.directoryDisplayName(

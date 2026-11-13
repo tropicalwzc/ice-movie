@@ -1,4 +1,5 @@
 import IceCore
+import MediaLibraryKit
 import RenderKit
 import SubtitleKit
 import SwiftUI
@@ -30,6 +31,7 @@ struct PlayerScreen: View {
     let resumeNotice: String?
     let onRestartFromBeginning: (() -> Void)?
     let onNextEpisode: (() -> Void)?
+    let onPreviousEpisode: (() -> Void)?
 
     @State private var pip: PictureInPictureCoordinator
     @State private var commandToken: UUID?
@@ -58,7 +60,8 @@ struct PlayerScreen: View {
         onAdjustOffset: ((Double) -> Void)? = nil,
         resumeNotice: String? = nil,
         onRestartFromBeginning: (() -> Void)? = nil,
-        onNextEpisode: (() -> Void)? = nil
+        onNextEpisode: (() -> Void)? = nil,
+        onPreviousEpisode: (() -> Void)? = nil
     ) {
         self.engine = engine
         self.renderer = renderer
@@ -83,6 +86,7 @@ struct PlayerScreen: View {
         self.resumeNotice = resumeNotice
         self.onRestartFromBeginning = onRestartFromBeginning
         self.onNextEpisode = onNextEpisode
+        self.onPreviousEpisode = onPreviousEpisode
         _pip = State(initialValue: PictureInPictureCoordinator(engine: engine))
     }
 
@@ -112,7 +116,8 @@ struct PlayerScreen: View {
             onAdjustOffset: onAdjustOffset,
             resumeNotice: resumeNotice,
             onRestartFromBeginning: onRestartFromBeginning,
-            onNextEpisode: onNextEpisode
+            onNextEpisode: onNextEpisode,
+            onPreviousEpisode: onPreviousEpisode
         )
         .statusBarHidden(isFullscreen)
         .persistentSystemOverlays(isFullscreen ? .hidden : .automatic)
@@ -171,6 +176,7 @@ private struct PlayerSurface: View {
     let resumeNotice: String?
     let onRestartFromBeginning: (() -> Void)?
     let onNextEpisode: (() -> Void)?
+    let onPreviousEpisode: (() -> Void)?
 
     @State private var controlsVisible = true
     @State private var showSubtitlePanel = false
@@ -184,6 +190,36 @@ private struct PlayerSurface: View {
     /// 压测/性能验收：右上角常驻网速、内存与 CPU，且内嵌播放时也要显示。
     private var showsStatusDetails: Bool {
         ProcessInfo.processInfo.arguments.contains("-playerStatusDetails")
+    }
+
+    /// iPhone 横屏标题：放不下时按词缩短，末尾保留「第 X 集」；iPad 仍用两行。
+    @ViewBuilder
+    private var playerTitle: some View {
+        if isPad {
+            titleLabel(label, lineLimit: 2)
+                .frame(maxWidth: 640, alignment: .leading)
+        } else {
+            ViewThatFits(in: .horizontal) {
+                ForEach(
+                    Array(PlaybackTitleFitter.candidates(for: label).enumerated()),
+                    id: \.offset
+                ) { candidate in
+                    titleLabel(candidate.element, lineLimit: 1)
+                }
+            }
+        }
+    }
+
+    private func titleLabel(_ text: String, lineLimit: Int) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .lineLimit(lineLimit)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.55))
+            .clipShape(Capsule())
+            .accessibilityIdentifier("player.title")
     }
 
     var body: some View {
@@ -204,41 +240,61 @@ private struct PlayerSurface: View {
             BufferingOverlay(engine: engine)
             PlaybackFailureOverlay(engine: engine, onClose: onClose)
 
-            if isFullscreen {
+            // 顶部栏：返回 + 标题在左，网速/电量与关闭在右；同一行布局避免标题压住状态条。
+            if isFullscreen || onClose != nil || showsStatusDetails {
                 VStack {
-                    HStack(spacing: 10) {
-                        Button {
-                            onClose?()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 15, weight: .bold))
-                                .frame(width: 34, height: 34)
-                                .background(.black.opacity(0.55))
-                                .clipShape(Circle())
-                                .foregroundStyle(.white)
+                    HStack(spacing: 12) {
+                        if isFullscreen {
+                            Button {
+                                onClose?()
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .frame(width: 34, height: 34)
+                                    .background(.black.opacity(0.55))
+                                    .clipShape(Circle())
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(controlsVisible ? 1 : 0)
+                            .allowsHitTesting(controlsVisible)
+                            .accessibilityLabel("返回")
+                            .accessibilityIdentifier("player.back")
+
+                            playerTitle
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .opacity(controlsVisible ? 1 : 0)
+                                .allowsHitTesting(false)
+                        } else {
+                            Spacer(minLength: 0)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("返回")
-                        .accessibilityIdentifier("player.back")
-                        Text(label)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(isPad ? 2 : 1)
-                            .truncationMode(isPad ? .tail : .head)
-                            .frame(maxWidth: isPad ? 640 : nil, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.black.opacity(0.55))
-                            .clipShape(Capsule())
-                            .accessibilityIdentifier("player.title")
-                        Spacer(minLength: 56)
+
+                        PlayerStatusBadge(engine: engine)
+                            .opacity(showsStatusDetails || controlsVisible ? 1 : 0)
+                            .allowsHitTesting(false)
+
+                        if let onClose {
+                            Button {
+                                onClose()
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .frame(width: 34, height: 34)
+                                    .background(.black.opacity(0.55))
+                                    .clipShape(Circle())
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(controlsVisible ? 1 : 0)
+                            .allowsHitTesting(controlsVisible)
+                            .accessibilityLabel("关闭播放")
+                            .accessibilityIdentifier("player.close")
+                        }
                     }
                     Spacer()
                 }
                 .padding(.top, 12)
                 .padding(.horizontal, 14)
-                .opacity(controlsVisible ? 1 : 0)
-                .allowsHitTesting(controlsVisible)
                 .animation(.easeInOut(duration: 0.2), value: controlsVisible)
             }
 
@@ -314,6 +370,7 @@ private struct PlayerSurface: View {
                     onToggleSubtitlePanel: {
                         showSubtitlePanel.toggle()
                     },
+                    onPreviousEpisode: onPreviousEpisode,
                     onNextEpisode: onNextEpisode
                 )
             }
@@ -326,39 +383,6 @@ private struct PlayerSurface: View {
                     .truncationMode(.head)
                     .padding(10)
                     .allowsHitTesting(false)
-            }
-
-            // 右上角状态条 + 关闭按钮。状态条默认跟随控件显隐；
-            // 压测加 `-playerStatusDetails` 时常驻，并展开内存/CPU，便于持续观察。
-            if onClose != nil || showsStatusDetails {
-                VStack {
-                    HStack(spacing: 12) {
-                        Spacer()
-                        PlayerStatusBadge(engine: engine)
-                            .opacity(showsStatusDetails || controlsVisible ? 1 : 0)
-                            .allowsHitTesting(false)
-                        if let onClose {
-                            Button {
-                                onClose()
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .frame(width: 34, height: 34)
-                                    .background(.black.opacity(0.55))
-                                    .clipShape(Circle())
-                                    .foregroundStyle(.white)
-                            }
-                            .buttonStyle(.plain)
-                            .opacity(controlsVisible ? 1 : 0)
-                            .allowsHitTesting(controlsVisible)
-                            .accessibilityLabel("关闭播放")
-                            .accessibilityIdentifier("player.close")
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(14)
-                .animation(.easeInOut(duration: 0.2), value: controlsVisible)
             }
 
             if let resumeNotice {
@@ -525,6 +549,7 @@ private struct PlayerGestureLayer: View {
     @State private var hintTask: Task<Void, Never>?
     @State private var verticalSide: VerticalSide?
     @State private var verticalStartValue: Double = 0
+    @State private var viewSize: CGSize = .zero
 
     var body: some View {
         ZStack {
@@ -574,10 +599,15 @@ private struct PlayerGestureLayer: View {
                 .onEnded { _ in verticalSide = nil }
         )
         .onDisappear { hintTask?.cancel() }
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { size in
+            viewSize = size
+        }
     }
 
     private func handleDoubleTap(x: CGFloat) {
-        let forward = x > UIScreen.main.bounds.midX
+        let forward = x > max(1, viewSize.width) / 2
         let target = min(
             max(0, engine.clock.currentTime + (forward ? PlaybackSeek.step : -PlaybackSeek.step)),
             max(0, engine.duration - 0.05)
@@ -599,20 +629,20 @@ private struct PlayerGestureLayer: View {
 
         if verticalSide == nil {
             onInteraction()
-            if value.startLocation.x < UIScreen.main.bounds.midX {
+            if value.startLocation.x < max(1, viewSize.width) / 2 {
                 verticalSide = .brightness
-                verticalStartValue = Double(UIScreen.main.brightness)
+                verticalStartValue = Double(currentScreen?.brightness ?? 0.5)
             } else {
                 verticalSide = .volume
                 verticalStartValue = Double(engine.currentVolume)
             }
         }
 
-        let delta = -Double(value.translation.height) / Double(max(1, UIScreen.main.bounds.height))
+        let delta = -Double(value.translation.height) / Double(max(1, viewSize.height))
         let newValue = min(max(verticalStartValue + delta, 0), 1)
         switch verticalSide {
         case .brightness:
-            UIScreen.main.brightness = CGFloat(newValue)
+            currentScreen?.brightness = CGFloat(newValue)
             showHint(text: "亮度", symbol: "sun.max.fill", value: newValue)
         case .volume:
             engine.setVolume(Float(newValue))
@@ -649,6 +679,14 @@ private struct PlayerGestureLayer: View {
         return h > 0
             ? String(format: "%d:%02d:%02d", h, m, s)
             : String(format: "%02d:%02d", m, s)
+    }
+
+    /// 多窗口下不能再用 UIScreen.main；取当前前台窗口所在屏幕。
+    private var currentScreen: UIScreen? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .screen
     }
 }
 
@@ -790,8 +828,10 @@ private struct PlayerStatusBadge: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let speed = engine.downloadBytesPerSecond
-            let memory = MemoryFootprint.currentMB
-            let cpu = CPUUsage.currentPercent()
+            // 隐藏状态（控件淡出且未开压测详情）时不要每秒采样 CPU/内存；
+            // CPUUsage 会读取 mach 线程信息，在 4K 播放时属于额外开销。
+            let memory = showsDetails ? MemoryFootprint.currentMB : -1
+            let cpu = showsDetails ? CPUUsage.currentPercent() : -1
             let battery = BatteryStatus.current
             let memoryTint = tint(for: memory)
             let cpuTint = tint(forCPU: cpu)
@@ -847,6 +887,8 @@ private struct PlayerStatusBadge: View {
             if baselineMB == nil {
                 baselineMB = MemoryFootprint.currentMB
             }
+            // 电池监控只需开启一次，避免每秒重复写全局状态。
+            UIDevice.current.isBatteryMonitoringEnabled = true
         }
     }
 
@@ -901,8 +943,8 @@ private struct BatteryStatus {
     let low: Bool
     let isCharging: Bool
 
+    @MainActor
     static var current: BatteryStatus {
-        UIDevice.current.isBatteryMonitoringEnabled = true
         let level = UIDevice.current.batteryLevel
         let state = UIDevice.current.batteryState
         guard level >= 0 else {

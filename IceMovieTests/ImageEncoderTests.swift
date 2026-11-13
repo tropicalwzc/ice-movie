@@ -1,6 +1,6 @@
 import CoreGraphics
 import ImageIO
-import ImageKit
+@testable import ImageKit
 import XCTest
 
 final class ImageEncoderTests: XCTestCase {
@@ -30,6 +30,24 @@ final class ImageEncoderTests: XCTestCase {
         XCTAssertEqual(image.height, 40)
     }
 
+    func testPreviewRotationDownsamplesToScreenSize() throws {
+        let image = try decode(fixtureData("sample-landscape.png"))
+        let preview = try XCTUnwrap(
+            ImageEncoder.rotatedPreview(image, quarterTurns: 1, maxPixelSize: 48)
+        )
+        XCTAssertEqual(preview.width, 24)
+        XCTAssertEqual(preview.height, 48)
+    }
+
+    func testZeroTurnPreviewStillDownsamples() throws {
+        let image = try decode(fixtureData("sample-landscape.png"))
+        let preview = try XCTUnwrap(
+            ImageEncoder.rotatedPreview(image, quarterTurns: 0, maxPixelSize: 48)
+        )
+        XCTAssertEqual(preview.width, 48)
+        XCTAssertEqual(preview.height, 24, "0 度预览也必须遵守最长边限制")
+    }
+
     func testHEICRotation() throws {
         let data = try fixtureData("sample.heic")
         let rotated = try ImageEncoder.rotatedImageData(
@@ -41,6 +59,26 @@ final class ImageEncoderTests: XCTestCase {
         XCTAssertEqual(image.width, 64)
         XCTAssertEqual(image.height, 64)
         XCTAssertEqual(String(decoding: rotated.prefix(12), as: UTF8.self).contains("ftyp"), true)
+    }
+
+    func testSaveTargetKeepsNormalPhotosAndBoundsHugeOnes() {
+        XCTAssertEqual(
+            ImageEncoder.saveTargetDimension(width: 4032, height: 3024, maxDimension: 4032),
+            4032,
+            "12MP 照片必须保持原像素"
+        )
+        XCTAssertEqual(
+            ImageEncoder.saveTargetDimension(width: 6000, height: 4000, maxDimension: 6000),
+            6000,
+            "24MP 照片仍在工作集上限内"
+        )
+        let huge = ImageEncoder.saveTargetDimension(
+            width: 8064,
+            height: 6048,
+            maxDimension: 8064
+        )
+        XCTAssertLessThanOrEqual(huge, 6144, "48MP 旋转必须限制单张位图内存")
+        XCTAssertGreaterThan(huge, 5000, "下采样不应过度损失分辨率")
     }
 
     func testCorruptImageFails() {

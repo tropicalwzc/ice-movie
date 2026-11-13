@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// 从发布用文件名中解析出的可读信息。
 public struct MediaTitle: Equatable, Sendable {
@@ -292,6 +293,66 @@ public enum MediaTitleParser {
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " ."))
         return working.isEmpty ? rawName : working
+    }
+}
+
+/// 窄屏播放页标题适配。
+///
+/// 播放页标题形如 `"作品名 · 第 12 集"`。iPhone 横屏时右上角还有网速/电量，
+/// 完整标题可能放不下；这里按词生成从完整到最短的候选，由 `ViewThatFits`
+/// 选第一个放得下的，并始终把「第 X 集」留在末尾。
+public enum PlaybackTitleFitter {
+    /// 候选从完整标题开始，逐词缩短，最后退到只保留集数。
+    public static func candidates(for label: String) -> [String] {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [label] }
+
+        let (base, episode) = splitEpisode(trimmed)
+        var result = [trimmed]
+        let prefixes = wordPrefixes(of: base)
+
+        // 完整前缀即完整标题，已作为第一个候选。
+        for prefix in prefixes.dropLast().reversed() {
+            let candidate = episode.map { "\(prefix)… · \($0)" } ?? "\(prefix)…"
+            if result.last != candidate {
+                result.append(candidate)
+            }
+        }
+        if let episode, result.last != episode {
+            result.append(episode)
+        }
+        return result
+    }
+
+    /// `"标题 · 第 12 集"` → `("标题", "第 12 集")`；没有集数后缀时第二项为 nil。
+    public static func splitEpisode(_ label: String) -> (title: String, episode: String?) {
+        guard let marker = label.range(of: " · 第", options: .backwards),
+              label.hasSuffix("集") else {
+            return (label, nil)
+        }
+        let episode = "第" + label[marker.upperBound...]
+        let title = label[..<marker.lowerBound]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return (label, nil) }
+        return (String(title), episode)
+    }
+
+    /// 按系统分词器的词边界，返回从开头累积的前缀。
+    private static func wordPrefixes(of text: String) -> [String] {
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = text
+        var prefixes: [String] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let prefix = String(
+                text[..<range.upperBound]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            if !prefix.isEmpty, prefixes.last != prefix {
+                prefixes.append(prefix)
+            }
+            return true
+        }
+        return prefixes
     }
 }
 

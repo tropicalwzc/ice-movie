@@ -246,11 +246,12 @@ final class AVIOBridge {
 
     /// 在独立任务里调用异步数据源，并在当前线程等待结果。
     /// 这段等待发生在 FFmpeg 自己的线程上，不会占用 Swift 并发池。
+    /// 读取任务与等待线程使用同一 QoS（userInitiated），避免优先级反转。
     private func readSynchronously(at offset: Int64, count: Int) -> ReadResult {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ReadResult()
         let source = self.source
-        Task.detached {
+        Task.detached(priority: .userInitiated) {
             do {
                 box.data = try await source.read(at: offset, count: count)
             } catch {

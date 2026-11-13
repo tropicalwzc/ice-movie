@@ -169,6 +169,65 @@ final class SharedThumbnailCacheTests: XCTestCase {
         let thumbCount = await provider.thumbnailCount
         XCTAssertEqual(thumbCount, 0)
     }
+
+    func testFlushKeepsEntriesStoredWhileIndexWriteIsInFlight() async throws {
+        let provider = GatedSidecarProvider()
+        let cache = SharedThumbnailCache(provider: provider)
+        let date = Date(timeIntervalSince1970: 100)
+
+        await cache.store(
+            thumbnailData: Data([1]),
+            width: 10,
+            height: 10,
+            path: "A.jpg",
+            size: 1,
+            modified: date
+        )
+        let flush = Task { await cache.flush() }
+        await provider.waitForFirstIndexWrite()
+
+        // 模拟 flush 正在写 SMB 时，缩略图预热任务又存了一张。
+        await cache.store(
+            thumbnailData: Data([2]),
+            width: 10,
+            height: 10,
+            path: "B.jpg",
+            size: 2,
+            modified: date
+        )
+        await provider.releaseFirstIndexWrite()
+        await flush.value
+
+        let rawData = await provider.indexData
+        let data = try XCTUnwrap(rawData)
+        let index = try JSONDecoder().decode(SharedThumbnailIndex.self, from: data)
+        XCTAssertEqual(Set(index.entries.keys), ["A.jpg", "B.jpg"], "flush 不得覆盖等待期间的新条目")
+    }
+
+    func testRemoveAllWaitsForInFlightIndexWrite() async throws {
+        let provider = GatedSidecarProvider()
+        let cache = SharedThumbnailCache(provider: provider)
+        let date = Date(timeIntervalSince1970: 100)
+
+        await cache.store(
+            thumbnailData: Data([1]),
+            width: 10,
+            height: 10,
+            path: "A.jpg",
+            size: 1,
+            modified: date
+        )
+        let flush = Task { await cache.flush() }
+        await provider.waitForFirstIndexWrite()
+
+        let removeAll = Task { await cache.removeAll() }
+        await provider.releaseFirstIndexWrite()
+        await flush.value
+        await removeAll.value
+
+        let finalIndex = await provider.indexData
+        XCTAssertNil(finalIndex, "removeAll 之后旧 flush 不得把索引写回")
+    }
 }
 
 private actor FakeSidecarProvider: ThumbnailSidecarProviding {
@@ -215,4 +274,54 @@ private actor FakeSidecarProvider: ThumbnailSidecarProviding {
 
 private enum FakeError: Error {
     case readOnly
+}
+
+/// 首次 storeIndex 会阻塞，用于复现 flush 等待 SMB 写盘期间的并发 store/removeAll。
+private actor GatedSidecarProvider: ThumbnailSidecarProviding {
+    private(set) var indexData: Data?
+    private var thumbs: [String: Data] = [:]
+    private var firstWriteStarted = false
+    private var firstWriteWaiter: CheckedContinuation<Void, Never>?
+    private var firstWriteRelease: CheckedContinuation<Void, Never>?
+
+    func waitForFirstIndexWrite() async {
+        if firstWriteStarted { return }
+        await withCheckedContinuation { firstWriteWaiter = $0 }
+    }
+
+    func releaseFirstIndexWrite() {
+        firstWriteRelease?.resume()
+        firstWriteRelease = nil
+    }
+
+    func prepare() async throws {}
+
+    func loadIndex() async throws -> Data? { indexData }
+
+    func storeIndex(_ data: Data) async throws {
+        if !firstWriteStarted {
+            firstWriteStarted = true
+            firstWriteWaiter?.resume()
+            firstWriteWaiter = nil
+            await withCheckedContinuation { firstWriteRelease = $0 }
+        }
+        indexData = data
+    }
+
+    func loadThumbnail(relativePath: String) async throws -> Data? {
+        thumbs[relativePath]
+    }
+
+    func storeThumbnail(_ data: Data, relativePath: String) async throws {
+        thumbs[relativePath] = data
+    }
+
+    func removeThumbnail(relativePath: String) async throws {
+        thumbs[relativePath] = nil
+    }
+
+    func removeAll() async throws {
+        indexData = nil
+        thumbs.removeAll()
+    }
 }

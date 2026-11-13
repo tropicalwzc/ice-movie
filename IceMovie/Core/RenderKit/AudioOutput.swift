@@ -111,6 +111,9 @@ public final class AudioOutput: @unchecked Sendable {
         }
 
         let playedBefore = currentPlayedContentTime()
+        // AVAudioPlayerNode 的方法会取引擎内部锁；reset()/stop() 的路径是
+        // 「引擎锁 → 本对象锁」。这里必须在拿 lock 之前读取，否则形成反向锁序。
+        let isPlaying = player.isPlaying
         lock.lock()
         if let end = scheduledEnd {
             if audio.pts - end > 0.05 {
@@ -122,7 +125,7 @@ public final class AudioOutput: @unchecked Sendable {
             }
             // 只有真正在播放时才可能欠载：起播前的预缓冲阶段没有消费者，
             // 缓冲短是正常的，不能算作供给滞后。
-            if player.isPlaying {
+            if isPlaying {
                 let ahead = end - (playedBefore ?? (anchorContentTime ?? 0))
                 if ahead < 0.05 {
                     let late = Int((0.05 - ahead) * 1000)
@@ -150,6 +153,18 @@ public final class AudioOutput: @unchecked Sendable {
 
     public func play() {
         guard started else { return }
+        // 来电/路由切换后 AVAudioEngine 可能被系统停掉；仅 player.play() 不会重新起引擎。
+        if !engine.isRunning {
+            // 中断结束恢复时系统不一定会自动重新激活会话，先补一次 setActive。
+            try? AVAudioSession.sharedInstance().setActive(true)
+            engine.prepare()
+            do {
+                try engine.start()
+            } catch {
+                Log.error(.render, "音频引擎恢复失败：\(error.localizedDescription)")
+                return
+            }
+        }
         player.play()
     }
 

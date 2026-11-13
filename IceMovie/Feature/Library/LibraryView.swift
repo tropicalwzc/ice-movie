@@ -630,8 +630,11 @@ struct LibraryView: View {
             DiagnosticsView()
         }
         .onChange(of: scenePhase) { _, phase in
-            // 退到后台或切换应用时立即落盘，避免依赖下一次 5 秒轮询。
-            if phase != .active { saveProgress() }
+            // 退到后台或切换应用时立即落盘，避免依赖下一次防抖/轮询。
+            if phase != .active {
+                saveProgress()
+                store.persistAspectRatiosIfNeeded()
+            }
             photoSync.handleScenePhase(phase)
         }
         .alert(
@@ -702,7 +705,10 @@ struct LibraryView: View {
                 onRestartFromBeginning: { restartPlayback() },
                 onNextEpisode: nextPlayableEntry(for: playback.entry) == nil
                     ? nil
-                    : { playNextEpisode() }
+                    : { playNextEpisode() },
+                onPreviousEpisode: previousPlayableEntry(for: playback.entry) == nil
+                    ? nil
+                    : { playPreviousEpisode() }
             )
         } else if let pendingPlayback {
             PendingPlayerScreen(
@@ -773,7 +779,10 @@ struct LibraryView: View {
                             onRestartFromBeginning: { restartPlayback() },
                             onNextEpisode: nextPlayableEntry(for: playback.entry) == nil
                                 ? nil
-                                : { playNextEpisode() }
+                                : { playNextEpisode() },
+                            onPreviousEpisode: previousPlayableEntry(for: playback.entry) == nil
+                                ? nil
+                                : { playPreviousEpisode() }
                         )
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .frame(maxWidth: .infinity)
@@ -1051,6 +1060,11 @@ struct LibraryView: View {
         return PlaybackQueue.next(after: entry, in: entries)
     }
 
+    private func previousPlayableEntry(for entry: MediaEntry) -> MediaEntry? {
+        let entries = store.entriesByPath[entry.directoryPath] ?? store.currentEntries
+        return PlaybackQueue.previous(before: entry, in: entries)
+    }
+
     /// 播放页“>>”按钮：跳到同目录下一个视频。
     private func playNextEpisode() {
         guard let playback, let next = nextPlayableEntry(for: playback.entry) else { return }
@@ -1059,6 +1073,18 @@ struct LibraryView: View {
             "手动下一集 \(Log.shortPath(playback.entry.path)) → \(Log.shortPath(next.path))"
         )
         openPlayback(next, fullscreen: isPlayerFullscreen)
+    }
+
+    /// 播放页“<<”按钮：跳到同目录上一个视频。
+    private func playPreviousEpisode() {
+        guard let playback, let previous = previousPlayableEntry(for: playback.entry) else {
+            return
+        }
+        Log.info(
+            .app,
+            "手动上一集 \(Log.shortPath(playback.entry.path)) → \(Log.shortPath(previous.path))"
+        )
+        openPlayback(previous, fullscreen: isPlayerFullscreen)
     }
 
     /// 播放自然结束后自动播放同目录的下一个视频；没有下一个则退回媒体库。
@@ -2209,6 +2235,9 @@ struct LibraryView: View {
     private func presentImageGallery(_ session: ImageGallerySession) {
         // 相册是独立的全屏浏览态：先停掉内联视频，避免图片读取和播放读取争用同一共享。
         closePlayback(restoreOrientation: false)
+        // 目录预热仍在后台打 SMB，会和相册首图读取抢带宽；先暂停，关闭相册再继续。
+        store.suspendThumbnailPrewarmForOverlay()
+        store.cancelThumbnailPrefetches()
         imageGallery = session
         AppOrientation.request(.allButUpsideDown, delay: .milliseconds(50))
         Log.info(
@@ -2221,6 +2250,7 @@ struct LibraryView: View {
     private func closeImageGallery() {
         guard imageGallery != nil else { return }
         imageGallery = nil
+        store.resumeThumbnailPrewarmAfterOverlay()
         AppOrientation.request(.portrait, delay: .milliseconds(500))
         Log.info(.app, "关闭图片相册")
     }

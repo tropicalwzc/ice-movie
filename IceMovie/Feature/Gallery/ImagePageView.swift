@@ -22,6 +22,7 @@ struct ImagePageView: View {
     @State private var isMotionPlaying = false
     @State private var motionTask: Task<Void, Never>?
     @State private var motionError: String?
+    @State private var motionErrorToken = 0
 
     var body: some View {
         ZStack {
@@ -96,24 +97,40 @@ struct ImagePageView: View {
             model = newModel
             if isCurrent {
                 onModelReady(newModel)
-            }
-            await newModel.loadThumbnail()
-            if isCurrent {
+                // 已有缩略图只作为同步占位；大图立即开始读取，不再等缩略图读完后串行开始。
+                newModel.loadCachedThumbnail()
                 newModel.loadFullImage(targetPixelSize: targetPixelSize)
+                newModel.prepareDisplayRotation(
+                    quarterTurns: rotation,
+                    targetPixelSize: targetPixelSize
+                )
                 // 动态视频只在长按时读取；页面打开时预取整段 MOV 会抢占静态图带宽并常驻大块内存。
+            } else {
+                // 相邻页提前准备缩略图；当前页则由 cachedThumbnail + 大图负责。
+                await newModel.loadThumbnail()
             }
         }
         .onChange(of: isCurrent) { _, current in
             if current {
                 if let model {
                     onModelReady(model)
+                    model.loadFullImage(targetPixelSize: targetPixelSize)
+                    model.prepareDisplayRotation(
+                        quarterTurns: rotation,
+                        targetPixelSize: targetPixelSize
+                    )
                 }
-                model?.loadFullImage(targetPixelSize: targetPixelSize)
             } else {
                 stopMotion()
                 model?.cancelLoading()
                 isZoomed = false
             }
+        }
+        .onChange(of: rotation) { _, turns in
+            model?.prepareDisplayRotation(
+                quarterTurns: turns,
+                targetPixelSize: targetPixelSize
+            )
         }
         .onChange(of: isZoomed) { _, zoomed in
             if zoomed {
@@ -135,12 +152,18 @@ struct ImagePageView: View {
             guard !Task.isCancelled, model?.isLoading == true else { return }
             showProgress = true
         }
-        .task(id: motionError) {
+        .task(id: motionErrorToken) {
             guard motionError != nil else { return }
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             motionError = nil
         }
+    }
+
+    /// 同一错误连续出现时也必须重新计时，不能依赖字符串本身作为 task id。
+    private func showMotionError(_ message: String) {
+        motionError = message
+        motionErrorToken += 1
     }
 
     private func startMotion(model: ImagePageModel) {
@@ -158,12 +181,12 @@ struct ImagePageView: View {
                     stopMotion()
                 }
                 controller.onFailed = { message in
-                    motionError = message
+                    showMotionError(message)
                     stopMotion()
                 }
                 motionController = controller
                 isMotionPlaying = true
-                controller.start()
+                await controller.start()
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 Log.info(
                     .thumbnail,
@@ -176,8 +199,10 @@ struct ImagePageView: View {
                     // 没有动态条目时只保留静态图，不打扰用户。
                     return
                 }
-                motionError = (error as? LocalizedError)?.errorDescription
-                    ?? error.localizedDescription
+                showMotionError(
+                    (error as? LocalizedError)?.errorDescription
+                        ?? error.localizedDescription
+                )
                 Log.error(
                     .thumbnail,
                     "LIVP 动态失败 \(Log.shortPath(entry.path)) \(error.localizedDescription)"

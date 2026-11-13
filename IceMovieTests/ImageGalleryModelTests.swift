@@ -27,6 +27,28 @@ final class ImageGalleryModelTests: XCTestCase {
         XCTAssertNil(session.initialEntry)
     }
 
+    func testSessionReplacesEntryAfterOverwrite() {
+        let original = entry("Photos/IMG_0003.JPG")
+        let session = ImageGallerySession(
+            entries: [original],
+            initialIndex: 0,
+            source: GalleryStubSource(fixtureName: "sample.jpg"),
+            title: "IMG_0003"
+        )
+        let updated = MediaEntry(
+            path: original.path,
+            name: original.name,
+            isDirectory: false,
+            size: 12345,
+            modified: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        session.replaceEntry(updated)
+
+        XCTAssertEqual(session.entries.first?.size, 12345)
+        XCTAssertEqual(session.initialEntry?.modified, updated.modified)
+    }
+
     func testPageModelLoadsThumbnailThenFullImage() async throws {
         let source = GalleryStubSource(fixtureName: "sample.jpg")
         let store = try LibraryStore(source: source, cacheCapacityBytes: 4 * 1024 * 1024)
@@ -48,6 +70,38 @@ final class ImageGalleryModelTests: XCTestCase {
         }
         XCTAssertNotNil(model.image)
         XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.isLoadTaskActive, "加载成功后必须清理任务盒子")
+        model.cancelLoading()
+        XCTAssertFalse(model.isLoadTaskActive, "取消后任务盒子必须复位")
+    }
+
+    func testHighResolutionCanRetryAfterCancel() async throws {
+        let source = GalleryStubSource(fixtureName: "sample.jpg")
+        let store = try LibraryStore(source: source, cacheCapacityBytes: 4 * 1024 * 1024)
+        let image = entry("Photos/IMG_0002.JPG")
+        let session = ImageGallerySession(
+            entries: [image],
+            initialIndex: 0,
+            source: source,
+            title: "IMG_0002"
+        )
+        let model = ImagePageModel(entry: image, session: session, store: store)
+
+        model.loadFullImage(targetPixelSize: 64)
+        for _ in 0..<80 where model.image == nil {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertNotNil(model.image)
+
+        model.ensureHighResolution(targetPixelSize: 64, scale: 2)
+        XCTAssertTrue(model.highResolutionRequested)
+
+        // 翻页/内存警告会取消重解；返回后必须允许再次放大触发。
+        model.cancelLoading()
+        XCTAssertFalse(model.highResolutionRequested)
+        model.ensureHighResolution(targetPixelSize: 64, scale: 2)
+        XCTAssertTrue(model.highResolutionRequested, "取消后再次放大应重新发起重解")
+
         model.cancelLoading()
     }
 

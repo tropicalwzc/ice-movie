@@ -80,6 +80,8 @@ final class LivePhotoMotionController {
     private let loader: LivePhotoResourceLoader
     private var endObserver: NSObjectProtocol?
     private var failureObserver: NSObjectProtocol?
+    private var statusObservation: NSKeyValueObservation?
+    private var didReportFailure = false
 
     init(data: Data, contentType: UTType) {
         let loader = LivePhotoResourceLoader(data: data, contentType: contentType)
@@ -110,7 +112,7 @@ final class LivePhotoMotionController {
         let failureBox = MainNotificationBox { [weak self] in
             let message = self?.player.currentItem?.error?.localizedDescription
                 ?? "动态播放失败"
-            self?.onFailed?(message)
+            self?.reportFailure(message)
         }
         failureObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemFailedToPlayToEndTime,
@@ -119,11 +121,32 @@ final class LivePhotoMotionController {
         ) { _ in
             failureBox.call()
         }
+        // 解封装失败通常只把 item.status 置为 .failed，不会发 FailedToPlayToEndTime；
+        // 不监听就会表现为“长按后什么都没发生”。
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            let message = item.error?.localizedDescription ?? "动态播放失败"
+            Task { @MainActor [weak self] in
+                self?.reportFailure(message)
+            }
+        }
     }
 
-    func start() {
-        try? PlaybackAudioSession.activate()
-        player.seek(to: .zero)
+    /// 同一次播放只提示一次，避免通知与 KVO 同时触发。
+    private func reportFailure(_ message: String) {
+        guard !didReportFailure else { return }
+        didReportFailure = true
+        onFailed?(message)
+    }
+
+    @MainActor
+    func start() async {
+        try? await PlaybackAudioSession.activate()
+        _ = await player.seek(to: .zero)
+        if item.status == .failed {
+            reportFailure(item.error?.localizedDescription ?? "动态播放失败")
+            return
+        }
         player.play()
     }
 
@@ -142,6 +165,8 @@ final class LivePhotoMotionController {
             NotificationCenter.default.removeObserver(failureObserver)
             self.failureObserver = nil
         }
+        statusObservation?.invalidate()
+        statusObservation = nil
     }
 }
 

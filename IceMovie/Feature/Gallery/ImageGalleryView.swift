@@ -18,6 +18,7 @@ struct ImageGalleryView: View {
     @State private var showSaveConfirmation = false
     @State private var saveError: String?
     @State private var saveNotice: String?
+    @State private var saveNoticeToken = 0
     @State private var showDeleteConfirmation = false
     @State private var deleteError: String?
     @State private var isDeleting = false
@@ -29,35 +30,29 @@ struct ImageGalleryView: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let targetPixelSize = Int(max(proxy.size.width, proxy.size.height) * displayScale)
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
 
-                if session.entries.isEmpty {
-                    ContentUnavailableView {
-                        Label("没有可浏览的图片", systemImage: "photo.on.rectangle.angled")
-                    } description: {
-                        Text("当前目录没有图片。")
-                    } actions: {
-                        Button("关闭") { onClose() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                } else {
-                    VStack(spacing: 0) {
-                        topChrome
-                        GeometryReader { pagerProxy in
-                            pager(
-                                targetPixelSize: targetPixelSize,
-                                pageSize: pagerProxy.size
-                            )
-                        }
-                        bottomChrome
-                    }
-                    .safeAreaPadding(.top, 4)
-                    .safeAreaPadding(.bottom, 4)
+            if session.entries.isEmpty {
+                ContentUnavailableView {
+                    Label("没有可浏览的图片", systemImage: "photo.on.rectangle.angled")
+                } description: {
+                    Text("当前目录没有图片。")
+                } actions: {
+                    Button("关闭") { onClose() }
+                        .buttonStyle(.borderedProminent)
                 }
+            } else {
+                VStack(spacing: 0) {
+                    topChrome
+                    GeometryReader { pagerProxy in
+                        pager(pageSize: pagerProxy.size)
+                    }
+                    bottomChrome
+                }
+                .safeAreaPadding(.top, 4)
+                .safeAreaPadding(.bottom, 4)
             }
         }
         .background(Color.black)
@@ -107,7 +102,7 @@ struct ImageGalleryView: View {
         } message: {
             Text(deleteError ?? "")
         }
-        .task(id: saveNotice) {
+        .task(id: saveNoticeToken) {
             guard saveNotice != nil else { return }
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
@@ -115,42 +110,63 @@ struct ImageGalleryView: View {
         }
     }
 
-    private func pager(targetPixelSize: Int, pageSize: CGSize) -> some View {
-        ScrollViewReader { reader in
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(session.entries) { entry in
-                        ImagePageView(
-                            entry: entry,
-                            session: session,
-                            isCurrent: currentID == entry.id,
-                            targetPixelSize: targetPixelSize,
-                            memoryWarningToken: memoryWarningToken,
-                            rotation: rotations[entry.id] ?? 0,
-                            onModelReady: { model in
-                                if currentID == entry.id {
-                                    activeModel = model
-                                }
-                            },
-                            isZoomed: $isZoomed
-                        )
-                        .frame(width: pageSize.width, height: pageSize.height)
-                        .id(entry.id)
+    /// 相同文案在 4 秒内再次出现时也要重新计时。
+    private func showSaveNotice(_ message: String) {
+        saveNotice = message
+        saveNoticeToken += 1
+    }
+
+    @ViewBuilder
+    private func pager(pageSize: CGSize) -> some View {
+        if pageSize.width > 0, pageSize.height > 0 {
+            // 只按 pager 的实际可用区域解码；上下工具条已扣掉，避免多占 10–15% 内存。
+            let targetPixelSize = Int(max(pageSize.width, pageSize.height) * displayScale)
+            ScrollViewReader { reader in
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(session.entries) { entry in
+                            ImagePageView(
+                                entry: entry,
+                                session: session,
+                                isCurrent: currentID == entry.id,
+                                targetPixelSize: targetPixelSize,
+                                memoryWarningToken: memoryWarningToken,
+                                rotation: rotations[entry.id] ?? 0,
+                                onModelReady: { model in
+                                    if currentID == entry.id {
+                                        activeModel = model
+                                    }
+                                },
+                                isZoomed: $isZoomed
+                            )
+                            .frame(width: pageSize.width, height: pageSize.height)
+                            .id(entry.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentID)
+                .scrollIndicators(.hidden)
+                .scrollDisabled(isZoomed)
+                .onAppear {
+                    guard let initialID = session.initialEntry?.id else { return }
+                    DispatchQueue.main.async {
+                        reader.scrollTo(initialID, anchor: .center)
                     }
                 }
-                .scrollTargetLayout()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $currentID)
-            .scrollIndicators(.hidden)
-            .scrollDisabled(isZoomed)
-            .onAppear {
-                guard let initialID = session.initialEntry?.id else { return }
-                DispatchQueue.main.async {
-                    reader.scrollTo(initialID, anchor: .center)
+                .onChange(of: pageSize) { _, _ in
+                    // 设备旋转/分屏后页宽突变，LazyHStack 会按新宽度重排；
+                    // 重新锚定当前页，避免停在两页之间或页码漂移。
+                    guard let currentID else { return }
+                    DispatchQueue.main.async {
+                        reader.scrollTo(currentID, anchor: .center)
+                    }
                 }
             }
+        } else {
+            Color.clear
         }
     }
 
@@ -375,7 +391,7 @@ struct ImageGalleryView: View {
             do {
                 try await model.saveRotated(quarterTurns: rotation)
                 rotations[currentID] = 0
-                saveNotice = "已覆盖原照片"
+                showSaveNotice("已覆盖原照片")
                 isSaving = false
             } catch {
                 isSaving = false
@@ -392,7 +408,7 @@ struct ImageGalleryView: View {
         Task {
             do {
                 try await model.saveToPhotoLibrary(quarterTurns: rotation)
-                saveNotice = "已保存到系统相册"
+                showSaveNotice("已保存到系统相册")
                 isSaving = false
             } catch {
                 isSaving = false

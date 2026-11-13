@@ -98,7 +98,7 @@ struct RootView: View {
         Log.info(.app, "启动 idiom=\(idiom) supportsMultipleScenes=\(UIApplication.shared.supportsMultipleScenes)")
 
         do {
-            try PlaybackAudioSession.activate()
+            try await PlaybackAudioSession.activate()
             let session = AVAudioSession.sharedInstance()
             Log.info(.app, "音频会话就绪 category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
         } catch {

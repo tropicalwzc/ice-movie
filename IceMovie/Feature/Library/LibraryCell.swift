@@ -159,6 +159,12 @@ struct LibraryPoster: View {
             return
         }
 
+        // 同一会话内已知失败时直接显示占位，不必再等一次 400ms 的无效重试。
+        if await store.isKnownThumbnailFailure(for: entry) {
+            loadFailed = true
+            return
+        }
+
         // 单元格滑出屏幕时请求会被取消；取消不是“图片损坏”，不能把它记成永久失败。
         // 预取取消、快速滑动都可能让第一次请求返回空，这里再重试一次。
         for attempt in 0..<2 {

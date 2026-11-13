@@ -26,6 +26,51 @@ final class ImageKitTests: XCTestCase {
         XCTAssertEqual(output.height, 64)
     }
 
+    func testThumbnailCanProduceSidecarJPEGDirectly() throws {
+        let data = try fixtureData("sample.jpg")
+        let output = try ImageDecoder.thumbnail(
+            data: data,
+            maxPixelSize: 64,
+            includeJPEG: true
+        )
+        let jpeg = try XCTUnwrap(output.jpegData)
+        XCTAssertEqual(Array(jpeg.prefix(2)), [0xFF, 0xD8])
+        XCTAssertNil(
+            try ImageDecoder.thumbnail(data: data, maxPixelSize: 64).jpegData,
+            "未请求侧车 JPEG 时不应多做一次编码"
+        )
+    }
+
+    func testRemoteProviderSurvivesWrapperDeallocation() throws {
+        let data = try fixtureData("sample.jpg")
+        let source = PaddedByteSource(data: data, padding: 512 * 1024)
+        let provider: CGDataProvider
+        do {
+            let remote = try RemoteImageDataProvider(
+                source: source,
+                label: "lifetime",
+                windowSize: 64 * 1024
+            )
+            provider = remote.provider
+        }
+        // remote 已释放：数据提供者必须自己保住回调所需的 Reader。
+        guard let imageSource = CGImageSourceCreateWithDataProvider(
+            provider,
+            [kCGImageSourceShouldCache: false] as CFDictionary
+        ) else {
+            return XCTFail("无法创建图片源")
+        }
+        let image = CGImageSourceCreateThumbnailAtIndex(
+            imageSource,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+                kCGImageSourceThumbnailMaxPixelSize: 32,
+            ] as CFDictionary
+        )
+        XCTAssertNotNil(image)
+    }
+
     func testPNGAlphaThumbnailKeepsAlpha() throws {
         let data = try fixtureData("sample-alpha.png")
         let output = try ImageDecoder.thumbnail(data: data, maxPixelSize: 32)

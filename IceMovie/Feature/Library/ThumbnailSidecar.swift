@@ -8,7 +8,8 @@ private enum SidecarLayout {
     static let version = ".icemovie/version"
     static let index = ".icemovie/index.json"
     static let thumbs = ".icemovie/thumbs"
-    static let versionValue = "1"
+    /// 2：512px 缩略图；版本变化时丢弃旧索引并重写缩略图文件。
+    static let versionValue = "2"
 }
 
 /// SMB 共享侧的缩略图缓存。
@@ -48,9 +49,10 @@ struct SMBThumbnailSidecar: ThumbnailSidecarProviding {
         guard try await client.fileExists(path: SidecarLayout.index) else {
             return nil
         }
+        // 索引有 3 万条上限；放宽到 16MB，避免长路径条目把合法索引误判为损坏。
         return try await client.readFile(
             path: SidecarLayout.index,
-            maxBytes: 8 * 1024 * 1024
+            maxBytes: 16 * 1024 * 1024
         )
     }
 
@@ -85,6 +87,12 @@ struct SMBThumbnailSidecar: ThumbnailSidecarProviding {
         let parent = (path as NSString).deletingLastPathComponent
         try await client.createDirectory(path: parent)
         if try await client.fileExists(path: path) {
+            // 索引版本升级后旧文件可能仍是 384px；必须覆盖，不能因为文件存在就跳过。
+            try await client.overwriteFile(
+                path: path,
+                data: data,
+                modified: Date()
+            )
             return
         }
         try await client.createFile(
@@ -158,9 +166,7 @@ struct LocalThumbnailSidecar: ThumbnailSidecarProviding {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        if FileManager.default.fileExists(atPath: url.path) {
-            return
-        }
+        // 与 SMB 侧一致：索引重建时必须覆盖旧的 384px 文件。
         try data.write(to: url, options: .atomic)
     }
 

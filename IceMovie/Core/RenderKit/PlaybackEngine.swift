@@ -67,6 +67,11 @@ public final class PlaybackEngine: @unchecked Sendable {
         }
     }
 
+    /// 在生成起播/验收快照前先解析档位；`play()` 内还会再调用一次，已决策时直接返回。
+    public func resolveStartupPrerollMode() {
+        decideStartupMode()
+    }
+
     /// 起播预滚档位的纯函数版本，便于验收两档阈值。
     public static func startupPreroll(mode: String) -> (audio: Double, video: Double) {
         mode == "conservative"
@@ -156,6 +161,9 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var pendingSeek: (target: Double, id: Int, requestedAt: Double)?
     private var seekRequests = 0
     private var completedSeekID = 0
+    private var completedSeekResults: [Int: Bool] = [:]
+    private var lastCompletedSeek: (id: Int, success: Bool)?
+    private var seekWaitersClosed = false
     private var seekWaiters: [Int: CheckedContinuation<Bool, Never>] = [:]
     private var pumpThread: Thread?
     private var syncTimer: DispatchSourceTimer?
@@ -186,6 +194,14 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var subtitleStreamIndex: Int?
     private var subtitleDecoder: SubtitlePacketDecoder?
     private var onSubtitleEvents: (([SubtitlePacketEvent]) -> Void)?
+    private struct SubtitleCollectorRequest {
+        let streamIndex: Int?
+        let onEvents: (([SubtitlePacketEvent]) -> Void)?
+    }
+    /// 字幕解码器必须在播放泵线程创建；主线程只提交请求。
+    private var pendingSubtitleCollector: SubtitleCollectorRequest?
+    private var audioObservers: [NSObjectProtocol] = []
+    private var resumeAfterInterruption = false
 
     public init(reader: MediaReader) throws {
         let clock = MasterClock()
@@ -248,9 +264,13 @@ public final class PlaybackEngine: @unchecked Sendable {
             }
             videoPipeline = pipeline
         }
+        installAudioObservers()
     }
 
     deinit {
+        for observer in audioObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
         stopSyncTimer()
         videoPipeline?.stop()
         condition.lock()
@@ -265,7 +285,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     // MARK: - 控制
 
     public func play() {
-        guard !stopped else { return }
+        guard !isStopped else { return }
         reader.endOpenPhase()
         decideStartupMode()
         startPumpIfNeeded()
@@ -313,8 +333,10 @@ public final class PlaybackEngine: @unchecked Sendable {
                 guard endedSnapshot || videoRenderer.pendingCount >= 1 else { return }
             }
         }
-        if playStartedAt == nil {
-            playStartedAt = ProcessInfo.processInfo.systemUptime
+        lock.withLock {
+            if playStartedAt == nil {
+                playStartedAt = ProcessInfo.processInfo.systemUptime
+            }
         }
         output?.play()
         clock.play()
@@ -331,7 +353,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     public func pause() {
-        guard !stopped else { return }
+        guard !isStopped else { return }
         resetBufferStallState()
         condition.lock()
         wantsPlay = false
@@ -347,7 +369,7 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     @discardableResult
     public func seek(to seconds: Double, requestedAt: Double? = nil) -> Int {
-        guard !stopped else { return -1 }
+        guard !isStopped else { return -1 }
         let target = duration > 0
             ? min(max(0, seconds), max(0, duration - 0.1))
             : max(0, seconds)
@@ -378,15 +400,27 @@ public final class PlaybackEngine: @unchecked Sendable {
     /// 起播前定位：等 demuxer seek、时钟与显示层重置完成（finishSeek）后返回；
     /// 音频裁剪和视频预滚在后续读包时完成，不在 prepareSeek 内等待。
     public func prepareSeek(to seconds: Double) async -> Bool {
-        guard !stopped else { return false }
+        guard !isStopped else { return false }
         let id = seek(to: seconds, requestedAt: ProcessInfo.processInfo.systemUptime)
         guard id > 0 else { return false }
         return await withCheckedContinuation { continuation in
             lock.lock()
-            if completedSeekID >= id {
-                let success = stats.failure == nil
+            // stop()/fail() 可能发生在 seek 入队之后、continuation 注册之前；
+            // 关闭标志与 waiter 注册在同一把锁内，保证不会漏掉 resume。
+            if seekWaitersClosed {
                 lock.unlock()
-                continuation.resume(returning: success)
+                continuation.resume(returning: false)
+            } else if let result = completedSeekResults[id] {
+                lock.unlock()
+                continuation.resume(returning: result)
+            } else if completedSeekID >= id {
+                // 结果表被裁剪时只信任最近一次同 id 的结果，避免把失败的 seek
+                // 用 stats.failure == nil 误判为成功。
+                let result = lastCompletedSeek?.id == id
+                    ? (lastCompletedSeek?.success ?? false)
+                    : false
+                lock.unlock()
+                continuation.resume(returning: result)
             } else {
                 seekWaiters[id] = continuation
                 lock.unlock()
@@ -394,21 +428,44 @@ public final class PlaybackEngine: @unchecked Sendable {
         }
     }
 
+    private var isStopped: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return stopped
+    }
+
+    private var currentWantsPlay: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return wantsPlay
+    }
+
     private func finishSeek(id: Int, success: Bool) {
         lock.lock()
         completedSeekID = max(completedSeekID, id)
-        let ready = seekWaiters.filter { $0.key <= completedSeekID }
-        for key in ready.keys {
-            seekWaiters.removeValue(forKey: key)
+        completedSeekResults[id] = success
+        lastCompletedSeek = (id, success)
+        var ready: [(continuation: CheckedContinuation<Bool, Never>, result: Bool)] = []
+        let readyKeys = seekWaiters.keys.filter { $0 <= completedSeekID }
+        for key in readyKeys {
+            guard let waiter = seekWaiters.removeValue(forKey: key) else { continue }
+            let result = completedSeekResults[key] ?? (key == id ? success : false)
+            ready.append((waiter, result))
+        }
+        // seek 会随拖动频繁发生；只保留最近一小段结果，避免字典无限增长。
+        if completedSeekResults.count > 32 {
+            let keepFrom = completedSeekID - 32
+            completedSeekResults = completedSeekResults.filter { $0.key >= keepFrom }
         }
         lock.unlock()
-        for continuation in ready.values {
-            continuation.resume(returning: success)
+        for item in ready {
+            item.continuation.resume(returning: item.result)
         }
     }
 
     private func finishAllSeekWaiters() {
         lock.lock()
+        seekWaitersClosed = true
         let waiters = seekWaiters
         seekWaiters.removeAll()
         lock.unlock()
@@ -459,9 +516,10 @@ public final class PlaybackEngine: @unchecked Sendable {
         condition.lock()
         stopped = true
         wantsPlay = false
-        resetBufferStallState()
+        pendingSubtitleCollector = nil
         condition.broadcast()
         condition.unlock()
+        resetBufferStallState()
         stopSyncTimer()
         finishAllSeekWaiters()
         reader.cancelPrefetch()
@@ -474,7 +532,69 @@ public final class PlaybackEngine: @unchecked Sendable {
             subtitleDecoder = nil
             onSubtitleEvents = nil
         }
+        for observer in audioObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        audioObservers.removeAll()
+        resumeAfterInterruption = false
         Log.info(.render, "停止 位置=\(fmt(clock.currentTime))s")
+    }
+
+    // MARK: - 音频中断
+
+    private func installAudioObservers() {
+        let center = NotificationCenter.default
+        audioObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleAudioInterruption(notification)
+            }
+        )
+        audioObservers.append(
+            center.addObserver(
+                forName: AVAudioSession.routeChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleAudioRouteChange(notification)
+            }
+        )
+    }
+
+    private func handleAudioInterruption(_ notification: Notification) {
+        guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+        switch type {
+        case .began:
+            resumeAfterInterruption = currentWantsPlay
+            guard resumeAfterInterruption else { return }
+            Log.notice(.render, "音频中断开始，暂停播放")
+            pause()
+        case .ended:
+            let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
+            let shouldResume = resumeAfterInterruption && options.contains(.shouldResume)
+            resumeAfterInterruption = false
+            let drained = lock.withLock { stats.drained }
+            guard shouldResume, !drained, !isStopped else { return }
+            Log.info(.render, "音频中断结束，恢复播放")
+            play()
+        @unknown default:
+            break
+        }
+    }
+
+    /// 耳机拔出时按系统建议暂停，避免突然外放；不自动恢复，等待用户操作。
+    private func handleAudioRouteChange(_ notification: Notification) {
+        guard let rawReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason),
+              reason == .oldDeviceUnavailable else { return }
+        guard currentWantsPlay else { return }
+        Log.notice(.render, "音频输出设备断开，暂停播放")
+        pause()
     }
 
     // MARK: - 状态
@@ -484,11 +604,37 @@ public final class PlaybackEngine: @unchecked Sendable {
         streamIndex: Int?,
         onEvents: (([SubtitlePacketEvent]) -> Void)?
     ) {
-        let decoder = streamIndex.flatMap { reader.makeSubtitlePacketDecoder(streamIndex: $0) }
+        // MediaReader/AVFormatContext 只能在播放泵线程访问；这里只登记请求，
+        // 真正的 decoder 创建放到 pumpLoop 中执行。
+        condition.lock()
+        guard !stopped else {
+            condition.unlock()
+            return
+        }
+        pendingSubtitleCollector = SubtitleCollectorRequest(
+            streamIndex: streamIndex,
+            onEvents: onEvents
+        )
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    /// 在 pumpLoop 持有 condition 锁时取走请求。
+    private func takePendingSubtitleCollectorLocked() -> SubtitleCollectorRequest? {
+        let request = pendingSubtitleCollector
+        pendingSubtitleCollector = nil
+        return request
+    }
+
+    /// 仅由播放泵线程调用。
+    private func applySubtitleCollector(_ request: SubtitleCollectorRequest) {
+        let decoder = request.streamIndex.flatMap {
+            reader.makeSubtitlePacketDecoder(streamIndex: $0)
+        }
         lock.withLock {
-            subtitleStreamIndex = streamIndex
+            subtitleStreamIndex = request.streamIndex
             subtitleDecoder = decoder
-            onSubtitleEvents = onEvents
+            onSubtitleEvents = request.onEvents
         }
     }
 
@@ -557,8 +703,11 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     /// 播放中供给不足：音频缓冲低于阈值时暂停主时钟，避免声音恢复后落后于画面。
     public var isBuffering: Bool {
-        guard !stopped else { return false }
-        if stalledForBuffering { return true }
+        condition.lock()
+        let stoppedSnapshot = stopped
+        condition.unlock()
+        guard !stoppedSnapshot else { return false }
+        if lock.withLock({ stalledForBuffering }) { return true }
         guard isPlaying else { return false }
         return audioSupplyLow || (output == nil && videoSupplyLow)
     }
@@ -582,22 +731,32 @@ public final class PlaybackEngine: @unchecked Sendable {
         let wantsPlaySnapshot = wantsPlay
         condition.unlock()
         guard !stoppedSnapshot, !endedSnapshot, wantsPlaySnapshot else {
-            if stalledForBuffering {
-                finishBufferStall()
-            }
-            stalledForBuffering = false
-            lowSupplyTicks = 0
+            resetBufferStallState()
             return
         }
         let low = audioSupplyLow || (output == nil && videoSupplyLow)
-        if !stalledForBuffering {
+        let clockPlaying = clock.isPlaying
+
+        var shouldStall = false
+        var wasStalled = false
+        lock.lock()
+        if stalledForBuffering {
+            wasStalled = true
+            lowSupplyTicks = 0
+        } else {
             // 供给水位会在 100ms 内被拉流线程补上；连续两次偏低才暂停，
             // 避免在正常波动时反复暂停/恢复。
             lowSupplyTicks = low ? lowSupplyTicks + 1 : 0
-            guard lowSupplyTicks >= 2, clock.isPlaying else { return }
-            stalledForBuffering = true
+            if lowSupplyTicks >= 2, clockPlaying {
+                stalledForBuffering = true
+                lowSupplyTicks = 0
+                shouldStall = true
+            }
+        }
+        lock.unlock()
+
+        if shouldStall {
             recordBufferStall()
-            lowSupplyTicks = 0
             output?.pause()
             clock.pause()
             videoRenderer?.syncTimebase()
@@ -609,7 +768,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             return
         }
 
-        lowSupplyTicks = 0
+        guard wasStalled else { return }
         let recovered: Bool
         if output != nil {
             recovered = bufferedAhead >= Self.audioResumeSeconds
@@ -617,7 +776,12 @@ public final class PlaybackEngine: @unchecked Sendable {
             recovered = (videoRenderer?.bufferedAhead ?? 0) >= Self.audioResumeSeconds
         }
         guard recovered else { return }
-        stalledForBuffering = false
+        let didRecover = lock.withLock { () -> Bool in
+            guard stalledForBuffering else { return false }
+            stalledForBuffering = false
+            return true
+        }
+        guard didRecover else { return }
         finishBufferStall()
         output?.play()
         clock.play()
@@ -658,11 +822,15 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func resetBufferStallState() {
-        if stalledForBuffering {
+        let wasStalled = lock.withLock { () -> Bool in
+            let wasStalled = stalledForBuffering
+            stalledForBuffering = false
+            lowSupplyTicks = 0
+            return wasStalled
+        }
+        if wasStalled {
             finishBufferStall()
         }
-        stalledForBuffering = false
-        lowSupplyTicks = 0
     }
 
     /// 阻塞等待播放结束或超时，返回最终统计。仅用于自检与验收脚本。
@@ -679,12 +847,20 @@ public final class PlaybackEngine: @unchecked Sendable {
     // MARK: - 拉流
 
     private func startPumpIfNeeded() {
-        guard pumpThread == nil else { return }
+        // play()/seek() 可能来自 UI、锁屏控制或画中画回调，统一用 lock 保护只启动一条泵线程。
+        lock.lock()
+        guard pumpThread == nil else {
+            lock.unlock()
+            return
+        }
         let thread = Thread { [weak self] in self?.pumpLoop() }
         thread.name = "icemovie.playback.pump"
-        thread.qualityOfService = .userInteractive
+        // 泵线程会同步等待异步字节源读取；读取任务使用 .userInitiated，
+        // 两边 QoS 保持一致，避免 Thread Performance Checker 报优先级反转。
+        thread.qualityOfService = .userInitiated
         pumpThread = thread
         thread.start()
+        lock.unlock()
     }
 
     private func pumpLoop() {
@@ -700,6 +876,10 @@ public final class PlaybackEngine: @unchecked Sendable {
         while true {
             condition.lock()
             while !stopped, pendingSeek == nil {
+                // 字幕采集请求只需在泵线程创建 decoder，不需要有可读数据。
+                if pendingSubtitleCollector != nil {
+                    break
+                }
                 if ended {
                     // EOF 后不要空转：等 seek() 把 ended 置回 false，或 stop() 唤醒。
                     if !loggedEndPark {
@@ -720,12 +900,16 @@ public final class PlaybackEngine: @unchecked Sendable {
                 condition.unlock()
                 break
             }
+            let subtitleCollectorRequest = takePendingSubtitleCollectorLocked()
             let request = pendingSeek
             pendingSeek = nil
             let latest = seekRequests
             let endedNow = ended
             condition.unlock()
 
+            if let subtitleCollectorRequest {
+                applySubtitleCollector(subtitleCollectorRequest)
+            }
             if let request {
                 if request.id == latest {
                     performSeek(
@@ -939,9 +1123,11 @@ public final class PlaybackEngine: @unchecked Sendable {
             isKeyframe: packet.pointee.flags & AV_PKT_FLAG_KEY != 0
         )
 
-        let needsFirst = lock.withLock { stats.firstVideoMilliseconds == 0 }
-        if needsFirst, let playStartedAt {
-            let elapsed = Int((ProcessInfo.processInfo.systemUptime - playStartedAt) * 1000)
+        let firstState = lock.withLock { () -> (needsFirst: Bool, startedAt: Double?) in
+            (stats.firstVideoMilliseconds == 0, playStartedAt)
+        }
+        if firstState.needsFirst, let startedAt = firstState.startedAt {
+            let elapsed = Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1000)
             lock.withLock {
                 if stats.firstVideoMilliseconds == 0 {
                     stats.firstVideoMilliseconds = elapsed
@@ -1024,15 +1210,12 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func performSeek(_ target: Double, id: Int, requestedAt: Double) {
-        guard reader.seek(to: target) else {
-            Log.error(.demux, "seek 被拒绝 id=\(id) 目标=\(fmt(target))s")
-            finishSeek(id: id, success: false)
-            return
-        }
         // seek 期间停掉 tick 的时钟/时间基校正；否则旧音频位置会在
         // output.reset 之前把刚移到目标的时钟拉回去。
         // 代次在进入/退出各推进一次：tick 只要在这段窗口内读过音频时间，
         // 前后代次必然不一致，旧值会被丢弃，不会回写主时钟。
+        // 必须在 reader.seek 之前置位：SMB 上的 demuxer seek 可能阻塞几百毫秒，
+        // 这段时间里 tick 仍可能用旧音频位置校正时钟。
         lock.withLock {
             seekInProgress = true
             seekEpoch &+= 1
@@ -1042,6 +1225,11 @@ public final class PlaybackEngine: @unchecked Sendable {
                 seekInProgress = false
                 seekEpoch &+= 1
             }
+        }
+        guard reader.seek(to: target) else {
+            Log.error(.demux, "seek 被拒绝 id=\(id) 目标=\(fmt(target))s")
+            finishSeek(id: id, success: false)
+            return
         }
         resetBufferStallState()
         videoPipeline?.flush()
@@ -1054,7 +1242,7 @@ public final class PlaybackEngine: @unchecked Sendable {
         videoRenderer?.reset(to: target)
         // 只有主时钟本来就在播放时才立刻恢复音频；起播缓冲阶段时钟是暂停的，
         // 先 play 会让音频独自跑出十几秒，随后主时钟再追音频造成音画不同步。
-        if wantsPlay, clock.isPlaying { output?.play() }
+        if currentWantsPlay, clock.isPlaying { output?.play() }
         beginSeekTimebaseWatch()
         recordSeekTimebaseOffset(videoRenderer?.timebaseOffset ?? 0, atCompletion: true)
 
@@ -1089,7 +1277,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             stats.seekCount += 1
         }
         // 纯视频没有音频解码回调来启动时基；缓冲暂停期间 seek 后必须在这里重新拉起。
-        if wantsPlay {
+        if currentWantsPlay {
             tryStartPlayback()
         }
         let queued = Int((ProcessInfo.processInfo.systemUptime - requestedAt) * 1000)
@@ -1106,24 +1294,36 @@ public final class PlaybackEngine: @unchecked Sendable {
         condition.broadcast()
         condition.unlock()
         lock.withLock { stats.failure = message }
+        finishAllSeekWaiters()
         output?.pause()
         clock.pause()
+        stopSyncTimer()
     }
 
     // MARK: - 时钟校正
 
     private func startSyncTimer() {
-        guard syncTimer == nil else { return }
+        // tryStartPlayback 可能同时从播放泵和主线程进入；timer 的创建/取消
+        // 必须串行化，否则会创建出两个 tick 源，主时钟被重复校正。
+        lock.lock()
+        guard syncTimer == nil else {
+            lock.unlock()
+            return
+        }
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "icemovie.clock.sync"))
         timer.schedule(deadline: .now() + 0.1, repeating: 0.1, leeway: .milliseconds(20))
         timer.setEventHandler { [weak self] in self?.tick() }
         syncTimer = timer
         timer.resume()
+        lock.unlock()
     }
 
     private func stopSyncTimer() {
-        syncTimer?.cancel()
+        lock.lock()
+        let timer = syncTimer
         syncTimer = nil
+        lock.unlock()
+        timer?.cancel()
     }
 
     private func tick() {
@@ -1152,7 +1352,7 @@ public final class PlaybackEngine: @unchecked Sendable {
         }
 
         updateBufferingState()
-        guard !stalledForBuffering else { return }
+        guard !lock.withLock({ stalledForBuffering }) else { return }
         // 先取 seek 代次再读音频时间；读取与校正之间若开始或完成了一次
         // seek，代次会前进，读到的旧音频时间对 seek 后的时钟位置是脏数据，
         // 必须丢弃，否则会把主时钟从目标位置拉回（画面停住/追赶/时间基跳变）。

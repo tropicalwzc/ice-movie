@@ -444,7 +444,6 @@ public final class MediaReader: @unchecked Sendable {
         let isASS = codecName == "ass" || codecName == "ssa"
         let header = Self.subtitleHeader(context)
         let timeBase = stream.pointee.time_base
-        let timeScale = Double(timeBase.num) / Double(timeBase.den)
 
         var reading = true
         while reading {
@@ -570,6 +569,11 @@ public final class MediaReader: @unchecked Sendable {
         var reading = true
 
         while reading {
+            // 切集/关闭字幕后让旧窗口尽快退出，不再继续读 SMB。
+            if Task.isCancelled {
+                av_packet_unref(packet)
+                throw CancellationError()
+            }
             switch read(into: packet) {
             case .packet:
                 break

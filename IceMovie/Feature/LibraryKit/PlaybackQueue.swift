@@ -11,4 +11,14 @@ public enum PlaybackQueue {
         }
         return entries[(index + 1)...].first { $0.kind == .video }
     }
+
+    /// 当前条目之前（列表上方）最近的一个视频。
+    /// 当前条目不在列表中或前面没有视频时返回 nil。
+    public static func previous(before entry: MediaEntry, in entries: [MediaEntry]) -> MediaEntry? {
+        guard entry.kind == .video else { return nil }
+        guard let index = entries.firstIndex(where: { $0.path == entry.path }), index > 0 else {
+            return nil
+        }
+        return entries[..<index].last { $0.kind == .video }
+    }
 }

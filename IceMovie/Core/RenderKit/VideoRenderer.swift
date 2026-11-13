@@ -150,7 +150,7 @@ public final class VideoRenderer: @unchecked Sendable {
                 )
             }
             for box in pending {
-                layer.enqueue(box.buffer)
+                layer.sampleBufferRenderer.enqueue(box.buffer)
             }
             Log.info(
                 .render,
@@ -207,7 +207,7 @@ public final class VideoRenderer: @unchecked Sendable {
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let layer = self.layer, layer.requiresFlushToResumeDecoding else {
+                    guard let self, let layer = self.layer, layer.sampleBufferRenderer.requiresFlushToResumeDecoding else {
                         return
                     }
                     self.requestRecovery(reason: "requiresFlushToResumeDecoding")
@@ -236,7 +236,7 @@ public final class VideoRenderer: @unchecked Sendable {
             .render,
             "显示层恢复 原因=\(reason) 位置=\(String(format: "%.2f", clock.currentTime))s"
         )
-        layer.flush()
+        layer.sampleBufferRenderer.flush()
         let rebuilt = makeTimebase()
         lock.lock()
         timebase = rebuilt
@@ -325,7 +325,7 @@ public final class VideoRenderer: @unchecked Sendable {
             stats.flushes += 1
         }
         guard let layer else { return }
-        layer.flush()
+        layer.sampleBufferRenderer.flush()
         refreshOrRetry(reason: "视频包队列丢包")
     }
 
@@ -454,11 +454,11 @@ public final class VideoRenderer: @unchecked Sendable {
         if let recoveryReason {
             recover(layer: layer, reason: recoveryReason)
             recovered = true
-        } else if layer.status == .failed {
-            let error = layer.error?.localizedDescription ?? "未知"
+        } else if layer.sampleBufferRenderer.status == .failed {
+            let error = layer.sampleBufferRenderer.error?.localizedDescription ?? "未知"
             recover(layer: layer, reason: "显示层状态失败：\(error)")
             recovered = true
-        } else if layer.requiresFlushToResumeDecoding {
+        } else if layer.sampleBufferRenderer.requiresFlushToResumeDecoding {
             recover(layer: layer, reason: "requiresFlushToResumeDecoding")
             lock.withLock { stats.flushes += 1 }
             recovered = true
@@ -476,7 +476,7 @@ public final class VideoRenderer: @unchecked Sendable {
             guard !drop else { return }
         }
 
-        layer.enqueue(box.buffer)
+        layer.sampleBufferRenderer.enqueue(box.buffer)
     }
 
     /// 自检用：注入一次显示层恢复，验证时间基重建与参数集重灌路径。
@@ -487,7 +487,7 @@ public final class VideoRenderer: @unchecked Sendable {
 
     /// 显示层时间基与主时钟的偏差，用于衡量音画是否漂移。
     public var timebaseOffset: Double {
-        guard let timebase else { return 0 }
+        guard let timebase = lock.withLock({ self.timebase }) else { return 0 }
         return CMTimebaseGetTime(timebase).seconds - clock.currentTime
     }
 
@@ -522,12 +522,13 @@ public final class VideoRenderer: @unchecked Sendable {
     }
 
     /// 显示层当前状态，供压力验收报告定位黑屏/解码问题。
+    @MainActor
     public var statusDescription: String {
         lock.withLock {
             guard let layer else { return "unbound" }
-            switch layer.status {
+            switch layer.sampleBufferRenderer.status {
             case .failed:
-                return "failed:\(layer.error?.localizedDescription ?? "unknown")"
+                return "failed:\(layer.sampleBufferRenderer.error?.localizedDescription ?? "unknown")"
             case .rendering:
                 return "rendering"
             case .unknown:
@@ -542,7 +543,7 @@ public final class VideoRenderer: @unchecked Sendable {
 
     /// 与主时钟对齐：播放时让时间基自由运行，暂停时停住，偏差过大时纠正。
     public func syncTimebase() {
-        guard let timebase else { return }
+        guard let timebase = lock.withLock({ self.timebase }) else { return }
         let target = clock.currentTime
         let current = CMTimebaseGetTime(timebase).seconds
         let playing = clock.isPlaying
@@ -576,12 +577,12 @@ public final class VideoRenderer: @unchecked Sendable {
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.layer?.flush()
+                self.layer?.sampleBufferRenderer.flush()
                 let pending = self.lock.withLock { self.stats.pendingDispatch }
                 Log.info(
                     .render,
                     "视频跳转清层 位置=\(String(format: "%.2f", seconds))s "
-                        + "状态=\(self.layer?.status.rawValue ?? -1) "
+                        + "状态=\(self.layer?.sampleBufferRenderer.status.rawValue ?? -1) "
                         + "待发=\(pending)"
                 )
             }

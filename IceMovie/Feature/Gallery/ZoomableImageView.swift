@@ -124,6 +124,8 @@ struct ZoomableImageView: UIViewRepresentable {
 final class ZoomingScrollView: UIScrollView {
     let imageView = UIImageView()
 
+    private var lastLayoutSize: CGSize = .zero
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         addSubview(imageView)
@@ -135,9 +137,24 @@ final class ZoomingScrollView: UIScrollView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if zoomScale <= 1.01 {
-            imageView.frame = bounds
-            contentSize = bounds.size
+
+        guard bounds.size != lastLayoutSize else {
+            if zoomScale <= 1.01 {
+                imageView.frame = bounds
+                contentSize = bounds.size
+            }
+            return
         }
+
+        let isFirstLayout = lastLayoutSize == .zero
+        lastLayoutSize = bounds.size
+        // 放大状态下旋转设备时，旧 imageView 尺寸与新 bounds 不匹配，
+        // 继续保留缩放会看到偏移/裁切；直接回到适应屏幕的初始状态。
+        if !isFirstLayout, zoomScale > 1.01 {
+            setZoomScale(1, animated: false)
+            contentOffset = .zero
+        }
+        imageView.frame = bounds
+        contentSize = bounds.size
     }
 }

@@ -1,15 +1,60 @@
 # IceMovie
 
-iPad 优先的 iOS SMB 视频播放器：直接连接局域网 SMB 共享，用 FFmpeg 解封装、VideoToolbox 硬解、AVAudioEngine 输出音频，支持 MKV/MP4、内封与外挂字幕、内联/全屏、画中画（设置页开关，默认关闭）与续播。点击视频默认直接全屏播放；播放结束后按目录顺序自动播放下一集。同一主机存在多个共享时，可在媒体库左栏直接切换，无需断开重连。
+iPad / iPhone 优先的局域网 SMB 媒体库与播放器：直接连接 SMB 共享，浏览视频、照片和文档，不依赖中转服务器，也不做转码。
+
+- **视频**：FFmpeg 解封装、VideoToolbox 硬解、AVAudioEngine 输出；支持 MKV/MP4/AVI/MPEG-TS、内封与外挂字幕、内联/全屏、画中画、锁屏控制、续播和同目录自动连播。
+- **照片**：图片瀑布流、全屏相册、缩放/旋转、收藏/删除、LIVP 静态与长按动态、照片日历，以及把系统相册增量同步到 SMB。
+- **文档**：Markdown（GFM、代码高亮、目录）与 PDF（连续滚动、页码、页面缩略图）阅读器。
+- **媒体库**：视频/图片混合网格、类型过滤、拍摄日期过滤、全文搜索、收藏夹、目录封面和共享侧车缩略图。
+- **播放体验**：起播快速档/慢链路保守档自适应、15 秒音视频预读、512MB 内存预读环、seek 缓存复用、缓冲/失败提示和播放诊断。
+
+同一主机存在多个共享时，可在媒体库左栏直接切换，无需断开重连。
+
+## 功能总览
+
+| 模块 | 能力 |
+|---|---|
+| 媒体库 | 视频/图片瀑布流、文档列表、目录封面、视频/图片过滤、拍摄日期日历、搜索、收藏夹 |
+| 播放器 | 全屏/内联、进度拖动、±90 秒、上一集/下一集、自动连播、续播、字幕面板；倍速接口支持 0.5–2.0 |
+| 音频 | 后台播放、锁屏/控制中心、Now Playing、来电/路由变化暂停与恢复 |
+| 字幕 | 外挂 ASS/SSA/SRT/VTT、内封文本字幕、libass 位图渲染、系统文字兜底、大文件分片加载 |
+| 相册 | 瀑布流、缩放/双击、旋转、保存系统相册、覆盖原图、收藏、删除、LIVP 动态 |
+| 照片同步 | 系统相册 → SMB 目标目录，增量匹配、预扫描、进度/失败汇总 |
+| 文档 | Markdown GFM/代码高亮/目录/复制，PDF 连续滚动与页面导航 |
+| 诊断 | 播放统计、缓存报告、FPS/内存/CPU 监控、压力验收和启动参数 |
+
+## 代码结构
+
+```text
+IceMovie/
+  App/                  应用入口、命令总线、音视频/字幕自检
+  Core/DemuxKit/        FFmpeg 解封装、音频解码、AVIO 桥接
+  Core/RenderKit/       播放引擎、主时钟、视频/音频输出、PiP、Now Playing
+  Core/SMBSession/      libsmb2 封装、按优先级调度的读取、预读环
+  Core/SubtitleKit/     字幕解析、ASS 清洗、libass 渲染
+  Core/ThumbnailKit/    缩略图生成、共享侧车索引、本地缓存
+  Core/ImageKit/        图片解码、编码、LIVP、旋转
+  Core/PersistenceKit/  播放进度、收藏、容器头缓存
+  Core/Diagnostics/     缓存维护、FPS/内存诊断
+  Feature/Library/      媒体库、搜索、过滤、照片日历、照片同步入口
+  Feature/Player/       播放页、底部控件、字幕覆盖层
+  Feature/Gallery/      全屏相册、缩放、旋转、LIVP 动态
+  Feature/PhotoSync/    系统相册扫描、匹配、SMB 上传
+  Feature/Document/     Markdown/PDF 阅读器
+Vendor/
+  setup.sh              拉取固定版本 FFmpeg/AMSMB2/libsmb2 并应用 patch
+  ffmpeg/patches/       FFmpeg 本地 patch
+  AMSMB2-patches/       AMSMB2 本地 patch
+```
 
 ## 环境
 
 - macOS + Xcode 26（部署目标 iOS 26.0）
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-- 本地已放置依赖：
-  - `Vendor/AMSMB2`（含 libsmb2 源码）
-  - `Vendor/ffmpeg/ffmpeg-src` 与已构建的 `Vendor/ffmpeg/lib/{iphoneos,iphonesimulator}`
-  - `Vendor/libass`（实验性，当前未接入构建）
+- 三方源码由脚本拉取：
+  - 首次检出后执行 `./Vendor/setup.sh`，会 clone 固定版本的 FFmpeg / AMSMB2 / libsmb2，并幂等应用 `Vendor/ffmpeg/patches` 与 `Vendor/AMSMB2-patches` 下的本地 patch。
+  - `Vendor/ffmpeg/lib/{iphoneos,iphonesimulator}` 是已构建产物；需要重新编译时执行 `cd Vendor/ffmpeg && ./build.sh`。
+  - libass 的预编译产物在 `Vendor/libass/out/{iphoneos,iphonesimulator}`；重新编译见下文。
 
 ## 生成工程
 
@@ -30,13 +75,16 @@ swift Scripts/make-app-icon.swift IceMovie/Resources/Assets.xcassets/AppIcon.app
 
 ## FFmpeg
 
+首次检出或切换机器后，先执行 `./Vendor/setup.sh` 拉取固定版本源码并应用 patch。
+
 构建脚本：`Vendor/ffmpeg/build.sh`。
 
-- 版本：`Vendor/ffmpeg/ffmpeg-src` 中的源码快照
+- 版本：`Vendor/setup.sh` 固定到 `release/7.1` / `f9db090`，并应用 `Vendor/ffmpeg/patches/0001-matroska-skip-font-attachments.patch`
 - 架构：`arm64-apple-ios26.0`（真机）与 `arm64-apple-ios26.0-simulator`（模拟器）
 - 关闭编码器、复用器、网络与设备层，只保留播放所需：
   - 解封装：matroska、mov/mp4、avi、mpegts
   - 解码：H.264、HEVC、AAC、Opus、FLAC、AC3/EAC3、DCA、Vorbis，以及 ass/ssa/subrip/webvtt 字幕
+- 播放首开额外启用 `skip_font_attachments`，跳过 MKV 字体附件负载，封面图等非字体附件仍保留
 - 产物：`Vendor/ffmpeg/lib/iphoneos` 与 `Vendor/ffmpeg/lib/iphonesimulator`
 
 重新构建：
@@ -45,7 +93,7 @@ swift Scripts/make-app-icon.swift IceMovie/Resources/Assets.xcassets/AppIcon.app
 cd Vendor/ffmpeg && ./build.sh
 ```
 
-## libass
+## libass 与字幕渲染
 
 构建脚本：`Vendor/libass/build.sh`。
 
@@ -60,18 +108,55 @@ cd Vendor/libass && ./build.sh
 
 接入方式：`IceMovie/Core/CLibass/module.modulemap` 暴露 `ass.h`；App 侧链接
 `libass.a`、`libharfbuzz.a`、`libfreetype.a`、`libfribidi.a`、`libiconv` 与 CoreText。
-ASS/SSA 走 libass 位图渲染（保留定位、颜色、描边与 OP 特效），SRT 仍走系统文字；
-中文字体优先使用容器附件，其次内置 `Resources/Fonts/NotoSansCJKsc-Regular.otf`，
-最后用 CoreText 系统字体兜底。
 
-- 特效脚本超过 4MB 或 5000 事件时自动降级为对白，避免 OP/ED 逐字动画拖垮主线程。
-- ≥800MB 的大文件内封文本字幕（ASS/SRT/mov_text）直接复用播放泵读到的字幕包，边播边解析，字幕与音画共用同一读流，不再为字幕二次扫描 SMB；45 秒内没有任何字幕包时才回退到分片加载（4s→16s→60s 递增窗口 + 后台预取）。分片读取使用独立的 `subtitle` 优先级，避免被播放预读拖住；窗口顶到片尾时停止预取，读取失败按 2–8 秒退避。这类文件用系统文字层显示对白。
-- SMB 短读不再当作 EOF：每块循环续读直到补满或真正到文件末尾，修复小 MP4 播不出和 4K 视频中途黑屏/截断。
-- 旋转、重建视频层或显示层解码恢复时，从当前位置重新解出一段关键帧，而不是把旧帧硬塞进新层；避免新层从非关键帧起解导致的黑屏和恢复刷屏。
-- 内封 SRT/mov_text/webvtt 由 FFmpeg 放在 `rect.ass` 里（`ReadOrder,Layer,Style,...,Text`），提取时按字段拆分，界面只显示正文；字幕脚本缓存命中时会重新注册容器字体附件。
+### 渲染策略
+
+- 外挂 ASS/SSA 走 libass 位图渲染，保留定位、颜色、描边与常规 OP 特效；SRT/VTT 走系统文字。
+- 内封文本字幕默认随播放泵采集，由系统文字层显示对白；`≥4MB` 或 `≥5000` 事件的脚本会先降级掉 `\p` 矢量绘图、逐字动画等重特效。
+- 内封 SRT/mov_text/webvtt 由 FFmpeg 放在 `rect.ass` 里（`ReadOrder,Layer,Style,...,Text`），提取时按字段拆分，界面只显示正文。
+- 大文件分片字幕、以及播放流 45 秒内没有采到字幕包时的回退路径，使用系统文字层；这类场景不追求 libass 样式保真，优先保证字幕尽快出现。
+- 字体统一使用内置 `Resources/Fonts/NotoSansCJKsc-Regular.otf`，最后用 CoreText 系统字体兜底。容器字体附件在播放首开时已被 FFmpeg 跳过，不再注册，避免为几 MB 字体付出 SMB 读取和内存拷贝。
 - PGS/DVD/DVB 等位图内封字幕暂无文本渲染路径，发现时直接跳过，不参与默认选轨。
-- 大文件分片字幕连续失败时会回退到后续字幕候选，并在播放器顶部显示错误提示。
-- 音频供给不足时冻结主时钟与音频，缓冲恢复后从同一位置继续，避免声音恢复后落后于画面；音频不足会压过视频领先回压，保证拉流线程继续补音频。
+- 分片字幕连续失败时会回退到后续字幕候选，并在播放器顶部显示错误提示。
+
+## 播放器
+
+### 进入与布局
+
+- 媒体库点击视频默认直接全屏播放；iPad 分栏模式可在右栏内联播放，并随时在内外全屏之间切换，不重建解码管线。
+- iPhone 全屏强制横屏；退出播放回到竖屏媒体库。iPad 保持系统方向策略。
+- 全屏播放器隐藏系统状态栏和 Home Indicator 覆盖层，画面按原比例完整显示。
+
+### 控件与手势
+
+- 底部控件：上一集、快退 90 秒、播放/暂停、快进 90 秒、全屏、字幕、下一集。
+- 进度条显示当前播放位置、白色已播放段和浅绿色预读区间；拖动时圆圈跟手，松手后 seek。
+- 单击画面显示/隐藏控件；双击左/右半屏快退/快进 90 秒；竖向拖动左半屏调亮度、右半屏调音量。
+- 控件在播放中 3.5 秒无操作自动隐藏；暂停、缓冲时不自动隐藏。`-keepControlsVisible` 可关闭自动隐藏用于验收。
+- 外接键盘和菜单栏支持播放/暂停、快进/快退 90 秒、全屏切换；具体命令见 `IceMovie/App/IceMovieApp.swift` 与 `PlayerCommands`。
+- iPhone 横屏标题会按词逐步缩短并保留“第 X 集”；iPad 标题最多两行。
+- 右上角 HUD 显示实时下载速度和电量；压测参数 `-playerStatusDetails` 会额外显示内存/CPU。
+
+### 播放流程
+
+- 续播：播放位置每 5 秒落盘，关闭/切集时再保存一次；再次打开显示“已续播至 xx:xx”，可直接从头播放。
+- 结束：读到文件结尾且音视频缓冲耗尽后标记 `drained`，同目录存在下一个视频时自动连播；没有下一个则返回媒体库。
+- 手动上一集/下一集只选择同目录视频，跳过目录、图片和文档；第一集没有上一集按钮，最后一集没有下一集按钮。
+- 缓冲：音频低于水位连续两次后冻结主时钟和音频，恢复后从同一位置继续；界面显示“缓冲中…”。
+- 失败：读取/解码错误显示“播放中断”覆盖层，可直接返回媒体库；损坏文件不会阻塞媒体库浏览。
+
+### 播放稳定性
+
+- SMB 短读不再当作 EOF：每块循环续读直到补满或真正到文件末尾，避免小 MP4 播不出和 4K 视频中途黑屏/截断。
+- 旋转、重建视频层或显示层解码恢复时，从当前位置重新解出一段关键帧，而不是把旧帧硬塞进新层，避免非关键帧起解导致的黑屏和恢复刷屏。
+- 音频供给不足时冻结主时钟与音频，缓冲恢复后从同一位置继续；音频不足优先于视频回压，保证拉流线程继续补音频。
+
+### 音频、锁屏与画中画
+
+- `AVAudioSession` 使用 `.playback` + `.moviePlayback`，支持锁屏/切后台继续出声。
+- 锁屏界面和控制中心显示标题、时长、进度与播放速率，支持播放/暂停、±90 秒和拖动进度。
+- 来电、音频抢占、耳机拔出会暂停播放；系统允许恢复时自动恢复，耳机拔出后不自动外放。
+- 画中画默认关闭，在「更多 > 设置」中开启；画中画内的播放/暂停、快进快退会转回播放引擎。
 
 ## 媒体库条目
 
@@ -105,7 +190,7 @@ ASS/SSA 走 libass 位图渲染（保留定位、颜色、描边与 OP 特效）
 - 点同步先做只读扫描，预览“系统相册可访问 / 动态照片 / 视频 / 格式不支持 / 缺少拍摄时间 / 目标已有 / 已匹配 / 待同步”，确认后才上传。
 - 上传平铺在目标目录，文件名 `原名_yyyyMMddHHmmss.扩展名`；先写同目录临时文件、校验大小、再 rename，绝不覆盖已有文件，也不删除远端文件。
 - 增量判断使用“原文件名 + 拍摄时间”，忽略扩展名、大小写和文件名前缀；本地清单按目标隔离并加速后续扫描，重装后靠远端文件名兜底。
-- v1 只同步静态图片 JPG/JPEG/PNG/HEIC/HEIF；Live Photo 只取静态图并记录 `livePhotoStill`；视频、GIF、RAW 跳过并计数；隐藏照片不上传；Live Photo 动态与视频留待后续 change。
+- 当前版本只同步静态图片 JPG/JPEG/PNG/HEIC/HEIF；Live Photo 只取静态图并记录 `livePhotoStill`；视频、GIF、RAW 跳过并计数；隐藏照片不上传；Live Photo 动态与视频留待后续版本。
 - 上传期间顶部固定状态条显示目标、已处理/总数、数量进度条、实际 SMB 上传速度与取消；切换目录仍可见，沉浸式相册/播放时被覆盖。
 - 单张失败不中断，状态条显示失败计数；整体中断（断线、目标不可写、权限收回）显示常驻红条；结束汇总成功/失败/跳过、用时和平均速度，可重试失败。失败提示只在应用内，不发系统通知。
 - 只在前台同步；锁屏或切后台可能中断，下次从剩余照片继续；已同步照片的后续编辑不重传，手机删除照片也不会删除 SMB 文件。
@@ -168,7 +253,7 @@ ASS/SSA 走 libass 位图渲染（保留定位、颜色、描边与 OP 特效）
   -libraryPath "面试知识库" -documentSelfTest
 ```
 
-验收会递归打开所有文档，检查表格/代码块/高亮/目录、滚动到底部与 PDF 页数，结果写入 App `Documents/DocumentSelfTest-*.json`，并在日志输出 `DOCSELFTEST PASS/FAIL`。当前 `pythonworkspace/面试知识库` 的 118 个可见文档（110 Markdown + 8 PDF）全部通过，累计渲染 603 个表格、498 个代码块、348 个高亮代码块，全部可滚动到底部。
+验收会递归打开所有文档，检查表格/代码块/高亮/目录、滚动到底部与 PDF 页数，结果写入 App `Documents/DocumentSelfTest-*.json`，并在日志输出 `DOCSELFTEST PASS/FAIL`。历史验收中 `pythonworkspace/面试知识库` 的 118 个可见文档（110 Markdown + 8 PDF）全部通过，累计渲染 603 个表格、498 个代码块、348 个高亮代码块；文档内容变更后需要重跑。
 
 ## 构建与签名
 
@@ -177,32 +262,39 @@ ASS/SSA 走 libass 位图渲染（保留定位、颜色、描边与 OP 特效）
 ```bash
 xcodebuild -project IceMovie.xcodeproj -scheme IceMovie \
   -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' \
-  -derivedDataPath build-test build \
-  CODE_SIGN_IDENTITY='-' OTHER_SWIFT_FLAGS='$(inherited) -disable-sandbox'
+  -derivedDataPath build-test \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  build CODE_SIGN_IDENTITY='-' OTHER_SWIFT_FLAGS='$(inherited) -disable-sandbox'
 ```
 
 必须使用 `CODE_SIGN_IDENTITY='-'`；`CODE_SIGNING_ALLOWED=NO` 会让钥匙串返回 `-34018`。
+当前 `Vendor/ffmpeg/lib/iphonesimulator` 只包含 arm64 静态库，因此模拟器构建需要 `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES`，否则 x86_64 链接会失败。
 
 真机：在 Xcode 中为 `IceMovie` target 选择自己的 Team，或传入 `DEVELOPMENT_TEAM=<TEAM_ID>`。
 
 ## 测试
+
+播放器并发、seek 等待者、缩略图侧车和图片旋转等核心逻辑都有单元测试；依赖真实样本的用例在样本缺失时 `XCTSkip`。
 
 单元测试：
 
 ```bash
 xcodebuild -project IceMovie.xcodeproj -scheme IceMovieTests \
   -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' \
-  -derivedDataPath build-test test \
+  -derivedDataPath build-test \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  test \
   CODE_SIGN_IDENTITY='-' OTHER_SWIFT_FLAGS='$(inherited) -disable-sandbox'
 ```
 
-引擎级回归（第 4–7 组，一条命令）：
+播放器核心回归（解封装 → 硬解 → 起播 → seek → 字幕）：
 
 ```bash
 xcodebuild -project IceMovie.xcodeproj -scheme IceMovieTests \
   -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' \
-  -derivedDataPath build-test test \
-  -only-testing:IceMovieTests/PlaybackRegressionTests \
+  -derivedDataPath build-test \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  test -only-testing:IceMovieTests/PlaybackRegressionTests \
   CODE_SIGN_IDENTITY='-' OTHER_SWIFT_FLAGS='$(inherited) -disable-sandbox'
 ```
 
@@ -211,7 +303,9 @@ UI 测试：
 ```bash
 xcodebuild -project IceMovie.xcodeproj -scheme IceMovieUITests \
   -destination 'platform=iOS Simulator,id=<SIMULATOR_UDID>' \
-  -derivedDataPath build-test test \
+  -derivedDataPath build-test \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  test \
   CODE_SIGN_IDENTITY='-' OTHER_SWIFT_FLAGS='$(inherited) -disable-sandbox'
 ```
 
@@ -249,23 +343,26 @@ xcodebuild -project IceMovie.xcodeproj -scheme IceMovieUITests \
 - 每条压力 JSON 额外记录 `cpuAvgPercent` / `cpuMaxPercent` / `cpuEndPercent`（单核百分比，100 = 占满一个核心）；`cpuEndPercent ≥ 80` 通常意味着 EOF 后泵线程空转或收尾线程异常，需要复核
 - `-resetAcceptanceReport`：启动时清空逐集验收报告
 - `-keepControlsVisible`：验收时让控件常显（仅测试）
+- `-playerStatusDetails`：播放器右上角 HUD 常显，并展开内存/CPU 指标
 - `-stressRandom`：随机抽样压力测试开关；配合 `-stressRootPath <相对路径>`（默认共享根）
 - `-stressCount <条数>`、`-stressPlaySeconds <秒>`、`-stressSeekAfter <秒>`、`-stressSeekFraction <0–1>`
 - `-stressTimeLimit <秒>`：压力测试时间上限（默认 1800）；发现无视频帧、显示层解码恢复、单分钟缓冲 ≥6 次、播放失败或显示层 failed 时自动停止
 - `-stressFilter <子串>`：只测路径包含该子串的视频，用于单文件复现
 - `-stressHDFirst`：验收时把最大的 4K 排在小 MP4 之后，优先覆盖高码率片
 - `-stressTolerateBufferStalls`：把缓冲超标记录为环境异常（`stressBufferException`）并继续，只有无视频帧/解码恢复/播放失败才中断
+- `-stressTolerateFileErrors`：把损坏样本/无视频帧等文件级异常记录后继续，适合跑内容质量参差的共享目录
 - `-stressSeekBackSeconds <秒>` / `-stressSeekBackFraction <0–1>`：播放中段再回退指定秒数或比例，用于验证回退命中缓存
 - `-stressSeekForwardSeconds <秒>`：播放后段再前进指定秒数，用于验证邻近前跳命中
 - `-smbChunkMB <MB>` / `-smbRingMB <MB>`：SMB 播放读块与预读窗口（默认 1MB / 512MB）
 - `-smbSeekCache 0`：关闭新的 seek 缓存复用，回退到旧的“seek 清空预读环”行为
 - `-playbackRate <倍速>`：加速长片回归（0.5–2.0）
 - `-throughputReport <秒>`：播放指定秒数后把吞吐/跳转统计写入 `Documents/ice-throughput.json`
-- `-shardedThresholdMB <MB>`：自检时降低分片字幕阈值（默认 800MB）
 - `-smbHost <地址> -smbShare <共享> -library`：SMB 库
 - `-resetPlaybackProgress`：清空续播记录
 - `-resetSubtitlePreferences`：清空字幕偏好
 - `-debugLog` / `-logDebug`：打开调试日志并追加写入 `Documents/ice-playback.log`（多窗口只初始化一次，不互相清空）
+- `-cacheReport`：把当前缓存占用报告输出到 stderr
+- `-fpsMonitor`：输出实时滚动帧率
 - `-diagnostics`：直接打开诊断页
 
 ## 缓存策略
@@ -295,7 +392,7 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 - 读取顺序：内存 → 本地 64MB 缓存 → 共享侧车 → 原图。侧车命中时不再读原图。
 - 进入目录自动全量预热：可见项优先、单并发、滚动时让路、可暂停/继续/取消；顶部显示进度。
 - 新照片/变化照片增量补；删除文件的索引与孤儿缩略图会清理。
-- 侧车缩略图为 384px JPEG，单张约 10–50KB；3,596 张照片约 100–200MB，不占本地设备空间。
+- 侧车缩略图为 512px JPEG，单张约 15–70KB；3,596 张照片约 150–250MB，不占本地设备空间。
 - 共享只读或写入失败时自动回退本地缓存 + 原图，不影响浏览。
 - 充电空闲时通过 `BGProcessingTask` 继续当前目录预热；首轮通常约 10–25 分钟，之后进入增量模式。
 - 滚动不再持续跟踪 `scrollPosition`，改用 `ScrollViewReader` + 轻量可见锚点；60Hz iPad 实测 10 次滑动 54.5–57.2fps。可用 `-fpsMonitor` 启动参数输出实时帧率。
@@ -306,7 +403,7 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 加上日志轮转和系统快照，App 数据目标控制在 **200 MB 以内**，硬上限 **500 MB**；启动时会自动修剪升级前遗留的超大缓存。iPad 实测从约 800 MB 降到 **64–67 MB**（容器头缓存重建后播放一个视频约 3 MB，后续最多再增长 48 MB）。
 
 - 内存中的封面另有 64 MB `NSCache`，退出即释放。
-- 图片缩略图与视频共用 `Caches/Thumbnails` 的 **64 MB** 硬上限：网格按 384px 下采样，生成失败显示“无预览”且同一会话不重试；JPEG 先读 512KB 前缀，解析 EXIF 后只解码完整的内嵌缩略图，避免为封面下载整张 3–10MB 原图；没有内嵌图才整图解码。缩略图解码在后台完成，滑出屏幕的生成任务会取消，快速滑动时暂缓瀑布流改高度；停止滚动后会预取后续最多 12 张封面并提前解码，滑动开始则立即取消。缩略图生成逻辑升级时会清空旧版本缓存，避免历史半截图继续被使用。实测 ImageIO 通过直连数据源会请求整张压缩图，因此网格封面按可见条目读取整图（受低并发与缓存约束），不做全尺寸解码；LIVP 只读取静态图条目，不碰 MOV。原图、全尺寸解码结果与相册预览都不落盘，相册图只在内存中保留当前页。
+- 图片缩略图与视频共用 `Caches/Thumbnails` 的 **64 MB** 硬上限：网格按 512px 下采样，生成失败显示“无预览”且同一会话不重试；JPEG 先读 512KB 前缀，解析 EXIF 后只解码完整的内嵌缩略图，避免为封面下载整张 3–10MB 原图；没有内嵌图才整图解码。缩略图解码在后台完成，滑出屏幕的生成任务会取消，快速滑动时暂缓瀑布流改高度；停止滚动后会预取后续最多 12 张封面并提前解码，滑动开始则立即取消。缩略图生成逻辑升级时会清空旧版本缓存，避免历史半截图继续被使用。实测 ImageIO 通过直连数据源会请求整张压缩图，因此网格封面按可见条目读取整图（受低并发与缓存约束），不做全尺寸解码；LIVP 只读取静态图条目，不碰 MOV。原图、全尺寸解码结果与相册预览都不落盘，相册图只在内存中保留当前页。
 - 播放预读：SMB 播放块默认 1 MB、内存环约 512 MB（512 块，可用 `-smbChunkMB` / `-smbRingMB` 调整）；音频/视频各补到 15 秒，起播快速档只需 1 帧视频 + ≤300ms 音频，慢链路自动回退到 2s/1s。局域网带宽足够时提前读、提前解码，网络抖动不再立刻触发“缓冲中”；该缓冲只占内存，不写硬盘。
 - 预读是持续的后台任务：环形窗口填满后不会停死，播放消耗后从新的读位置继续补下一段。
 - 视频包封装/投递在独立有界队列和线程完成，播放泵只做读包与音频/字幕处理；音频低于 1 秒时暂停后台预读，把 SMB 带宽让给播放读，避免高码率 4K 反复缓冲。
@@ -315,14 +412,18 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 - seek 先查连续缓存：回退或邻近跳转命中时不重置预读环、不重新下载；未命中时只丢弃前向窗口，先读目标位置第一块，再从解封装读头向前预读。
 - 读窗口显式区分播放头、解封装读头和预读最远点：缓冲区间从播放头算到预读最远点，包含已解封装但尚未播放的数据；进度条不会只显示读头之后的一小段。
 - 回看窗口默认约 20 秒、最多 64 MB，其余内存留给未来窗口；淘汰先丢回看窗口外的远端块，再丢前向窗口外和窗口内离播放头最远的数据。
-- 播放器 HUD：iPad 右上角在控件可见时显示实时下载速度和电量；返回/关闭按钮与状态栏随控件一起淡入淡出；标题在 iPad 允许两行。进度条用浅绿色显示当前播放点到预读窗口末端的已缓冲区间。
+- 播放器 HUD：全屏右上角显示实时下载速度和电量；压测时 `-playerStatusDetails` 常显并展开内存/CPU。返回/关闭按钮与状态栏随控件淡入淡出；iPhone 标题按词缩短并保留集数，iPad 标题最多两行。进度条用浅绿色显示当前播放点到预读窗口末端的已缓冲区间。
 - 缩略图与字幕脚本的缓存键都带数据源命名空间（SMB 为主机 + 共享，本地源为根目录绝对路径），切换共享或根目录不会串用。
 - 字幕脚本缓存键还带格式版本；解析或降级逻辑升级后，旧缓存会自动失效。
 - 最坏会先写入一个新文件再触发淘汰，瞬时可能略微超过上限，但下一次读取前就会回到预算内。
 - 媒体库「更多 > 清空缓存」可立即删除缩略图、目录封面、字幕脚本与容器头缓存。
 - 诊断页「更多 > 缓存占用」会按实际分配块显示各模块占比；`-cacheReport` 启动参数可把同一份报告输出到 stderr。
 
-## 真机实测（iPad Air 11 英寸 M2，iOS 27.0.1，SMB `192.168.5.2` / `TROPICAL-ADVPC.local`）
+## 真机验收记录（历史数据）
+
+以下为特定版本、特定网络环境下的历史实测，升级 iOS、FFmpeg 或更换 SMB 服务器后需要重新验收。
+
+### 播放与起播（iPad Air 11 英寸 M2，iOS 27.0.1，SMB `192.168.5.2` / `TROPICAL-ADVPC.local`）
 
 通过 `-libraryOpenFirst -throughputReport <秒>` 让真机按产品路径播放并写回
 `Documents/ice-throughput.json`，用 `devicectl device copy from` 取回：
@@ -351,7 +452,7 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 
 - 媒体库固定竖屏；点击视频进入全屏时自动切到横屏，即使系统开启“竖排方向锁定”。
 - 全屏播放器在紧凑布局改用根视图覆盖层（不再使用 `fullScreenCover`），避免系统弹层的视图控制器只支持竖屏导致 `requestGeometryUpdate` 失败，也避免键盘退场动画期间覆盖层被丢弃。
-- 播放 350MB H.264 MP4：横屏画面、进度条、±90 秒与字幕按钮正常；画中画改由「更多 > 设置」开关控制（默认关闭）。退出播放回到竖屏媒体库。
+- 播放 350MB H.264 MP4：横屏画面、进度条、快进 90 秒、上一集/下一集与字幕按钮正常；画中画改由「更多 > 设置」开关控制（默认关闭）。退出播放回到竖屏媒体库。
 - 搜索定位后再点视频（键盘仍在退场）也能正常进入播放器，`testOpenFromSearchPresentsPlayer` 覆盖该路径。
 
 ### 随机起播 / 中间跳转压力验收
@@ -411,10 +512,16 @@ App 不缓存视频。播放时使用 **512 MB 内存预读环 + 15 秒音视频
 9. 纯文档目录只显示“文件夹 + 文档”列表；混合目录显示视频网格 + 文档列表；文档行带 `MD`/`PDF` 徽标
 10. Markdown 中的表格、代码块、高亮、复制、h1–h3 目录与外部链接按预期工作；关闭后重新打开从开头开始
 11. PDF 连续滚动、页码、页面缩略图跳转与损坏 PDF 的重试提示正常；文件名检索可直接打开文档
+12. 全屏相册的缩放、双击、旋转、保存到系统相册、覆盖原图和收藏/删除流程正常；LIVP 长按动态可播放并释放
+13. 照片同步的目标目录标记、预扫描、增量上传、断线重试和失败汇总正常；目标为只读共享时能正确降级
+14. 搜索命中视频/图片/文档分别进入播放器/相册/阅读器；收藏夹跨目录汇总和空状态正确
 
 ## 已知限制
 
 - 模拟器画中画窗口内容可能黑屏，但音频与播放进度继续；以真机为准。
 - 损坏文件在个别 demuxer 上探测较慢；已修正 FFmpeg 自定义 IO 的 EOF 与失败清理，并保证播放准备不阻塞媒体库。
-- libass 的复杂特效（模糊、逐字动画等）仍受字体与脚本支持范围限制；常规对白、定位 OP、颜色与描边已保真。
-- ≥800MB 的内封字幕按播放位置分片读取并使用系统文字层，以保证秒开；OP/ED 逐字特效会降级为对白。
+- PGS/DVD/DVB 等位图内封字幕暂不支持文本渲染，会跳过且不参与默认选轨。
+- libass 的复杂特效（模糊、逐字动画等）仍受字体与脚本支持范围限制；容器字体附件在播放首开时被跳过，统一使用内置 Noto CJK 与系统字体，特殊字体可能回退。
+- 内封文本字幕优先复用播放泵采集；45 秒内没有字幕包时回退分片读取，分片与超长字幕使用系统文字层，OP/ED 逐字特效会降级为对白。
+- 照片同步只在前台运行；Live Photo 当前只同步静态图，视频、GIF、RAW 会跳过；删除 SMB 照片不可撤销。
+- 文档阅读器不持久化阅读位置：重新打开 Markdown 从开头、PDF 从第 1 页开始。

@@ -145,18 +145,36 @@ final class ShardedSubtitleLoader {
         guard to > from, !Task.isCancelled else { return false }
         let began = ProcessInfo.processInfo.systemUptime
         do {
-            let events = try await Task.detached(priority: .utility) { [source, entry, streamIndex] in
+            let readTask = Task.detached(priority: .utility) { [source, entry, streamIndex] in
                 let byteSource = try await source.openSubtitleByteSource(path: entry.path)
-                let reader = try MediaReader.open(source: byteSource, label: entry.path)
-                defer { reader.close() }
-                let events = try reader.readSubtitleEvents(
-                    streamIndex: streamIndex,
-                    from: from,
-                    to: to
-                )
-                await byteSource.close()
-                return events
-            }.value
+                do {
+                    // 字幕窗口只需要流参数，不做完整探测；否则每个 60s 窗口都会
+                    // 在 SMB 上重复读取大量容器数据。
+                    let reader = try MediaReader.open(
+                        source: byteSource,
+                        label: entry.path,
+                        fastProbe: true
+                    )
+                    defer { reader.close() }
+                    let events = try reader.readSubtitleEvents(
+                        streamIndex: streamIndex,
+                        from: from,
+                        to: to
+                    )
+                    await byteSource.close()
+                    return events
+                } catch {
+                    await byteSource.close()
+                    throw error
+                }
+            }
+            // 外层 stop()/切集时取消本次窗口读取，让 readSubtitleEvents 在
+            // 下一个包边界退出，避免旧窗口继续和播放读抢 SMB 带宽。
+            let events = try await withTaskCancellationHandler {
+                try await readTask.value
+            } onCancel: {
+                readTask.cancel()
+            }
             guard !Task.isCancelled else { return false }
 
             if consecutiveFailures > 0 {

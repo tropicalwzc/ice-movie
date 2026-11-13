@@ -152,16 +152,16 @@ struct LibraryGridView: View {
         // 右侧会出现一整列空白；列分配复用已有条目的稳定列。
         let buckets = buckets(for: items, columnCount: columnCount)
         return HStack(alignment: .top, spacing: LibraryGridLayout.spacing) {
-            ForEach(buckets.indices, id: \.self) { column in
+            ForEach(buckets) { bucket in
                 LazyVStack(alignment: .leading, spacing: 22) {
-                    ForEach(Array(buckets[column].enumerated()), id: \.element.id) { index, entry in
+                    ForEach(Array(bucket.entries.enumerated()), id: \.element.id) { index, entry in
                         LibraryCell(
                             entry: entry,
                             initialAspectRatio: store.aspectRatio(for: entry)
                         )
                         .id(entry.id)
                         .onAppear {
-                            prefetchSeed = (buckets[column], index)
+                            prefetchSeed = (bucket.entries, index)
                             if !isScrolling {
                                 schedulePrefetch()
                             }
@@ -233,9 +233,9 @@ struct LibraryGridView: View {
     private func buckets(
         for items: [MediaEntry],
         columnCount: Int
-    ) -> [[MediaEntry]] {
+    ) -> [ColumnBucket] {
         guard columnCount > 1 else {
-            return items.isEmpty ? [] : [items]
+            return items.isEmpty ? [] : [ColumnBucket(column: 0, entries: items)]
         }
         let assignments = resolvedAssignments(
             for: assignmentEntries,
@@ -247,7 +247,17 @@ struct LibraryGridView: View {
                 buckets[column].append(item)
             }
         }
-        return buckets.filter { !$0.isEmpty }
+        // 用原始列号作为 id，过滤空列后 LazyVStack 的状态不会串到另一列。
+        return buckets.enumerated().compactMap { column, entries in
+            entries.isEmpty ? nil : ColumnBucket(column: column, entries: entries)
+        }
+    }
+
+    private struct ColumnBucket: Identifiable {
+        let column: Int
+        let entries: [MediaEntry]
+
+        var id: Int { column }
     }
 
     private func documentSection(items: [MediaEntry]) -> some View {
@@ -392,34 +402,41 @@ struct LibraryGridView: View {
     }
 }
 
-/// 加载骨架：尺寸与真实单元格一致，避免整屏空白与布局跳动。
+/// 加载骨架：按瀑布流的多列结构占位，避免固定 2:3 到真实内容时整屏高度跳变。
 struct LibrarySkeletonGrid: View {
     let columns: Int
 
+    /// 模拟横竖图混合，减少骨架屏到真实瀑布流的落差。
+    private static let ratios: [CGFloat] = [2 / 3, 3 / 2, 2 / 3, 4 / 5, 3 / 4, 1]
+
     var body: some View {
-        LazyVGrid(
-            columns: Array(
-                repeating: GridItem(.flexible(), spacing: LibraryGridLayout.spacing, alignment: .top),
-                count: max(1, columns)
-            ),
-            alignment: .leading,
-            spacing: 22
-        ) {
-            ForEach(0..<(max(1, columns) * 2), id: \.self) { _ in
-                VStack(alignment: .leading, spacing: 7) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemFill))
-                        .aspectRatio(2 / 3, contentMode: .fit)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(uiColor: .tertiarySystemFill))
-                        .frame(height: 11)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(uiColor: .quaternarySystemFill))
-                        .frame(width: 60, height: 9)
+        HStack(alignment: .top, spacing: LibraryGridLayout.spacing) {
+            ForEach(0..<max(1, columns), id: \.self) { column in
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    ForEach(0..<2, id: \.self) { row in
+                        skeletonCell(
+                            ratio: Self.ratios[(column * 2 + row) % Self.ratios.count]
+                        )
+                    }
                 }
-                .redacted(reason: .placeholder)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
+    }
+
+    private func skeletonCell(ratio: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemFill))
+                .aspectRatio(ratio, contentMode: .fit)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(uiColor: .tertiarySystemFill))
+                .frame(height: 11)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(uiColor: .quaternarySystemFill))
+                .frame(width: 60, height: 9)
+        }
+        .redacted(reason: .placeholder)
     }
 }
 

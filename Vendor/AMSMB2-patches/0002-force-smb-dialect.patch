@@ -1,0 +1,20 @@
+diff --git a/AMSMB2/Context.swift b/AMSMB2/Context.swift
+index e3dd09e..86cee72 100644
+--- a/AMSMB2/Context.swift
++++ b/AMSMB2/Context.swift
+@@ -220,6 +220,15 @@ extension SMB2Client {
+ 
+ extension SMB2Client {
+     func connect(server: String, share: String, user: String) throws {
++        // 本地新增：允许通过环境变量 SMB2_FORCE_VERSION 强制 SMB 方言（十六进制），
++        // 用于排查与特定服务器协商失败的情况。默认行为不变。
++        if let raw = ProcessInfo.processInfo.environment["SMB2_FORCE_VERSION"],
++           let value = UInt32(raw, radix: 16) {
++            try? withThreadSafeContext { context in
++                smb2_set_version(context, smb2_negotiate_version(value))
++            }
++        }
++
+         try async_await { context, cbPtr -> Int32 in
+             smb2_connect_share_async(
+                 context, server, share, user, SMB2Client.generic_handler, cbPtr

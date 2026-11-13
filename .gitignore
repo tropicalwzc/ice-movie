@@ -34,3 +34,7 @@ __pycache__/
 
 # docs/ 下的验收/测试产物文件名包含本地内容信息，整个目录不进入版本库
 docs/
+
+# 三方源码由 Vendor/setup.sh 从固定版本拉取；父仓库不再记录 gitlink
+Vendor/AMSMB2/
+Vendor/ffmpeg/ffmpeg-src/

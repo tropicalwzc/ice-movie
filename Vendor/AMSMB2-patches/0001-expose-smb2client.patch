@@ -1,0 +1,14 @@
+diff --git a/AMSMB2/AMSMB2.swift b/AMSMB2/AMSMB2.swift
+index 63a7126..787918b 100644
+--- a/AMSMB2/AMSMB2.swift
++++ b/AMSMB2/AMSMB2.swift
+@@ -24,7 +24,8 @@ public class SMB2Manager: NSObject, NSSecureCoding, Codable, NSCopying, CustomRe
+     fileprivate typealias CopyProgressHandler = (@Sendable
+         (_ bytes: Int64, _ soFar: Int64, _ total: Int64) -> Int64?)?
+ 
+-    fileprivate var client: SMB2Client?
++    // 本地补丁：由 fileprivate 放宽为 internal，使同模块的 SMBSession 能复用底层句柄做随机读。
++    var client: SMB2Client?
+ 
+     /// SMB2 Share URL.
+     public let url: URL

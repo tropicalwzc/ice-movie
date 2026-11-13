@@ -1,6 +1,12 @@
 # FFmpeg（iOS 静态库）
 
-本目录是播放内核使用的 FFmpeg 源码、构建脚本与本地 patch。`build.sh` 会：
+本目录是播放内核使用的 FFmpeg 源码、构建脚本与本地 patch。`Vendor/ffmpeg/ffmpeg-src` 不进入父仓库，首次检出后先执行：
+
+```bash
+./Vendor/setup.sh
+```
+
+`build.sh` 会：
 
 1. 幂等应用 `patches/` 下的 patch（已应用则跳过）；
 2. 分别为 `arm64-apple-ios26.0`（真机）与 `arm64-apple-ios26.0-simulator` 构建静态库；

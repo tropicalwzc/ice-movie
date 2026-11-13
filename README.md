@@ -1,5 +1,7 @@
 # IceMovie
 
+> 当前版本：1.0.0
+
 iPad / iPhone 优先的局域网 SMB 媒体库与播放器：直接连接 SMB 共享，浏览视频、照片和文档，不依赖中转服务器，也不做转码。
 
 - **视频**：FFmpeg 解封装、VideoToolbox 硬解、AVAudioEngine 输出；支持 MKV/MP4/AVI/MPEG-TS、内封与外挂字幕、内联/全屏、画中画、锁屏控制、续播和同目录自动连播。

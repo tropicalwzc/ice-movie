@@ -37,11 +37,16 @@ public enum ImageDecoder {
         ) else {
             throw ImageDecodeError.invalidImage
         }
-        let image = try thumbnailImage(
-            source: source,
-            maxPixelSize: maxPixelSize,
-            label: label
-        )
+        guard !Self.hasInvalidImageData(source) else {
+            throw ImageDecodeError.invalidImage
+        }
+        let image = try autoreleasepool {
+            try thumbnailImage(
+                source: source,
+                maxPixelSize: maxPixelSize,
+                label: label
+            )
+        }
         return try output(
             image: image,
             includeJPEG: includeJPEG
@@ -79,25 +84,30 @@ public enum ImageDecoder {
         label: String,
         includeJPEG: Bool
     ) throws -> ThumbnailOutput {
-        let remote = try RemoteImageDataProvider(source: source, label: label)
-        guard let imageSource = CGImageSourceCreateWithDataProvider(
-            remote.provider,
-            [kCGImageSourceShouldCache: false] as CFDictionary
-        ) else {
-            throw ImageDecodeError.invalidImage
+        try autoreleasepool {
+            let remote = try RemoteImageDataProvider(source: source, label: label)
+            guard let imageSource = CGImageSourceCreateWithDataProvider(
+                remote.provider,
+                [kCGImageSourceShouldCache: false] as CFDictionary
+            ) else {
+                throw ImageDecodeError.invalidImage
+            }
+            guard !Self.hasInvalidImageData(imageSource) else {
+                throw ImageDecodeError.invalidImage
+            }
+            let image = try thumbnailImage(
+                source: imageSource,
+                maxPixelSize: maxPixelSize,
+                label: label
+            )
+            let result = try output(image: image, includeJPEG: includeJPEG)
+            Log.debug(
+                .thumbnail,
+                "图片缩略图 \(Log.shortPath(label)) \(image.width)x\(image.height) "
+                    + "读取=\(remote.bytesRead)B/\(remote.networkReadCount)次"
+            )
+            return result
         }
-        let image = try thumbnailImage(
-            source: imageSource,
-            maxPixelSize: maxPixelSize,
-            label: label
-        )
-        let result = try output(image: image, includeJPEG: includeJPEG)
-        Log.debug(
-            .thumbnail,
-            "图片缩略图 \(Log.shortPath(label)) \(image.width)x\(image.height) "
-                + "读取=\(remote.bytesRead)B/\(remote.networkReadCount)次"
-        )
-        return result
     }
 
     private static let remoteDecodeQueue = DispatchQueue(
@@ -140,6 +150,17 @@ public enum ImageDecoder {
         guard let thumbnailData = exifThumbnailData(in: [UInt8](prefix)) else {
             return nil
         }
+        // 有些相机的 EXIF 缩略图偏移/长度损坏，交给 ImageIO 会打印
+        // “decompressing image -- possibly corrupt” 后再回退主图。
+        // 先做一次廉价的完整 JPEG 校验，坏数据直接走主图路径。
+        guard Self.isCompleteJPEG(thumbnailData) else {
+            Log.debug(
+                .thumbnail,
+                "EXIF 缩略图不完整，跳过快速路径 \(Log.shortPath(label)) "
+                    + "\(thumbnailData.count)B"
+            )
+            return nil
+        }
 
         let output = try thumbnail(
             data: thumbnailData,
@@ -160,6 +181,18 @@ public enum ImageDecoder {
                 + "前缀=\(prefix.count)B"
         )
         return output
+    }
+
+    /// 完整 JPEG 至少要有 SOI 和 EOI。EXIF 缩略图长度损坏时，ImageIO 会打印
+    /// “possibly corrupt” 警告；提前跳过可以避免无意义的系统日志和一次解码尝试。
+    public static func isCompleteJPEG(_ data: Data) -> Bool {
+        guard data.count >= 4,
+              data.first == 0xFF,
+              data.dropFirst().first == 0xD8,
+              data.suffix(2).elementsEqual([0xFF, 0xD9]) else {
+            return false
+        }
+        return true
     }
 
     /// 从 JPEG 前缀中解析 EXIF 的 JPEGInterchangeFormat 缩略图。
@@ -372,6 +405,15 @@ public enum ImageDecoder {
             in: CGRect(x: 0, y: 0, width: image.width, height: image.height)
         )
         return context.makeImage()
+    }
+
+    private static func hasInvalidImageData(_ source: CGImageSource) -> Bool {
+        switch CGImageSourceGetStatus(source) {
+        case .statusInvalidData, .statusUnexpectedEOF:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func thumbnailImage(

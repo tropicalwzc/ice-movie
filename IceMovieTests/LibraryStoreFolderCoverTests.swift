@@ -3,6 +3,7 @@ import Foundation
 import IceCore
 import MediaLibraryKit
 import ThumbnailKit
+import ImageKit
 import XCTest
 @testable import IceMovie
 
@@ -123,6 +124,21 @@ final class LibraryStoreFolderCoverTests: XCTestCase {
         XCTAssertGreaterThan(image.width, 0)
         XCTAssertGreaterThan(image.height, 0)
         XCTAssertFalse(image.data.isEmpty)
+        let source = try XCTUnwrap(
+            CGImageSourceCreateWithData(image.data as CFData, nil)
+        )
+        XCTAssertNotNil(
+            CGImageSourceCreateImageAtIndex(source, 0, nil),
+            "抽帧 PNG 必须能被 ImageIO 完整解码"
+        )
+        let jpeg = try XCTUnwrap(ImageDecoder.encodeJPEG(image.data))
+        let jpegSource = try XCTUnwrap(
+            CGImageSourceCreateWithData(jpeg as CFData, nil)
+        )
+        XCTAssertNotNil(
+            CGImageSourceCreateImageAtIndex(jpegSource, 0, nil),
+            "侧车 JPEG 必须能被 ImageIO 完整解码"
+        )
     }
 
     private func directory(_ path: String) -> MediaEntry {

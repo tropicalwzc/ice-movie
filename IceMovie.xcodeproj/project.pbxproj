@@ -2923,7 +2923,7 @@
 					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
 					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lavformat",
@@ -3341,7 +3341,7 @@
 					"$(SRCROOT)/Vendor/ffmpeg/lib/$(PLATFORM_NAME)",
 					"$(SRCROOT)/Vendor/libass/out/$(PLATFORM_NAME)/lib",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lavformat",

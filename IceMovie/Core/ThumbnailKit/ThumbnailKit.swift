@@ -439,7 +439,9 @@ public actor ThumbnailService {
                             do {
                                 let data = try await ImageDataReader.readAll(
                                     source: retrySource,
-                                    maxBytes: 64 * 1024 * 1024,
+                                    // 缩略图回退不需要把超大原图整个读进内存；
+                                    // 32MB 已覆盖常见 48MP JPEG/HEIC，超过则回退失败而不是冒 jetsam 风险。
+                                    maxBytes: 32 * 1024 * 1024,
                                     label: path
                                 )
                                 await retrySource.close()
@@ -520,11 +522,16 @@ public actor ThumbnailService {
     /// 共享侧车文件可能损坏；解码失败时删除并回退原图。
     private static func isDecodableImage(_ data: Data) -> Bool {
         guard !data.isEmpty,
+              ImageDecoder.isCompleteJPEG(data),
               let source = CGImageSourceCreateWithData(
                   data as CFData,
                   [kCGImageSourceShouldCache: false] as CFDictionary
               ),
               CGImageSourceGetCount(source) > 0 else {
+            return false
+        }
+        let status = CGImageSourceGetStatus(source)
+        guard status != .statusInvalidData, status != .statusUnexpectedEOF else {
             return false
         }
         return CGImageSourceCreateImageAtIndex(

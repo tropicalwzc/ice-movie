@@ -27,16 +27,19 @@ final class ThumbnailPrewarmController {
     @ObservationIgnored private var nextIndex = 0
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var isScrolling = false
+    @ObservationIgnored private let maxConcurrent: Int
     @ObservationIgnored private let generate: (MediaEntry) async -> Bool
     @ObservationIgnored private let onFlush: (() async -> Void)?
 
     init(
         entries: [MediaEntry],
+        maxConcurrent: Int = 3,
         onFlush: (() async -> Void)? = nil,
         generate: @escaping (MediaEntry) async -> Bool
     ) {
         self.entries = entries
         self.total = entries.count
+        self.maxConcurrent = max(1, maxConcurrent)
         self.onFlush = onFlush
         self.generate = generate
     }
@@ -95,17 +98,26 @@ final class ThumbnailPrewarmController {
     }
 
     private func run() async {
+        var lastFlushed = 0
         while !Task.isCancelled, nextIndex < entries.count {
             if isPaused || isScrolling {
                 try? await Task.sleep(for: .milliseconds(250))
                 continue
             }
-            let entry = entries[nextIndex]
-            nextIndex += 1
-            currentName = entry.name
-            _ = await generate(entry)
-            completed += 1
-            if completed % 20 == 0 {
+            // 取一小批并发执行：SMB 打开/读取和解码可以重叠，
+            // 同时用 maxConcurrent 控制内存峰值，避免 3000 张目录一次性堆积。
+            let end = min(entries.count, nextIndex + maxConcurrent)
+            let batch = Array(entries[nextIndex..<end])
+            nextIndex = end
+            await withTaskGroup(of: Void.self) { group in
+                for entry in batch {
+                    group.addTask { [weak self] in
+                        await self?.generateAndRecord(entry)
+                    }
+                }
+            }
+            if completed - lastFlushed >= 20 {
+                lastFlushed = completed
                 await onFlush?()
             }
             if completed % 100 == 0 {
@@ -124,5 +136,14 @@ final class ThumbnailPrewarmController {
             await onFlush?()
         }
         task = nil
+    }
+
+    private func generateAndRecord(_ entry: MediaEntry) async {
+        guard !Task.isCancelled else { return }
+        currentName = entry.name
+        _ = await generate(entry)
+        // 取消时 generate 可能已经在网络/解码中，不能把完成数继续算进去。
+        guard !Task.isCancelled else { return }
+        completed += 1
     }
 }

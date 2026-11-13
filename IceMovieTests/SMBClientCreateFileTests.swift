@@ -1,6 +1,6 @@
 import Foundation
 import IceCore
-import SMBSession
+@testable import SMBSession
 import XCTest
 
 /// 真实 SMB 原子创建验收。默认跳过；运行前在模拟器可见的
@@ -104,5 +104,42 @@ final class SMBClientCreateFileTests: XCTestCase {
             await client.disconnect()
             throw error
         }
+    }
+}
+
+final class SMBClientFileDeletionTests: XCTestCase {
+    func testMissingFileErrorsAreTreatedAsSuccessfulDelete() {
+        XCTAssertTrue(
+            SMBClient.isMissingFileError(
+                NSError(domain: NSPOSIXErrorDomain, code: Int(ENOENT))
+            )
+        )
+        XCTAssertTrue(SMBClient.isMissingFileError(POSIXError(.ENOENT)))
+        XCTAssertTrue(
+            SMBClient.isMissingFileError(
+                NSError(
+                    domain: "libsmb2",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Error code 2: No such file"]
+                )
+            )
+        )
+    }
+
+    func testOtherErrorsAreNotTreatedAsMissingFile() {
+        XCTAssertFalse(
+            SMBClient.isMissingFileError(
+                NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))
+            )
+        )
+        XCTAssertFalse(
+            SMBClient.isMissingFileError(
+                NSError(
+                    domain: "libsmb2",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "STATUS_ACCESS_DENIED"]
+                )
+            )
+        )
     }
 }

@@ -1,10 +1,16 @@
 import CoreGraphics
 import IceCore
 import ImageIO
-import ImageKit
+@testable import ImageKit
 import XCTest
 
 final class ImageKitTests: XCTestCase {
+    func testJPEGCompletenessCheckRejectsTruncatedData() throws {
+        let data = try fixtureData("sample.jpg")
+        XCTAssertTrue(ImageDecoder.isCompleteJPEG(data))
+        XCTAssertFalse(ImageDecoder.isCompleteJPEG(Data(data.dropLast(2))))
+    }
+
     func testJPEGThumbnailIsDownsampled() throws {
         let data = try fixtureData("sample.jpg")
         let output = try ImageDecoder.thumbnail(data: data, maxPixelSize: 32)

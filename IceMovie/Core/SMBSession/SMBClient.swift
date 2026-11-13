@@ -661,11 +661,34 @@ public actor SMBClient {
             try await manager.removeItem(atPath: path)
             Log.info(.smb, "删除文件成功 \(Log.shortPath(path))")
         } catch {
+            // 删除是幂等操作：共享侧文件可能已被上一轮清理或人工删除。
+            // libsmb2 把 STATUS_NO_SUCH_FILE 映射成 POSIX ENOENT（Error code 2），
+            // 不能把它当成连接失败，否则侧车清理会持续报错并重试。
+            if Self.isMissingFileError(error) {
+                Log.debug(.smb, "删除文件时文件已不存在，视为成功 \(Log.shortPath(path))")
+                return
+            }
             let mapped = (error as? SMBConnectionError)
                 ?? Self.map(error, host: connectedHost ?? "")
             Log.error(.smb, "删除文件失败 \(Log.shortPath(path)) \(mapped.localizedDescription)")
             throw mapped
         }
+    }
+
+    /// 判断删除失败是否只是目标已不存在。POSIX ENOENT 与 SMB 的
+    /// STATUS_NO_SUCH_FILE 都应视为删除成功。
+    static func isMissingFileError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSPOSIXErrorDomain, nsError.code == Int(ENOENT) {
+            return true
+        }
+        let text = nsError.localizedDescription.lowercased()
+        return text.contains("error code 2:")
+            || text.contains("error code 2 ")
+            || text.hasSuffix("error code 2")
+            || text.contains("no such file")
+            || text.contains("status_no_such_file")
+            || text.contains("0xc000000f")
     }
 
     private func fileSize(atPath path: String, manager: SMB2Manager) async throws -> Int64? {

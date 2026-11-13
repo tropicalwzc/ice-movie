@@ -416,9 +416,13 @@ final class LibraryStore {
             )
         )
         let thumbnailStore = try ThumbnailStore(capacityBytes: cacheCapacityBytes)
+        // 之前 NSCache 按压缩数据计费导致批量预热 OOM；修复计费后，
+        // iPhone 可以恢复到 3 并发，兼顾首屏加载速度与内存峰值。
+        let thumbnailConcurrency = 3
         let thumbnails = ThumbnailService(
             store: thumbnailStore,
-            maxWidth: Self.thumbnailMaxWidth
+            maxWidth: Self.thumbnailMaxWidth,
+            maxConcurrent: thumbnailConcurrency
         )
         self.thumbnails = thumbnails
         // 目录封面单独占 16MB：视频预热持续写入 64MB 主缓存时，
@@ -445,6 +449,8 @@ final class LibraryStore {
             }
         }
         imageCache.totalCostLimit = 64 * 1024 * 1024
+        // 再设数量上限，防止大量极小缩略图让 NSCache 延迟淘汰、内存短时膨胀。
+        imageCache.countLimit = 128
         aspectRatios = Self.loadAspectRatios()
         folderCoverSelections = Self.loadFolderCoverSelections()
         Self.purgeThumbnailsIfVariantChanged(stores: [thumbnailStore, folderCoverStore])
@@ -954,7 +960,8 @@ final class LibraryStore {
 
     func thumbnail(
         for entry: MediaEntry,
-        ensureSidecar: Bool = false
+        ensureSidecar: Bool = false,
+        cacheInMemory: Bool = true
     ) async -> UIImage? {
         guard entry.kind == .video || entry.kind == .image else { return nil }
         let key = thumbnailCacheKey(for: entry)
@@ -997,18 +1004,30 @@ final class LibraryStore {
         guard let outcome else {
             return nil
         }
-        // PNG 解码/prepare 放到后台，避免滚动时多个封面在主线程解码造成卡顿。
+        // 图片头解析与 JPEG/HEIC 预解码放到后台，避免滚动时多个封面在主线程解码造成卡顿。
         let data = outcome.data
         let decoded = await Task.detached(priority: .userInitiated) {
             DecodedThumbnail(data: data)
         }.value
         guard let image = decoded.image else { return nil }
-        imageCache.setObject(image, forKey: key, cost: outcome.data.count)
+        if cacheInMemory {
+            imageCache.setObject(image, forKey: key, cost: Self.decodedImageCost(image, fallback: outcome.data.count))
+        }
         if ensureSidecar, let sidecar = thumbnailSidecarCache {
             // 本地磁盘缓存命中时 ThumbnailService 不会再写侧车；这里补一次。
             await storeSidecarIfNeeded(image: image, entry: entry, sidecar: sidecar)
         }
         return image
+    }
+
+    /// NSCache 的 cost 必须按解码后的像素内存计算，不能按压缩数据大小：
+    /// 512px 缩略图压缩后只有几十 KB，但 RGBA 解码后约 0.5–1MB。
+    /// 按压缩大小计费会让缓存实际占用远超 64MB，iPhone 批量预热时容易被 jetsam。
+    private static func decodedImageCost(_ image: UIImage, fallback: Int) -> Int {
+        if let cgImage = image.cgImage, cgImage.bytesPerRow > 0, cgImage.height > 0 {
+            return max(fallback, cgImage.bytesPerRow * cgImage.height)
+        }
+        return max(1, fallback)
     }
 
     // MARK: - 目录封面
@@ -1060,7 +1079,7 @@ final class LibraryStore {
                 }.value
                 if Task.isCancelled { return nil }
                 if let image = decoded.image {
-                    imageCache.setObject(image, forKey: key, cost: data.count)
+                    imageCache.setObject(image, forKey: key, cost: Self.decodedImageCost(image, fallback: data.count))
                     Log.debug(
                         .thumbnail,
                         "目录封面缓存命中（免枚举） \(Log.shortPath(folderPath))"
@@ -1140,7 +1159,7 @@ final class LibraryStore {
                 DecodedThumbnail(data: outcome.data)
             }.value
             guard !Task.isCancelled, let image = decoded.image else { continue }
-            imageCache.setObject(image, forKey: key, cost: outcome.data.count)
+            imageCache.setObject(image, forKey: key, cost: Self.decodedImageCost(image, fallback: outcome.data.count))
             Log.debug(
                 .thumbnail,
                 outcome.fromCache
@@ -1468,7 +1487,12 @@ final class LibraryStore {
                 if testDelay > 0 {
                     try? await Task.sleep(for: .milliseconds(testDelay))
                 }
-                return await self.thumbnail(for: entry, ensureSidecar: true) != nil
+                return await self.thumbnail(
+                    for: entry,
+                    ensureSidecar: true,
+                    // 全量预热只负责写磁盘/共享侧车；不要把 3000 张解码图留在前台内存缓存里。
+                    cacheInMemory: false
+                ) != nil
             }
             self.prewarmController = controller
             controller.start()
@@ -1492,7 +1516,21 @@ final class LibraryStore {
                 self.image = nil
                 return
             }
-            self.image = image.preparingForDisplay() ?? image
+            // PNG 调用 preparingForDisplay() 时 ImageIO 会误报
+            // “Error -17102 decompressing image -- possibly corrupt”（Apple 已知日志噪音），
+            // 但 PNG 缩略图本身很小，直接懒解码即可；JPEG/HEIC 仍预解码避免滚动卡顿。
+            if Self.isPNG(data) {
+                self.image = image
+            } else {
+                self.image = image.preparingForDisplay() ?? image
+            }
+        }
+
+        private static func isPNG(_ data: Data) -> Bool {
+            guard data.count >= 8 else { return false }
+            return data.prefix(8).elementsEqual([
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            ])
         }
     }
 

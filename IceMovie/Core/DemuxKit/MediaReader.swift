@@ -353,6 +353,11 @@ public final class MediaReader: @unchecked Sendable {
         bridge?.cancelPrefetch()
     }
 
+    /// 准备阶段取消时中止底层读取；调用方仍需在播放线程退出后关闭 reader。
+    public func cancelPendingReads() {
+        bridge?.cancelReads()
+    }
+
     public func setPrefetchEnabled(_ enabled: Bool) {
         bridge?.setPrefetchEnabled(enabled)
     }

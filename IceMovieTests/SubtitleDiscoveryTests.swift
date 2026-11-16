@@ -41,13 +41,53 @@ final class SubtitleDiscoveryTests: XCTestCase {
     }
 
     func testDefaultOrderPrefersSimplified() {
-        XCTAssertLessThan(
-            SubtitleDiscovery.order(.simplifiedChinese),
-            SubtitleDiscovery.order(.traditionalChinese)
+        XCTAssertEqual(
+            [
+                SubtitleLanguage.simplifiedChinese,
+                .traditionalChinese,
+                .english,
+                .japanese,
+                .unknown,
+            ].map(SubtitleDiscovery.order),
+            [0, 1, 2, 3, 4]
         )
-        XCTAssertLessThan(
-            SubtitleDiscovery.order(.traditionalChinese),
-            SubtitleDiscovery.order(.japanese)
+    }
+
+    func testEmbeddedTitleDisambiguatesGenericChineseTag() {
+        let tracks = SubtitleDiscovery.embedded([
+            .init(
+                streamIndex: 1,
+                codec: "ass",
+                languageTag: "eng",
+                title: "English"
+            ),
+            .init(
+                streamIndex: 2,
+                codec: "ass",
+                languageTag: "chi",
+                title: "Chinese (Simplified)"
+            ),
+            .init(
+                streamIndex: 3,
+                codec: "ass",
+                languageTag: "chi",
+                title: "Chinese (Traditional)"
+            ),
+        ])
+        func language(at streamIndex: Int) -> SubtitleLanguage? {
+            tracks.first { track in
+                if case .embedded(let index) = track.source {
+                    return index == streamIndex
+                }
+                return false
+            }?.language
+        }
+        XCTAssertEqual(language(at: 1), .english)
+        XCTAssertEqual(language(at: 2), .simplifiedChinese)
+        XCTAssertEqual(language(at: 3), .traditionalChinese)
+        XCTAssertEqual(
+            SubtitleDiscovery.preferred(from: tracks)?.language,
+            .simplifiedChinese
         )
     }
 
@@ -276,7 +316,7 @@ extension SubtitleDiscoveryTests {
         )
     }
 
-    func testOrderedSelectionPrefersLastLanguageAndSkipsForced() {
+    func testOrderedSelectionUsesLanguagePriorityAndSkipsForced() {
         let tracks = [
             SubtitleTrack(source: .embedded(streamIndex: 1), title: "chs", language: .simplifiedChinese, format: .ass),
             SubtitleTrack(source: .embedded(streamIndex: 2), title: "cht", language: .traditionalChinese, format: .ass),
@@ -289,10 +329,11 @@ extension SubtitleDiscoveryTests {
                 format: .ass,
                 isForced: true
             ),
+            SubtitleTrack(source: .embedded(streamIndex: 6), title: "other", language: .unknown, format: .srt),
         ]
-        let ordered = SubtitleDiscovery.ordered(tracks, preferredLanguage: .traditionalChinese)
+        let ordered = SubtitleDiscovery.ordered(tracks)
         XCTAssertEqual(ordered.map(\.language), [
-            .traditionalChinese, .simplifiedChinese, .japanese, .english,
+            .simplifiedChinese, .traditionalChinese, .english, .japanese, .unknown,
         ])
         XCTAssertFalse(ordered.contains { $0.isForced })
     }

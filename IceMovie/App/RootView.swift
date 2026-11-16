@@ -304,13 +304,21 @@ struct RootView: View {
             Task.detached { await SubtitleSelfTest.runEmbedded(path: path) }
         }
         if let index = arguments.firstIndex(of: "-subtitleScan"), arguments.indices.contains(index + 1) {
+            let host = value(for: "-smbHost", in: arguments) ?? ""
+            let explicitUser = value(for: "-smbUser", in: arguments)
+            let explicitPassword = value(for: "-smbPassword", in: arguments)
+            let credential = (explicitUser == nil && explicitPassword == nil)
+                ? savedCredential(for: host)
+                : nil
+            let dumpExternal = arguments.contains("-subtitleDebugDump")
             Task.detached {
                 await SubtitleSelfTest.runOverSMB(
-                    host: value(for: "-smbHost", in: arguments) ?? "",
+                    host: host,
                     share: value(for: "-smbShare", in: arguments) ?? "",
                     path: arguments[index + 1],
-                    user: value(for: "-smbUser", in: arguments) ?? "",
-                    password: value(for: "-smbPassword", in: arguments) ?? ""
+                    user: explicitUser ?? credential?.username ?? "",
+                    password: explicitPassword ?? credential?.password ?? "",
+                    dumpExternal: dumpExternal
                 )
             }
         }

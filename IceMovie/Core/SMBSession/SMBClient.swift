@@ -77,6 +77,14 @@ public enum SMBConnectionError: LocalizedError, Sendable {
 
 /// SMB 会话。持有单条连接，负责心跳、退避重连与读写重试。
 public actor SMBClient {
+    private struct ConnectKey: Equatable, Sendable {
+        let host: String
+        let port: Int?
+        let user: String
+        let password: String
+        let share: String
+    }
+
     private struct SessionCredentials: Sendable {
         let address: SMBHostAddress
         let user: String
@@ -90,6 +98,9 @@ public actor SMBClient {
     private var session: SessionCredentials?
     private var heartbeatTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
+    private var connectTask: Task<Void, Error>?
+    private var connectTaskKey: ConnectKey?
+    private var connectGeneration = 0
     private var state: SMBSessionState = .idle
     private let readScheduler = SMBReadScheduler(label: "smb-read")
 
@@ -120,18 +131,71 @@ public actor SMBClient {
         let (address, url) = try await prepareEndpoint(input: host)
         let targetShare = share.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
             .isEmpty ? (address.share ?? share) : share
+        let key = ConnectKey(
+            host: address.host,
+            port: address.port,
+            user: user,
+            password: password,
+            share: targetShare
+        )
+
+        // actor 在 prepareEndpoint 等 await 点会重入。启动页和播放页可能同时请求
+        // 同一个共享，必须复用同一条建连任务，不能第二次 connect 把第一条会话断掉。
+        if connectTaskKey == key, let connectTask {
+            return try await connectTask.value
+        }
+        connectTask?.cancel()
+        connectGeneration &+= 1
+        let generation = connectGeneration
+        let task = Task { [weak self] in
+            guard let self else { throw CancellationError() }
+            try await self.performConnect(
+                address: address,
+                url: url,
+                targetShare: targetShare,
+                user: user,
+                password: password,
+                generation: generation
+            )
+        }
+        connectTask = task
+        connectTaskKey = key
+        defer {
+            if connectGeneration == generation {
+                connectTask = nil
+                connectTaskKey = nil
+            }
+        }
+        try await task.value
+    }
+
+    private func performConnect(
+        address: SMBHostAddress,
+        url: URL,
+        targetShare: String,
+        user: String,
+        password: String,
+        generation: Int
+    ) async throws {
+        try Task.checkCancellation()
+        guard connectGeneration == generation else { throw CancellationError() }
         Log.info(.smb, "开始连接 host=\(address.raw) share=\(targetShare) user=\(user)")
         let began = Date()
+        await teardownCurrentSession()
+        try Task.checkCancellation()
+        guard connectGeneration == generation else { throw CancellationError() }
 
-        await disconnect()
         let credential = URLCredential(user: user, password: password, persistence: .forSession)
         guard let manager = SMB2Manager(url: url, credential: credential) else {
             Log.error(.smb, "无法构造会话 host=\(address.raw)")
             throw SMBConnectionError.invalidAddress(address.raw)
         }
-
         do {
             try await manager.connectShare(name: targetShare)
+            guard !Task.isCancelled, connectGeneration == generation else {
+                try? await manager.disconnectShare(gracefully: false)
+                throw CancellationError()
+            }
             self.manager = manager
             self.connectedShare = targetShare
             self.connectedHost = address.raw
@@ -145,6 +209,10 @@ public actor SMBClient {
             startHeartbeat()
             Log.info(.smb, "共享已连接 share=\(targetShare) 耗时=\(Self.milliseconds(since: began))")
         } catch {
+            if Task.isCancelled || connectGeneration != generation {
+                try? await manager.disconnectShare(gracefully: false)
+                throw CancellationError()
+            }
             Self.logRaw(error)
             var mapped = Self.map(error, host: address.raw)
             // libsmb2 在端口未监听时常把底层失败折叠成 EPERM，单看错误码无法与协议问题区分。
@@ -200,6 +268,14 @@ public actor SMBClient {
     }
 
     public func disconnect() async {
+        connectGeneration &+= 1
+        connectTask?.cancel()
+        connectTask = nil
+        connectTaskKey = nil
+        await teardownCurrentSession()
+    }
+
+    private func teardownCurrentSession() async {
         heartbeatTask?.cancel()
         reconnectTask?.cancel()
         heartbeatTask = nil
@@ -306,6 +382,10 @@ public actor SMBClient {
 
     /// 请求级修复：只尝试一次，成功后就地恢复，避免目录请求等待完整退避。
     private func reconnectNow() async throws {
+        if let connectTask {
+            try await connectTask.value
+            if manager != nil { return }
+        }
         guard let session else { throw SMBConnectionError.notConnected }
         do {
             let manager = try await makeManager(session: session)
@@ -340,6 +420,10 @@ public actor SMBClient {
 
     private func ensureManager() async throws {
         if manager != nil { return }
+        if let connectTask {
+            try await connectTask.value
+            if manager != nil { return }
+        }
         guard session != nil else { throw SMBConnectionError.notConnected }
         try await reconnectNow()
     }

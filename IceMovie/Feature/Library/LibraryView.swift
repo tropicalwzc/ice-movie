@@ -94,6 +94,8 @@ struct PendingPlayerScreen: View {
                 .tint(.white)
                 .padding(.top, 12)
                 .padding(.leading, 16)
+                .accessibilityLabel("关闭播放")
+                .accessibilityIdentifier("pending.close")
             }
         }
         .onAppear {
@@ -118,6 +120,17 @@ func mergedSubtitleTracks(
         result.append(track)
     }
     return result
+}
+
+enum SubtitleSeekRefreshPolicy {
+    /// 目标时刻没有可见字幕就立即刷新；附近存在未来 cue 不能填上当前空档。
+    static func shouldRefresh(
+        timeline: SubtitleTimeline?,
+        at position: Double
+    ) -> Bool {
+        guard let timeline else { return true }
+        return timeline.active(at: position).isEmpty
+    }
 }
 
 @MainActor
@@ -202,6 +215,7 @@ final class LibraryPlaybackSession: Identifiable {
     }
 
     private var subtitlesStarted = false
+    private var subtitleSeekFallbackTask: Task<Void, Never>?
 
     /// 由播放会话在完成续播 seek 后调用，带上真实起播位置：
     /// 分片字幕直接读目标时间附近，不再先扫 0 秒、也不用空等起播稳定。
@@ -238,21 +252,17 @@ final class LibraryPlaybackSession: Identifiable {
 
     func loadInitialSubtitle(startPosition: Double = 0) {
         guard timeline == nil, SubtitlePreferences.enabled else { return }
-        let candidates = SubtitleDiscovery.ordered(
-            tracks,
-            preferredLanguage: SubtitlePreferences.lastLanguage
-        )
+        let candidates = SubtitleDiscovery.ordered(tracks)
         guard !candidates.isEmpty else { return }
         Log.info(
             .subtitle,
-            "字幕候选 \(candidates.count) 条 顺序=\(candidates.map(\.language.displayName).joined(separator: " > ")) 上次选择=\(SubtitlePreferences.lastLanguage?.displayName ?? "无")"
+            "字幕候选 \(candidates.count) 条 顺序=\(candidates.map(\.language.displayName).joined(separator: " > "))"
         )
         // 大文件 ASS 直接复用播放泵读到的字幕包：必须在 engine.play() 之前同步挂上，
         // 否则第一个 Cluster 的字幕包会被播放泵读掉而错过。
         if let first = candidates.first,
            let index = playbackCollectedIndex(first) {
             selectedTrack = first
-            SubtitlePreferences.lastLanguage = first.language
             startCollected(
                 first,
                 streamIndex: index,
@@ -288,7 +298,6 @@ final class LibraryPlaybackSession: Identifiable {
             if Task.isCancelled { return }
             if let index = playbackCollectedIndex(candidate) {
                 selectedTrack = candidate
-                SubtitlePreferences.lastLanguage = candidate.language
                 let fallback = Array(candidates.dropFirst(offset + 1))
                 startCollected(
                     candidate,
@@ -313,7 +322,6 @@ final class LibraryPlaybackSession: Identifiable {
                 subtitleFonts = loaded.fonts
                 subtitleError = nil
                 subtitleLoading = false
-                SubtitlePreferences.lastLanguage = candidate.language
                 Log.info(
                     .subtitle,
                     "默认字幕就绪 \(candidate.title) 语言=\(candidate.language.displayName) "
@@ -405,6 +413,7 @@ final class LibraryPlaybackSession: Identifiable {
         streamIndex: Int,
         fallbackCandidates: [SubtitleTrack] = []
     ) {
+        clearSubtitleSeekRecovery()
         shardedLoader?.stop()
         shardedLoader = nil
         subtitleTask?.cancel()
@@ -420,25 +429,101 @@ final class LibraryPlaybackSession: Identifiable {
                 self?.appendCollected(events)
             }
         }
+        engine.setSeekObserver { [weak self] target in
+            Task { @MainActor [weak self] in
+                self?.scheduleSeekSubtitleRecovery(
+                    track: track,
+                    streamIndex: streamIndex,
+                    target: target,
+                    fallbackCandidates: fallbackCandidates
+                )
+            }
+        }
         Log.info(
             .subtitle,
             "字幕随播放流采集 \(track.title) stream=\(streamIndex) "
                 + "文件大小=\(entry.size / 1024 / 1024)MB"
         )
-        // 45 秒内连一个字幕包都没读到才回退；冷开场长时间没有对白是正常的。
+        // 实时采集在 seek 后可能只留下开场少量包，不能一直等到用户暂停才刷新。
+        // 连续 8 秒没有当前可见 cue，且累计 cue 仍很少时，提前回退到目标位置分片加载。
         subtitleTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(45))
-            guard let self, !Task.isCancelled else { return }
-            guard !self.sawSubtitlePackets, self.collectedCues.isEmpty else { return }
-            Log.notice(.subtitle, "播放流未采集到字幕包，回退分片加载")
-            self.engine.setSubtitleCollector(streamIndex: nil, onEvents: nil)
+            let began = ProcessInfo.processInfo.systemUptime
+            var inactiveSeconds = 0
+            while !Task.isCancelled,
+                  ProcessInfo.processInfo.systemUptime - began < 45 {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, !Task.isCancelled else { return }
+                if self.collectedCues.count >= 20 { return }
+                let now = self.engine.clock.currentTime
+                let activeCues = self.timeline?.active(at: now).count ?? 0
+                if activeCues == 0 {
+                    inactiveSeconds += 1
+                } else {
+                    inactiveSeconds = 0
+                }
+                guard inactiveSeconds >= 8 || self.collectedCues.isEmpty && inactiveSeconds >= 4 else {
+                    continue
+                }
+                Log.notice(
+                    .subtitle,
+                    "播放流字幕覆盖不足，回退分片加载 条目=\(self.collectedCues.count) "
+                        + "位置=\(String(format: "%.1f", now))s"
+                )
+                self.engine.setSubtitleCollector(streamIndex: nil, onEvents: nil)
+                self.startSharded(
+                    track,
+                    streamIndex: streamIndex,
+                    startPosition: now,
+                    fallbackCandidates: fallbackCandidates
+                )
+                return
+            }
+        }
+    }
+
+    private func scheduleSeekSubtitleRecovery(
+        track: SubtitleTrack,
+        streamIndex: Int,
+        target: Double,
+        fallbackCandidates: [SubtitleTrack]
+    ) {
+        guard shardedLoader == nil, selectedTrack?.id == track.id else { return }
+        subtitleSeekFallbackTask?.cancel()
+        subtitleSeekFallbackTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  self.shardedLoader == nil,
+                  self.selectedTrack?.id == track.id,
+                  SubtitleSeekRefreshPolicy.shouldRefresh(
+                      timeline: self.timeline,
+                      at: target
+                  ) else {
+                return
+            }
+            self.subtitleSeekFallbackTask = nil
+            Log.info(
+                .subtitle,
+                "seek 后字幕时间线未覆盖目标，立即分片加载 "
+                    + "位置=\(String(format: "%.1f", target))s"
+            )
             self.startSharded(
                 track,
                 streamIndex: streamIndex,
-                startPosition: self.engine.clock.currentTime,
+                startPosition: target,
                 fallbackCandidates: fallbackCandidates
             )
         }
+    }
+
+    private func clearSubtitleSeekRecovery() {
+        subtitleSeekFallbackTask?.cancel()
+        subtitleSeekFallbackTask = nil
+        engine.setSeekObserver(nil)
     }
 
     private func appendCollected(_ events: [SubtitlePacketEvent]) {
@@ -459,6 +544,15 @@ final class LibraryPlaybackSession: Identifiable {
         timeline = SubtitleTimeline(cues: cues)
         subtitleLoading = false
         markSubtitleCue()
+        if collectedCues.count == 1 || collectedCues.count % 100 == 0 {
+            let now = engine.clock.currentTime
+            let active = timeline?.active(at: now).count ?? 0
+            Log.info(
+                .subtitle,
+                "字幕采集进度 条目=\(collectedCues.count) 位置=\(String(format: "%.1f", now))s "
+                    + "当前可见=\(active)"
+            )
+        }
     }
 
     private func startSharded(
@@ -467,6 +561,9 @@ final class LibraryPlaybackSession: Identifiable {
         startPosition: Double,
         fallbackCandidates: [SubtitleTrack] = []
     ) {
+        clearSubtitleSeekRecovery()
+        subtitleTask?.cancel()
+        subtitleTask = nil
         engine.setSubtitleCollector(streamIndex: nil, onEvents: nil)
         collectedCues.removeAll()
         sawSubtitlePackets = false
@@ -513,6 +610,7 @@ final class LibraryPlaybackSession: Identifiable {
     }
 
     func stopSubtitles() {
+        clearSubtitleSeekRecovery()
         subtitleTask?.cancel()
         subtitleTask = nil
         shardedLoader?.stop()
@@ -1428,6 +1526,7 @@ struct LibraryView: View {
             var syncIssues = 0
             var fileExceptions = 0
             var subtitleFirstCues: [Int] = []
+            var subtitleItems = 0
             var subtitleMissing = 0
             var cpuItemAverages: [Double] = []
             var cpuItemPeaks: [Double] = []
@@ -1695,8 +1794,11 @@ struct LibraryView: View {
                 )
                 let subtitleCueCount = session.timeline?.cues.count ?? 0
                 let subtitleFirstCue = session.subtitleFirstCueMilliseconds
-                if subtitleCueCount > 0, subtitleFirstCue > 0 {
-                    subtitleFirstCues.append(subtitleFirstCue)
+                if subtitleCueCount > 0 {
+                    subtitleItems += 1
+                    if subtitleFirstCue > 0 {
+                        subtitleFirstCues.append(subtitleFirstCue)
+                    }
                 } else {
                     subtitleMissing += 1
                 }
@@ -1720,6 +1822,7 @@ struct LibraryView: View {
                 bufferExceptions: bufferExceptions,
                 syncIssues: syncIssues,
                 fileExceptions: fileExceptions,
+                subtitleItems: subtitleItems,
                 subtitleFirstCues: subtitleFirstCues,
                 subtitleMissing: subtitleMissing,
                 cpuItemAverages: cpuItemAverages,
@@ -2139,6 +2242,7 @@ struct LibraryView: View {
         bufferExceptions: Int = 0,
         syncIssues: Int = 0,
         fileExceptions: Int = 0,
+        subtitleItems: Int = 0,
         subtitleFirstCues: [Int] = [],
         subtitleMissing: Int = 0,
         cpuItemAverages: [Double] = [],
@@ -2166,7 +2270,8 @@ struct LibraryView: View {
             "stressSyncIssues": syncIssues,
             "stressFileExceptions": fileExceptions,
             "stressStopReason": reason,
-            "stressSubtitleItems": sortedCues.count,
+            "stressSubtitleItems": subtitleItems,
+            "stressSubtitleTimedItems": sortedCues.count,
             "stressSubtitleMissing": subtitleMissing,
             "stressSubtitleFirstCueMin": sortedCues.first ?? 0,
             "stressSubtitleFirstCueAvg": subtitleAvg,

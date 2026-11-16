@@ -425,7 +425,7 @@ public actor ContainerHeaderCache {
 public final class CachedByteSource: ByteSource, ReadStatsProviding,
     BufferMetricsProviding, NetworkSpeedProviding, PrefetchControlling, PrefetchCancelling,
     BufferSupplyProviding, SeekCacheProviding, SeekAwareByteSource, BufferRetentionProviding,
-    CachePhaseControlling, @unchecked Sendable {
+    CachePhaseControlling, ReadCancelling, @unchecked Sendable {
     private let base: any ByteSource
     private let cache: ContainerHeaderCache?
     private let namespace: String
@@ -608,6 +608,10 @@ public final class CachedByteSource: ByteSource, ReadStatsProviding,
 
     public func cancelPrefetch() {
         (base as? PrefetchCancelling)?.cancelPrefetch()
+    }
+
+    public func cancelReads() {
+        (base as? ReadCancelling)?.cancelReads()
     }
 
     public func setSupply(audioAhead: Double, videoAhead: Double) {

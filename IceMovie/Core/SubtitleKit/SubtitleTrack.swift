@@ -105,7 +105,13 @@ public enum SubtitleDiscovery {
     public static func embedded(_ sources: [EmbeddedSource]) -> [SubtitleTrack] {
         sources
             .map { source in
-                let language = SubtitleLanguage.detect(from: source.languageTag ?? source.title ?? "")
+                // 容器常给 `chi`、`zho` 一类泛化标签，真正的简繁信息在标题里。
+                // 两者必须合并判断，不能因为标签非空就忽略更具体的标题。
+                let language = SubtitleLanguage.detect(
+                    from: [source.languageTag, source.title]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                )
                 let format: SubtitleFormat = switch source.codec {
                 case "ass", "ssa": .ass
                 case "subrip", "srt": .srt
@@ -446,41 +452,30 @@ public enum SubtitleDiscovery {
 
     /// 默认选轨：在全部候选里按语言优先级取，强制轨不参与。
     public static func preferred(from tracks: [SubtitleTrack]) -> SubtitleTrack? {
-        ordered(tracks, preferredLanguage: nil).first
+        ordered(tracks).first
     }
 
-    /// 按「上次选择的语言优先，其余按简 > 繁 > 日 > 英」排序。
-    public static func ordered(
-        _ tracks: [SubtitleTrack],
-        preferredLanguage: SubtitleLanguage?
-    ) -> [SubtitleTrack] {
+    /// 默认按「简 > 繁 > 英 > 日 > 其他」排序；同语言保持容器或文件名原顺序。
+    public static func ordered(_ tracks: [SubtitleTrack]) -> [SubtitleTrack] {
         tracks
             .filter { !$0.isForced }
             .enumerated()
             .sorted { lhs, rhs in
-                let leftScore = score(lhs.element.language, preferred: preferredLanguage)
-                let rightScore = score(rhs.element.language, preferred: preferredLanguage)
+                let leftScore = order(lhs.element.language)
+                let rightScore = order(rhs.element.language)
                 if leftScore != rightScore { return leftScore < rightScore }
                 return lhs.offset < rhs.offset
             }
             .map(\.element)
     }
 
-    private static func score(
-        _ language: SubtitleLanguage,
-        preferred: SubtitleLanguage?
-    ) -> Int {
-        if let preferred, language == preferred { return -1 }
-        return order(language)
-    }
-
-    /// 默认选择顺序：简体 > 繁体 > 日语 > 英语 > 未知。
+    /// 默认选择顺序：简体 > 繁体 > 英语 > 日语 > 未知。
     public static func order(_ language: SubtitleLanguage) -> Int {
         switch language {
         case .simplifiedChinese: 0
         case .traditionalChinese: 1
-        case .japanese: 2
-        case .english: 3
+        case .english: 2
+        case .japanese: 3
         case .unknown: 4
         }
     }

@@ -129,6 +129,26 @@ final class SMBChunkRingTests: XCTestCase {
         XCTAssertEqual(kind, .miss)
     }
 
+    func testCacheHitSeekResetsBackwardReadAnchorToTarget() {
+        let anchors = SMBSeekClassifier.readAnchors(
+            target: 100,
+            cachedEnd: 140,
+            kind: .cacheHit
+        )
+        XCTAssertEqual(anchors.readHead, 100, "回退命中不能继续从旧的前向读头预取")
+        XCTAssertEqual(anchors.prefetchHead, 140)
+    }
+
+    func testNearWindowSeekClearsOldPrefetchHead() {
+        let anchors = SMBSeekClassifier.readAnchors(
+            target: 100,
+            cachedEnd: 100,
+            kind: .backWindow
+        )
+        XCTAssertEqual(anchors.readHead, 100)
+        XCTAssertEqual(anchors.prefetchHead, 100)
+    }
+
     func testStoreKeepsPinnedHeaderChunks() {
         let ring = SMBChunkRing(chunkSize: 4, capacity: 3)
         ring.setHeaderPinBytes(8)

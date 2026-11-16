@@ -102,6 +102,41 @@ final class SMBReadSchedulerTests: XCTestCase {
         gate.signal()
         _ = await blocker.value
     }
+
+    func testCancelOwnerInterruptsRateLimitWaitAndUnblocksCaller() async {
+        let scheduler = SMBReadScheduler(label: "test-owner-cancel")
+        let owner = UUID()
+        let started = expectation(description: "read started")
+        scheduler.setLimit(bytesPerSecond: 100)
+
+        let first = Task {
+            try await scheduler.submit(owner: owner, priority: .playback) {
+                started.fulfill()
+                return Data(repeating: 1, count: 100)
+            }
+        }
+        await fulfillment(of: [started], timeout: 1)
+        // worker 已拿到结果，正在按 100B/s 做 1 秒限速等待。
+        try? await Task.sleep(for: .milliseconds(80))
+
+        let began = Date()
+        scheduler.cancel(owner: owner)
+        do {
+            _ = try await first.value
+            XCTFail("应按 owner 取消")
+        } catch let error as SMBReadError {
+            XCTAssertEqual(error, .cancelled)
+        } catch {
+            XCTFail("错误类型不对：\(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(began), 0.5)
+
+        scheduler.setLimit(bytesPerSecond: 0)
+        let next = try? await scheduler.submit(priority: .playback) {
+            Data([2])
+        }
+        XCTAssertEqual(next, Data([2]), "取消旧 owner 后队列应立即继续")
+    }
 }
 
 private final class OrderBox: @unchecked Sendable {

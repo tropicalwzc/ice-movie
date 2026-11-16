@@ -50,6 +50,7 @@ public enum SMBReadError: LocalizedError, Sendable, Equatable {
 public final class SMBReadScheduler: @unchecked Sendable {
     private struct Job {
         let id: UInt64
+        let owner: UUID?
         let priority: SMBReadPriority
         let enqueuedAt: Date
         let timeout: TimeInterval
@@ -90,6 +91,7 @@ public final class SMBReadScheduler: @unchecked Sendable {
 
     /// 提交一次读取。超时与断连都会让调用方立即收到错误，而不是无限等待。
     public func submit(
+        owner: UUID? = nil,
         priority: SMBReadPriority,
         timeout: TimeInterval = 30,
         operation: @escaping @Sendable () throws -> Data
@@ -106,6 +108,7 @@ public final class SMBReadScheduler: @unchecked Sendable {
             let id = nextID
             jobs[id] = Job(
                 id: id,
+                owner: owner,
                 priority: priority,
                 enqueuedAt: Date(),
                 timeout: timeout,
@@ -124,6 +127,27 @@ public final class SMBReadScheduler: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// 取消某个字节源的全部读取。调用方会立即收到取消错误；
+    /// 若当前任务正在限速等待，worker 也会被唤醒并继续下一条请求。
+    public func cancel(owner: UUID, error: SMBReadError = .cancelled) {
+        condition.lock()
+        let ids = jobs.compactMap { id, job in job.owner == owner ? id : nil }
+        guard !ids.isEmpty else {
+            condition.unlock()
+            return
+        }
+        let cancelled = ids.compactMap { jobs.removeValue(forKey: $0) }
+        let idSet = Set(ids)
+        pending.removeAll { idSet.contains($0) }
+        condition.broadcast()
+        condition.unlock()
+
+        for job in cancelled {
+            job.continuation.resume(throwing: error)
+        }
+        Log.notice(.smb, "读调度取消 owner=\(owner.uuidString.prefix(8)) 数量=\(cancelled.count)")
     }
 
     /// 会话断开时调用：让所有排队与执行中的请求立即以断开错误结束。
@@ -187,7 +211,7 @@ public final class SMBReadScheduler: @unchecked Sendable {
                 let expected = Double(data.count) / Double(limit)
                 let elapsed = Date().timeIntervalSince(startedAt)
                 if expected > elapsed {
-                    Thread.sleep(forTimeInterval: expected - elapsed)
+                    waitForRateLimit(id: id, duration: expected - elapsed)
                 }
             }
 
@@ -239,6 +263,7 @@ public final class SMBReadScheduler: @unchecked Sendable {
             return
         }
         pending.removeAll { $0 == id }
+        condition.broadcast()
         condition.unlock()
 
         Log.notice(.smb, "读调度超时 \(job.priority.label) 等待=\(String(format: "%.1f", job.timeout))s")
@@ -256,5 +281,14 @@ public final class SMBReadScheduler: @unchecked Sendable {
         for job in all.values {
             job.continuation.resume(throwing: SMBReadError.cancelled)
         }
+    }
+
+    private func waitForRateLimit(id: UInt64, duration: TimeInterval) {
+        let deadline = Date().addingTimeInterval(duration)
+        condition.lock()
+        while !stopped, jobs[id] != nil, Date() < deadline {
+            condition.wait(until: min(deadline, Date().addingTimeInterval(0.1)))
+        }
+        condition.unlock()
     }
 }

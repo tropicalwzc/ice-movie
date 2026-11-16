@@ -166,6 +166,8 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var seekWaitersClosed = false
     private var seekWaiters: [Int: CheckedContinuation<Bool, Never>] = [:]
     private var pumpThread: Thread?
+    private let pumpExit = DispatchGroup()
+    private var pumpExitEntered = false
     private var syncTimer: DispatchSourceTimer?
     private var playStartedAt: Double?
     private var pausedAt: Double?
@@ -194,6 +196,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     private var subtitleStreamIndex: Int?
     private var subtitleDecoder: SubtitlePacketDecoder?
     private var onSubtitleEvents: (([SubtitlePacketEvent]) -> Void)?
+    private var seekObserver: ((Double) -> Void)?
     private struct SubtitleCollectorRequest {
         let streamIndex: Int?
         let onEvents: (([SubtitlePacketEvent]) -> Void)?
@@ -268,16 +271,7 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     deinit {
-        for observer in audioObservers {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        stopSyncTimer()
-        videoPipeline?.stop()
-        condition.lock()
-        stopped = true
-        wantsPlay = false
-        condition.broadcast()
-        condition.unlock()
+        stop()
         // 跨文件压测时用这条日志核对引擎是否按时释放（内存每个会话涨几十 MB）。
         Log.info(.render, "引擎释放")
     }
@@ -403,28 +397,34 @@ public final class PlaybackEngine: @unchecked Sendable {
         guard !isStopped else { return false }
         let id = seek(to: seconds, requestedAt: ProcessInfo.processInfo.systemUptime)
         guard id > 0 else { return false }
-        return await withCheckedContinuation { continuation in
-            lock.lock()
-            // stop()/fail() 可能发生在 seek 入队之后、continuation 注册之前；
-            // 关闭标志与 waiter 注册在同一把锁内，保证不会漏掉 resume。
-            if seekWaitersClosed {
-                lock.unlock()
-                continuation.resume(returning: false)
-            } else if let result = completedSeekResults[id] {
-                lock.unlock()
-                continuation.resume(returning: result)
-            } else if completedSeekID >= id {
-                // 结果表被裁剪时只信任最近一次同 id 的结果，避免把失败的 seek
-                // 用 stats.failure == nil 误判为成功。
-                let result = lastCompletedSeek?.id == id
-                    ? (lastCompletedSeek?.success ?? false)
-                    : false
-                lock.unlock()
-                continuation.resume(returning: result)
-            } else {
-                seekWaiters[id] = continuation
-                lock.unlock()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                // stop()/fail() 可能发生在 seek 入队之后、continuation 注册之前；
+                // 关闭标志与 waiter 注册在同一把锁内，保证不会漏掉 resume。
+                if seekWaitersClosed {
+                    lock.unlock()
+                    continuation.resume(returning: false)
+                } else if let result = completedSeekResults[id] {
+                    lock.unlock()
+                    continuation.resume(returning: result)
+                } else if completedSeekID >= id {
+                    // 结果表被裁剪时只信任最近一次同 id 的结果，避免把失败的 seek
+                    // 用 stats.failure == nil 误判为成功。
+                    let result = lastCompletedSeek?.id == id
+                        ? (lastCompletedSeek?.success ?? false)
+                        : false
+                    lock.unlock()
+                    continuation.resume(returning: result)
+                } else {
+                    seekWaiters[id] = continuation
+                    lock.unlock()
+                }
             }
+        } onCancel: { [weak self] in
+            // 尚未交付的引擎取消续播定位时直接停止；stop() 会关闭 seek waiter，
+            // 同时等待已经进入的 FFmpeg/SMB seek 完成，调用方再丢弃 engine。
+            self?.stop()
         }
     }
 
@@ -522,7 +522,9 @@ public final class PlaybackEngine: @unchecked Sendable {
         resetBufferStallState()
         stopSyncTimer()
         finishAllSeekWaiters()
-        reader.cancelPrefetch()
+        // 先中止底层在途读取，再汇合泵线程；否则 SMB 慢读会把 stop() 卡到超时。
+        reader.cancelPendingReads()
+        waitForPumpExit()
         videoPipeline?.stop()
         output?.pause()
         output?.reset()
@@ -531,6 +533,7 @@ public final class PlaybackEngine: @unchecked Sendable {
             subtitleStreamIndex = nil
             subtitleDecoder = nil
             onSubtitleEvents = nil
+            seekObserver = nil
         }
         for observer in audioObservers {
             NotificationCenter.default.removeObserver(observer)
@@ -538,6 +541,14 @@ public final class PlaybackEngine: @unchecked Sendable {
         audioObservers.removeAll()
         resumeAfterInterruption = false
         Log.info(.render, "停止 位置=\(fmt(clock.currentTime))s")
+    }
+
+    /// stop() 返回时必须保证 FFmpeg 上下文不再被播放泵访问。
+    /// 若 stop() 由泵线程自身触发则不能汇合自己，由外层调用方延迟释放 reader。
+    private func waitForPumpExit() {
+        let thread = lock.withLock { pumpThread }
+        guard let thread, thread !== Thread.current else { return }
+        pumpExit.wait()
     }
 
     // MARK: - 音频中断
@@ -617,6 +628,14 @@ public final class PlaybackEngine: @unchecked Sendable {
         )
         condition.broadcast()
         condition.unlock()
+    }
+
+    /// seek 完成、时钟已移动到目标位置后通知订阅方。
+    ///
+    /// 内封字幕采集在随机 seek 后可能停在旧位置附近，订阅方可用该通知
+    /// 立即切换到目标位置分片加载，而不是等待“无字幕”轮询超时。
+    public func setSeekObserver(_ observer: ((Double) -> Void)?) {
+        lock.withLock { seekObserver = observer }
     }
 
     /// 在 pumpLoop 持有 condition 锁时取走请求。
@@ -849,11 +868,20 @@ public final class PlaybackEngine: @unchecked Sendable {
     private func startPumpIfNeeded() {
         // play()/seek() 可能来自 UI、锁屏控制或画中画回调，统一用 lock 保护只启动一条泵线程。
         lock.lock()
-        guard pumpThread == nil else {
+        guard pumpThread == nil, !pumpExitEntered else {
             lock.unlock()
             return
         }
-        let thread = Thread { [weak self] in self?.pumpLoop() }
+        pumpExitEntered = true
+        pumpExit.enter()
+        let exit = pumpExit
+        let thread = Thread { [weak self] in
+            guard let self else {
+                exit.leave()
+                return
+            }
+            self.pumpLoop()
+        }
         thread.name = "icemovie.playback.pump"
         // 泵线程会同步等待异步字节源读取；读取任务使用 .userInitiated，
         // 两边 QoS 保持一致，避免 Thread Performance Checker 报优先级反转。
@@ -864,6 +892,10 @@ public final class PlaybackEngine: @unchecked Sendable {
     }
 
     private func pumpLoop() {
+        defer {
+            lock.withLock { pumpThread = nil }
+            pumpExit.leave()
+        }
         guard let packet = av_packet_alloc() else {
             fail("无法分配 AVPacket")
             return
@@ -1154,8 +1186,9 @@ public final class PlaybackEngine: @unchecked Sendable {
         guard let decoder, let output else { return }
         do {
             for frame in try decoder.flush() {
-                output.enqueue(frame)
-                lock.withLock { stats.decodedSeconds += frame.duration }
+                guard let audio = trimForSeek(frame) else { continue }
+                output.enqueue(audio)
+                lock.withLock { stats.decodedSeconds += audio.duration }
             }
         } catch {
             Log.error(.demux, "解码器冲刷失败：\(error.localizedDescription)")
@@ -1285,7 +1318,9 @@ public final class PlaybackEngine: @unchecked Sendable {
             .render,
             "seek 执行 id=\(id) 位置=\(fmt(target))s 松手到执行=\(max(0, queued))ms"
         )
+        let observer = lock.withLock { seekObserver }
         finishSeek(id: id, success: true)
+        observer?(target)
     }
 
     private func fail(_ message: String) {

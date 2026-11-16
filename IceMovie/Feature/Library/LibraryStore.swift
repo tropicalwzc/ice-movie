@@ -74,6 +74,69 @@ struct PreparedPlayback {
     let externalTracksTask: Task<[SubtitleTrack], Never>
 }
 
+/// 一次尚未交付给播放会话的准备过程。取消动作按注册逆序执行，
+/// 保证先停 engine，再关 reader，最后关字节源。
+private final class PlaybackPreparationCancellation: @unchecked Sendable {
+    private typealias Action = @Sendable () -> Void
+
+    private let lock = NSLock()
+    private var cancelled = false
+    private var committed = false
+    private var actions: [Action] = []
+
+    var isCancelled: Bool {
+        lock.withLock { cancelled }
+    }
+
+    func checkCancellation() throws {
+        if isCancelled { throw CancellationError() }
+    }
+
+    func register(_ action: @escaping @Sendable () -> Void) {
+        let runImmediately = lock.withLock { () -> Bool in
+            guard !committed else { return false }
+            if cancelled { return true }
+            actions.append(action)
+            return false
+        }
+        if runImmediately {
+            action()
+        }
+    }
+
+    /// engine 创建与取消标记在同一临界区，避免取消线程先关闭 reader，
+    /// 而准备线程仍在其上初始化解码器。
+    func makeEngine(reader: MediaReader) throws -> PlaybackEngine {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !cancelled, !committed else { throw CancellationError() }
+        let engine = try PlaybackEngine(reader: reader)
+        actions.append { engine.stop() }
+        return engine
+    }
+
+    func commit() {
+        lock.withLock {
+            guard !cancelled else { return }
+            committed = true
+            actions.removeAll()
+        }
+    }
+
+    func cancel() {
+        let pending: [Action] = lock.withLock {
+            guard !cancelled, !committed else { return [] }
+            cancelled = true
+            let pending = Array(actions.reversed())
+            actions.removeAll()
+            return pending
+        }
+        for action in pending {
+            action()
+        }
+    }
+}
+
 /// 媒体库视图模型。
 ///
 /// 目录导航、条目缓存、检索索引与缩略图都放在这里，两种宽度外壳只是它的投影；
@@ -1556,11 +1619,39 @@ final class LibraryStore {
                 preparingPlaybackID = nil
             }
         }
+        let cancellation = PlaybackPreparationCancellation()
+        let prepared = await withTaskCancellationHandler {
+            await preparePlaybackOperation(
+                entry,
+                startAt: startAt,
+                cancellation: cancellation
+            )
+        } onCancel: {
+            cancellation.cancel()
+        }
+        if prepared == nil {
+            cancellation.cancel()
+        }
+        return prepared
+    }
+
+    private func preparePlaybackOperation(
+        _ entry: MediaEntry,
+        startAt: Double?,
+        cancellation: PlaybackPreparationCancellation
+    ) async -> PreparedPlayback? {
         do {
             let source = self.source
             let path = entry.path
             let began = ProcessInfo.processInfo.systemUptime
             let baseSource = try await source.openByteSource(path: path)
+            cancellation.register {
+                (baseSource as? ReadCancelling)?.cancelReads()
+                Task(priority: .userInitiated) {
+                    await baseSource.close()
+                }
+            }
+            try cancellation.checkCancellation()
             let byteSource: any ByteSource
             if let cache = ContainerHeaderCache.shared {
                 let cached = CachedByteSource(
@@ -1576,6 +1667,13 @@ final class LibraryStore {
             } else {
                 byteSource = baseSource
             }
+            cancellation.register {
+                (byteSource as? ReadCancelling)?.cancelReads()
+                Task(priority: .userInitiated) {
+                    await byteSource.close()
+                }
+            }
+            try cancellation.checkCancellation()
             let sourceOpenMilliseconds = Int(
                 (ProcessInfo.processInfo.systemUptime - began) * 1000
             )
@@ -1586,8 +1684,18 @@ final class LibraryStore {
             let opened = try await Self.openReader(
                 byteSource: byteSource,
                 path: path,
-                fastProbe: true
+                fastProbe: true,
+                cancellation: cancellation
             )
+            do {
+                try cancellation.checkCancellation()
+            } catch {
+                opened.reader.close()
+                throw error
+            }
+            cancellation.register {
+                opened.reader.close()
+            }
             let probeMilliseconds = Int(
                 (ProcessInfo.processInfo.systemUptime - probeBegan) * 1000
             )
@@ -1619,6 +1727,9 @@ final class LibraryStore {
             let externalTracksTask = Task { [weak self] in
                 await self?.discoverExternalSubtitles(for: entry) ?? []
             }
+            cancellation.register {
+                externalTracksTask.cancel()
+            }
             let discovered = embedded
             let tracks = discovered.filter { $0.format != .bitmap }
             if tracks.count != discovered.count {
@@ -1643,7 +1754,7 @@ final class LibraryStore {
             )
             // 引擎仍在主线程创建，保持 AVAudioEngine/渲染器的原有线程语义。
             let engineBegan = ProcessInfo.processInfo.systemUptime
-            let engine = try PlaybackEngine(reader: opened.reader)
+            let engine = try cancellation.makeEngine(reader: opened.reader)
             let openSeconds = Double(
                 opened.reader.openInputMilliseconds + opened.reader.streamInfoMilliseconds
             ) / 1000
@@ -1663,6 +1774,7 @@ final class LibraryStore {
             var resumeLocated = true
             if let startAt, startAt > 0 {
                 resumeLocated = await engine.prepareSeek(to: startAt)
+                try cancellation.checkCancellation()
                 Log.info(
                     .app,
                     "续播定位 \(resumeLocated ? "成功" : "失败") "
@@ -1696,6 +1808,8 @@ final class LibraryStore {
             engine.resolveStartupPrerollMode()
             startup.startupPrerollMode = engine.startupPrerollMode
             startup.resumeLocated = resumeLocated
+            try cancellation.checkCancellation()
+            cancellation.commit()
             return PreparedPlayback(
                 engine: engine,
                 tracks: tracks,
@@ -1712,6 +1826,10 @@ final class LibraryStore {
                 externalTracksTask: externalTracksTask
             )
         } catch {
+            if cancellation.isCancelled || error is CancellationError {
+                Log.info(.app, "播放准备已取消 \(Log.shortPath(entry.path))")
+                return nil
+            }
             playbackFailure = PlaybackFailure.classify(error)
             Log.error(
                 .app,
@@ -1736,17 +1854,25 @@ final class LibraryStore {
     private nonisolated static func openReader(
         byteSource: any ByteSource,
         path: String,
-        fastProbe: Bool
+        fastProbe: Bool,
+        cancellation: PlaybackPreparationCancellation
     ) async throws -> OpenedMediaReader {
         try await withCheckedThrowingContinuation { continuation in
             let thread = Thread {
                 autoreleasepool {
                     do {
+                        try cancellation.checkCancellation()
                         let reader = try MediaReader.open(
                             source: byteSource,
                             label: path,
                             fastProbe: fastProbe
                         )
+                        do {
+                            try cancellation.checkCancellation()
+                        } catch {
+                            reader.close()
+                            throw error
+                        }
                         continuation.resume(
                             returning: OpenedMediaReader(
                                 reader: reader,

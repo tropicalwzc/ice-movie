@@ -23,6 +23,48 @@ final class PlaybackControlsUITests: XCTestCase {
         return element.isHittable
     }
 
+    func testCancelPlaybackPreparationOnIPad() throws {
+        #if targetEnvironment(simulator)
+        throw XCTSkip("该用例依赖 iPad 已保存的真实 SMB 凭据")
+        #else
+        let app = XCUIApplication()
+        let commonArguments = [
+            "-library",
+            "-smbHost", "tropical-bigpc.lan",
+            "-smbShare", "Videos",
+            "-libraryPath", "Study",
+            "-libraryOpenFirst",
+            "-libraryOpenName", "SSNI-916.mp4",
+            "-disableThumbnailPrefetch",
+            "-resetPlaybackProgress",
+            "-debugLog",
+        ]
+        app.launchArguments = commonArguments + ["-smbReadLimitKBps", "16"]
+        app.launch()
+
+        let preparing = app.staticTexts["正在准备播放…"]
+        XCTAssertTrue(preparing.waitForExistence(timeout: 8), "应进入尚未交付的准备页")
+        let close = app.buttons["pending.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 2), "准备页应提供关闭入口")
+        close.tap()
+        XCTAssertTrue(
+            app.buttons["pending.close"].waitForNonExistence(timeout: 5),
+            "取消后应立即退出准备页"
+        )
+        sleep(2)
+
+        app.terminate()
+        app.launchArguments = commonArguments.filter {
+            $0 != "-resetPlaybackProgress"
+        }
+        app.launch()
+        XCTAssertTrue(
+            app.buttons["暂停"].waitForExistence(timeout: 20),
+            "准备期取消后应能重新打开并正常起播"
+        )
+        #endif
+    }
+
     func testPausePlayScrubAndAutoHide() {        let app = XCUIApplication()
         app.launchArguments = [
             "-videoTest", videoPath,

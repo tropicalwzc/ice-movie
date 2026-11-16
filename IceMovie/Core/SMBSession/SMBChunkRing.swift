@@ -231,6 +231,11 @@ public enum SMBSeekKind: Equatable, Sendable {
 }
 
 public enum SMBSeekClassifier {
+    public struct ReadAnchors: Equatable, Sendable {
+        public let readHead: Int64
+        public let prefetchHead: Int64
+    }
+
     /// - Parameters:
     ///   - target: seek 目标字节偏移。
     ///   - cachedEnd: 从 target 起连续缓存的末尾；等于 target 表示目标块缺失。
@@ -248,5 +253,18 @@ public enum SMBSeekClassifier {
         let margin = Int64(max(1, chunkSize)) * 8
         if target >= windowStart, target <= windowEnd + margin { return .backWindow }
         return .miss
+    }
+
+    /// seek 后一律从目标重置读头；命中缓存时预读头只推进到真实连续缓存末尾。
+    /// 回退到旧读头前不足一个 chunk 时也不能继续沿用旧前向锚点。
+    public static func readAnchors(
+        target: Int64,
+        cachedEnd: Int64,
+        kind: SMBSeekKind
+    ) -> ReadAnchors {
+        ReadAnchors(
+            readHead: target,
+            prefetchHead: kind == .cacheHit ? max(target, cachedEnd) : target
+        )
     }
 }

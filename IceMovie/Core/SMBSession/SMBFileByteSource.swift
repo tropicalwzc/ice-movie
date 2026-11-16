@@ -23,9 +23,11 @@ struct SMBHandleProvider: @unchecked Sendable {
 /// - 句柄失效时重开一次并重试同一偏移。
 final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedProviding,
     BufferRetentionProviding, SeekAwareByteSource, SeekCacheProviding, BufferSupplyProviding,
-    PrefetchCancelling, PrefetchControlling, ReadStatsProviding, @unchecked Sendable {
+    PrefetchCancelling, PrefetchControlling, ReadCancelling, ReadStatsProviding,
+    @unchecked Sendable {
     private let scheduler: SMBReadScheduler
     private let priority: SMBReadPriority
+    private let readOwnerID = UUID()
     private let reopen: SMBHandleProvider?
     private let lengthValue: Int64?
     private let chunkSize: Int
@@ -125,6 +127,31 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         }
         task?.cancel()
         diag("prefetch cancel")
+    }
+
+    /// 取消准备中的容器读取。关闭句柄会让在途 pread 与排队读取尽快失败，
+    /// 同时阻止失败重试重新打开文件。
+    func cancelReads() {
+        let state = lock.withLock { () -> (task: Task<Void, Never>?, handle: SMB2FileHandle?) in
+            guard !closed else { return (nil, nil) }
+            closed = true
+            prefetchGeneration += 1
+            let task = prefetchTask
+            prefetchTask = nil
+            prefetchActive = false
+            return (task, handle)
+        }
+        // 先让 AVIO 等待的 continuation 立即返回；句柄关闭可能受 libsmb2
+        // 上下文锁影响，放到独立任务里完成，不能阻塞 UI 取消动作。
+        scheduler.cancel(owner: readOwnerID)
+        state.task?.cancel()
+        ring.reset()
+        if let handle = state.handle {
+            Task.detached(priority: .userInitiated) {
+                handle.close()
+            }
+        }
+        diag("reads cancel")
     }
 
     func setSupply(audioAhead: Double, videoAhead: Double) {
@@ -272,16 +299,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
     }
 
     func close() async {
-        let task = lock.withLock { () -> Task<Void, Never>? in
-            guard !closed else { return nil }
-            closed = true
-            let task = prefetchTask
-            prefetchTask = nil
-            handle.close()
-            return task
-        }
-        task?.cancel()
-        ring.reset()
+        cancelReads()
     }
 
     // MARK: - 内部
@@ -360,7 +378,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         var cursor = offset
         var remaining = count
         var result = Data()
-        var retried = false
+        var reopenAttempts = 0
 
         while remaining > 0 {
             if let lengthValue, cursor >= lengthValue { break }
@@ -383,20 +401,39 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
                 cursor += Int64(part.count)
                 remaining -= part.count
             } catch {
-                guard !retried, let reopen else { throw error }
+                guard reopenAttempts < 3, let reopen else { throw error }
                 if lock.withLock({ closed }) { throw error }
-                retried = true
                 Log.notice(
                     .smb,
                     "精确读失败，重开句柄 偏移=\(cursor) 优先级=\(priority.label) "
                         + error.localizedDescription
                 )
-                let newBox = try await reopen.open()
-                if lock.withLock({ closed }) { throw error }
-                lock.withLock {
-                    handle = newBox.handle
+
+                // 会话重连期间，另一路连接可能仍处于“正在连接”窗口。短暂退避后
+                // 再重开，避免把可恢复的 SMB 瞬时断连升级为 FFmpeg 永久 -5。
+                var reopenError: Error = error
+                var reopened = false
+                while reopenAttempts < 3 {
+                    reopenAttempts += 1
+                    if reopenAttempts > 1 {
+                        let delay = reopenAttempts == 2 ? 150 : 450
+                        try? await Task.sleep(for: .milliseconds(delay))
+                    }
+                    if Task.isCancelled { throw CancellationError() }
+                    do {
+                        let newBox = try await reopen.open()
+                        if lock.withLock({ closed }) { throw error }
+                        lock.withLock {
+                            handle = newBox.handle
+                        }
+                        box = newBox
+                        reopened = true
+                        break
+                    } catch {
+                        reopenError = error
+                    }
                 }
-                box = newBox
+                if !reopened { throw reopenError }
             }
         }
 
@@ -470,7 +507,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         length: Int,
         priority: SMBReadPriority
     ) async throws -> Data {
-        try await scheduler.submit(priority: priority, timeout: 30) {
+        try await scheduler.submit(owner: readOwnerID, priority: priority, timeout: 30) {
             try box.handle.pread(offset: UInt64(start), length: length)
         }
     }
@@ -504,6 +541,7 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
         let target = max(0, min(offset, lengthValue ?? offset))
         var old: Task<Void, Never>?
         var generation = 0
+        var shouldSchedulePrefetch = false
 
         lock.lock()
         // 命中/未命中都要允许后续读取和预读；短读设置的 reachedEOF 不能跨 seek 保留。
@@ -521,13 +559,37 @@ final class SMBFileByteSource: ByteSource, BufferMetricsProviding, NetworkSpeedP
             : .miss
 
         if kind == .cacheHit, seekCacheEnabled {
+            generation = prefetchGeneration + 1
+            prefetchGeneration = generation
+            old = prefetchTask
+            prefetchTask = nil
+            prefetchActive = false
             playhead = target
-            if readHead < target { readHead = target }
-            prefetchHead = max(prefetchHead, cachedEnd)
+            let anchors = SMBSeekClassifier.readAnchors(
+                target: target,
+                cachedEnd: cachedEnd,
+                kind: kind
+            )
+            readHead = anchors.readHead
+            prefetchHead = anchors.prefetchHead
+            windowStart = max(0, target - backBudgetLocked())
+            let keepTo = max(target, cachedEnd) + forwardBudgetLocked()
+            ring.trim(
+                keepFrom: windowStart,
+                keepTo: keepTo,
+                pinHeaderBytes: headerPinBytes
+            )
             lastSeekHit = true
             seekHitTotal += 1
             updateRetentionLocked()
+            shouldSchedulePrefetch = prefetchEnabled
             lock.unlock()
+            old?.cancel()
+            // 旧任务可能仍从原前向读头下载；代次已推进，晚返回也不能写回。
+            // 预读关闭时只登记锚点，起播后 setPrefetchEnabled 会从目标补缺口。
+            if shouldSchedulePrefetch {
+                schedulePrefetch(after: target)
+            }
             diag(
                 "seek hit target=\(target) cachedEnd=\(cachedEnd) "
                     + "readHead=\(readHead) prefetchHead=\(prefetchHead)"

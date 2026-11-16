@@ -67,6 +67,14 @@ public protocol PrefetchCancelling: AnyObject, Sendable {
     func cancelPrefetch()
 }
 
+/// 可选读取中止：准备阶段被取消时，同步终止在途/排队读取并关闭底层句柄。
+///
+/// 该入口只用于尚未交付给播放会话的字节源。调用后字节源不可继续使用；
+/// 上层仍应调用一次 `close()` 完成幂等清理。
+public protocol ReadCancelling: AnyObject, Sendable {
+    func cancelReads()
+}
+
 /// 可选供给反馈：音频低于安全水位时暂停后台预读，把 SMB 带宽让给播放读。
 public protocol BufferSupplyProviding: AnyObject, Sendable {
     func setSupply(audioAhead: Double, videoAhead: Double)

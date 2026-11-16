@@ -34,7 +34,11 @@ struct SubtitleLoader {
                 let began = ProcessInfo.processInfo.systemUptime
                 let data = try await readAll(byteSource)
                 await byteSource.close()
-                let text = decode(data)
+                let text = SubtitleTextDecoder.decode(
+                    data,
+                    language: track.language,
+                    format: track.format
+                )
                 let sanitized = track.format == .ass
                     ? ASSScriptSanitizer.sanitizeIfNeeded(text)
                     : ASSScriptSanitizer.Result(
@@ -152,15 +156,172 @@ struct SubtitleLoader {
         return data
     }
 
-    private func decode(_ data: Data) -> String {
+}
+
+enum SubtitleTextDecoder {
+    private struct Candidate {
+        let encoding: String
+        let text: String
+        let score: Int
+    }
+
+    static func decode(
+        _ data: Data,
+        language: SubtitleLanguage = .unknown,
+        format: SubtitleFormat = .other
+    ) -> String {
+        // BOM 是最可靠的判据。UTF-32 必须放在 UTF-16 前，因为两者都从 FF FE 开始。
+        if data.starts(with: [0xFF, 0xFE, 0x00, 0x00]) {
+            return String(data: data.dropFirst(4), encoding: .utf32LittleEndian)
+                ?? String(decoding: data, as: UTF8.self)
+        }
+        if data.starts(with: [0x00, 0x00, 0xFE, 0xFF]) {
+            return String(data: data.dropFirst(4), encoding: .utf32BigEndian)
+                ?? String(decoding: data, as: UTF8.self)
+        }
+        if data.starts(with: [0xEF, 0xBB, 0xBF]) {
+            return String(data: data.dropFirst(3), encoding: .utf8)
+                ?? String(decoding: data, as: UTF8.self)
+        }
+        if data.starts(with: [0xFF, 0xFE]) {
+            return String(
+                data: data.dropFirst(2),
+                encoding: .utf16LittleEndian
+            ) ?? String(decoding: data, as: UTF8.self)
+        }
+        if data.starts(with: [0xFE, 0xFF]) {
+            return String(
+                data: data.dropFirst(2),
+                encoding: .utf16BigEndian
+            ) ?? String(decoding: data, as: UTF8.self)
+        }
         if let text = String(data: data, encoding: .utf8) { return text }
-        let gbRaw = CFStringConvertEncodingToNSStringEncoding(
-            CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+
+        // 部分旧字幕组的 ASS 无 BOM，但字符仍按 UTF-16 存储。
+        let sampleCount = min(1024, data.count)
+        if sampleCount >= 16 {
+            var evenZeros = 0
+            var oddZeros = 0
+            for index in 0..<sampleCount {
+                if data[data.startIndex + index] == 0 {
+                    if index.isMultiple(of: 2) {
+                        evenZeros += 1
+                    } else {
+                        oddZeros += 1
+                    }
+                }
+            }
+            if oddZeros > sampleCount / 4, evenZeros < sampleCount / 20,
+               let text = String(data: data, encoding: .utf16LittleEndian) {
+                return text
+            }
+            if evenZeros > sampleCount / 4, oddZeros < sampleCount / 20,
+               let text = String(data: data, encoding: .utf16BigEndian) {
+                return text
+            }
+        }
+
+        // GB18030 兼容 GBK/GB2312；Big5 兼容台港繁体与部分 HKSCS 字符。
+        var candidates: [Candidate] = []
+        addCandidate(
+            label: "GB18030",
+            encoding: .GB_18030_2000,
+            preferred: language == .simplifiedChinese,
+            data: data,
+            language: language,
+            format: format,
+            to: &candidates
         )
-        if let text = String(data: data, encoding: String.Encoding(rawValue: gbRaw)) {
-            return text
+        addCandidate(
+            label: "Big5",
+            encoding: .big5,
+            preferred: language == .traditionalChinese,
+            data: data,
+            language: language,
+            format: format,
+            to: &candidates
+        )
+        addCandidate(
+            label: "Big5-HKSCS",
+            encoding: .big5_HKSCS_1999,
+            preferred: language == .traditionalChinese,
+            data: data,
+            language: language,
+            format: format,
+            to: &candidates
+        )
+        if let best = candidates.max(by: { $0.score < $1.score }) {
+            return best.text
         }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func addCandidate(
+        label: String,
+        encoding: CFStringEncodings,
+        preferred: Bool,
+        data: Data,
+        language: SubtitleLanguage,
+        format: SubtitleFormat,
+        to candidates: inout [Candidate]
+    ) {
+        let raw = CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(encoding.rawValue)
+        )
+        guard let text = String(
+            data: data,
+            encoding: String.Encoding(rawValue: raw)
+        ) else { return }
+        candidates.append(
+            Candidate(
+                encoding: label,
+                text: text,
+                score: score(
+                    text,
+                    language: language,
+                    format: format,
+                    preferred: preferred
+                )
+            )
+        )
+    }
+
+    private static func score(
+        _ text: String,
+        language: SubtitleLanguage,
+        format: SubtitleFormat,
+        preferred: Bool
+    ) -> Int {
+        let lower = text.lowercased()
+        var value = preferred ? 200 : 0
+        if lower.contains("[script info]") { value += 500 }
+        if lower.contains("[events]") { value += 800 }
+        if lower.contains("dialogue:") { value += 300 }
+        if lower.contains("format:") { value += 100 }
+        if lower.contains("-->") { value += 500 }
+        let scalars = text.unicodeScalars
+        let replacementCount = scalars.filter { $0.value == 0xFFFD }.count
+        value -= replacementCount * 80
+
+        var controlCount = 0
+        var scalarCount = 0
+        for scalar in scalars.prefix(20_000) {
+            scalarCount += 1
+            if scalar.value < 0x20,
+               scalar != "\n",
+               scalar != "\r",
+               scalar != "\t" {
+                controlCount += 1
+            }
+        }
+        value -= controlCount * 20
+        if scalarCount > 0 {
+            value += (scalarCount - controlCount) * 20 / scalarCount
+        }
+        if format == .ass || format == .srt {
+            value += language == .unknown ? 0 : 20
+        }
+        return value
     }
 }
 

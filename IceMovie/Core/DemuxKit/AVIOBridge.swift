@@ -49,6 +49,10 @@ final class AVIOBridge {
         (source as? PrefetchCancelling)?.cancelPrefetch()
     }
 
+    func cancelReads() {
+        (source as? ReadCancelling)?.cancelReads()
+    }
+
     func setPrefetchEnabled(_ enabled: Bool) {
         (source as? PrefetchControlling)?.setPrefetchEnabled(enabled)
     }

@@ -600,6 +600,24 @@ final class LibraryPlaybackSession: Identifiable {
             self.loadCandidates(fallbackCandidates)
         }
         shardedLoader = loader
+        engine.setSeekObserver { [weak self, weak loader] target in
+            Task { @MainActor [weak self, weak loader] in
+                guard let self,
+                      let loader,
+                      self.shardedLoader === loader,
+                      self.selectedTrack?.id == track.id else {
+                    return
+                }
+                Log.info(
+                    .subtitle,
+                    "分片字幕随 seek 重置 "
+                        + "位置=\(String(format: "%.1f", target))s"
+                )
+                self.subtitleLoading = true
+                self.timeline = nil
+                loader.rebase(to: target)
+            }
+        }
         subtitleLoading = true
         Log.info(
             .subtitle,
@@ -607,6 +625,21 @@ final class LibraryPlaybackSession: Identifiable {
                 + "起播=\(String(format: "%.1f", startPosition))s"
         )
         loader.start(at: startPosition)
+    }
+
+    /// “从头开始”时旧位置的字幕时间线和采集包都不能继续使用。
+    func prepareForRestartFromBeginning() {
+        guard let selectedTrack, playbackCollectedIndex(selectedTrack) != nil else {
+            return
+        }
+        subtitleTask?.cancel()
+        subtitleTask = nil
+        engine.setSubtitleCollector(streamIndex: nil, onEvents: nil)
+        timeline = nil
+        subtitleScript = nil
+        subtitleFonts = []
+        subtitleError = nil
+        subtitleLoading = true
     }
 
     func stopSubtitles() {
@@ -1268,6 +1301,7 @@ struct LibraryView: View {
     private func restartPlayback() {
         guard let playback else { return }
         PlaybackProgressStore(context: modelContext).clear(key: playback.progressKey)
+        playback.prepareForRestartFromBeginning()
         playback.engine.seek(to: 0)
         resumeNotice = nil
         resumeNoticeTask?.cancel()
@@ -1396,6 +1430,23 @@ struct LibraryView: View {
                         + "音频偏差=\(String(format: "%.3f", after.maxDrift))s "
                         + "显示偏差=\(String(format: "%.3f", after.maxVideoOffset))s "
                         + "欠载=\(after.underruns) 丢弃=\(after.droppedSeeks)"
+                )
+            }
+
+            if arguments.contains("-libraryRestartFromBeginning") {
+                try? await Task.sleep(for: .seconds(3))
+                restartPlayback()
+                try? await Task.sleep(for: .seconds(3))
+                let after = playback.engine.statistics
+                Log.info(
+                    .app,
+                    "从头开始验收 "
+                        + "落点=\(String(format: "%.1f", playback.engine.clock.currentTime))s "
+                        + "字幕=\(playback.selectedTrack?.title ?? "无") "
+                        + "字幕条数=\(playback.timeline?.cues.count ?? 0) "
+                        + "音频偏差=\(String(format: "%.3f", after.lastSeekDrift))s "
+                        + "显示偏差=\(String(format: "%.3f", after.maxVideoOffset))s "
+                        + "欠载=\(after.underruns) 失败=\(after.failure ?? "无")"
                 )
             }
         }

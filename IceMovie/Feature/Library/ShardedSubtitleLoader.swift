@@ -53,8 +53,21 @@ final class ShardedSubtitleLoader {
 
     /// 从指定位置开始加载，续播时直接读目标时间附近，不再先扫 0 秒。
     func start(at position: Double) {
+        rebase(to: position)
+    }
+
+    /// seek 或“从头开始”后彻底丢弃旧窗口状态，避免旧 cue 继续参与时间线。
+    func rebase(to position: Double) {
         startPosition = position
         windowsSinceSeek = 0
+        consecutiveFailures = 0
+        cueByKey.removeAll()
+        coverageStart = 0
+        coverageEnd = 0
+        hasCoverage = false
+        onError?(nil)
+        onCues?([])
+        onLoadingChange?(true)
         task?.cancel()
         task = Task { @MainActor [weak self] in
             await self?.run()

@@ -85,48 +85,60 @@ final class NowPlayingCoordinator {
     private func configureCommands() {
         let center = MPRemoteCommandCenter.shared()
 
-        add(center.playCommand) { [weak self] _ in
-            self?.engine?.play()
-            return .success
-        }
-        add(center.pauseCommand) { [weak self] _ in
-            self?.engine?.pause()
-            return .success
-        }
-        add(center.togglePlayPauseCommand) { [weak self] _ in
-            guard let engine = self?.engine else { return .commandFailed }
-            if engine.isPlaying {
-                engine.pause()
-            } else {
-                engine.play()
+        add(center.playCommand) { @Sendable _ in
+            remoteCommandStatus { [weak self] in
+                self?.engine?.play()
+                return .success
             }
-            return .success
+        }
+        add(center.pauseCommand) { @Sendable _ in
+            remoteCommandStatus { [weak self] in
+                self?.engine?.pause()
+                return .success
+            }
+        }
+        add(center.togglePlayPauseCommand) { @Sendable _ in
+            remoteCommandStatus { [weak self] in
+                guard let engine = self?.engine else { return .commandFailed }
+                if engine.isPlaying {
+                    engine.pause()
+                } else {
+                    engine.play()
+                }
+                return .success
+            }
         }
 
         center.skipForwardCommand.preferredIntervals = [NSNumber(value: PlaybackSeek.step)]
         center.skipBackwardCommand.preferredIntervals = [NSNumber(value: PlaybackSeek.step)]
-        add(center.skipForwardCommand) { [weak self] event in
+        add(center.skipForwardCommand) { @Sendable event in
             let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? PlaybackSeek.step
-            self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) + interval)
-            return .success
+            return remoteCommandStatus { [weak self] in
+                self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) + interval)
+                return .success
+            }
         }
-        add(center.skipBackwardCommand) { [weak self] event in
+        add(center.skipBackwardCommand) { @Sendable event in
             let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? PlaybackSeek.step
-            self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) - interval)
-            return .success
+            return remoteCommandStatus { [weak self] in
+                self?.engine?.seek(to: (self?.engine?.clock.currentTime ?? 0) - interval)
+                return .success
+            }
         }
 
-        add(center.changePlaybackPositionCommand) { [weak self] event in
+        add(center.changePlaybackPositionCommand) { @Sendable event in
             guard let position = (event as? MPChangePlaybackPositionCommandEvent)?
                 .positionTime else { return .commandFailed }
-            self?.engine?.seek(to: position)
-            return .success
+            return remoteCommandStatus { [weak self] in
+                self?.engine?.seek(to: position)
+                return .success
+            }
         }
     }
 
     private func add(
         _ command: MPRemoteCommand,
-        handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus
+        handler: @escaping @Sendable (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus
     ) {
         command.isEnabled = true
         let token = command.addTarget(handler: handler)
@@ -148,4 +160,20 @@ final class NowPlayingCoordinator {
         info[MPNowPlayingInfoPropertyIsLiveStream] = false
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
+}
+
+/// MediaPlayer 没有承诺 remote command handler 一定在主线程执行。
+/// handler 若在主线程则同步执行并返回真实状态；否则先返回成功，把操作
+/// 投递回主线程，避免 Swift 6 的 MainActor 隔离断言（SIGTRAP）。
+private func remoteCommandStatus(
+    _ action: @escaping @MainActor @Sendable () -> MPRemoteCommandHandlerStatus
+) -> MPRemoteCommandHandlerStatus {
+    if Thread.isMainThread {
+        return MainActor.assumeIsolated { action() }
+    }
+    Log.notice(.render, "远程命令回调不在主线程，转投主线程执行")
+    Task { @MainActor in
+        _ = action()
+    }
+    return .success
 }

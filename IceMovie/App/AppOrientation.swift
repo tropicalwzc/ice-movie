@@ -29,6 +29,14 @@ enum AppOrientation {
                 Log.error(.app, "旋转失败：没有可用场景")
                 return
             }
+            // 后台/转场期间 requestGeometryUpdate 会直接失败。等场景真正回到
+            // 前台再请求，既避免无意义的错误回调，也避免回前台时补一次旋转。
+            while scene.activationState != .foregroundActive {
+                guard token == generation else { return }
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled else { return }
+            }
+            guard token == generation else { return }
             if let root = scene.windows.first(where: \.isKeyWindow)?.rootViewController {
                 var controller: UIViewController? = root
                 while let current = controller {

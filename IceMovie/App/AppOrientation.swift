@@ -37,7 +37,13 @@ enum AppOrientation {
                 }
             }
             Log.info(.app, "请求屏幕方向 mask=\(orientations.rawValue)")
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { error in
+            // requestGeometryUpdate 的错误回调不保证在主线程执行。这个闭包
+            // 位于上面的 @MainActor Task 内，如果不显式标 @Sendable，就会
+            // 继承 MainActor 隔离；UIKit 从后台队列回调时 Swift 6 直接触发
+            // dispatch_assert_queue_fail（SIGTRAP），表现为回前台闪退。
+            scene.requestGeometryUpdate(
+                .iOS(interfaceOrientations: orientations)
+            ) { @Sendable error in
                 Log.error(.app, "旋转失败 \(error.localizedDescription)")
             }
         }

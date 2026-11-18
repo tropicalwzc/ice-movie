@@ -5,6 +5,8 @@ struct LibrarySearchResultsView: View {
     @Environment(LibraryStore.self) private var store
     @State private var openingImageID: String?
     @State private var imageOpenErrorID: String?
+    @State private var openingDocumentID: String?
+    @State private var documentOpenErrorID: String?
 
     var body: some View {
         List {
@@ -37,13 +39,14 @@ struct LibrarySearchResultsView: View {
                 Section {
                     ForEach(store.searchHits) { hit in
                         if hit.entry.isDocument {
-                            NavigationLink {
-                                DocumentReaderView(entry: hit.entry)
+                            Button {
+                                openDocument(hit)
                             } label: {
                                 documentRow(hit)
                             }
                             .buttonStyle(.plain)
                             .hoverEffect(.highlight)
+                            .disabled(openingDocumentID == hit.id)
                             .accessibilityIdentifier("search.document.\(hit.entry.name)")
                         } else if hit.entry.isImage {
                             Button {
@@ -53,7 +56,7 @@ struct LibrarySearchResultsView: View {
                             }
                             .buttonStyle(.plain)
                             .hoverEffect(.highlight)
-                            .disabled(openingImageID == hit.entry.id)
+                            .disabled(openingImageID == hit.id)
                             .accessibilityIdentifier("search.image.\(hit.entry.name)")
                         } else {
                             Button {
@@ -76,19 +79,31 @@ struct LibrarySearchResultsView: View {
 
     private func openImage(_ hit: LibrarySearchHit) {
         imageOpenErrorID = nil
-        openingImageID = hit.entry.id
+        openingImageID = hit.id
         Task {
             let opened = await store.openImageGallery(for: hit)
             openingImageID = nil
             if !opened {
-                imageOpenErrorID = hit.entry.id
+                imageOpenErrorID = hit.id
+            }
+        }
+    }
+
+    private func openDocument(_ hit: LibrarySearchHit) {
+        documentOpenErrorID = nil
+        openingDocumentID = hit.id
+        Task {
+            let opened = await store.openDocumentFromSearch(hit)
+            openingDocumentID = nil
+            if !opened {
+                documentOpenErrorID = hit.id
             }
         }
     }
 
     private func imageRow(_ hit: LibrarySearchHit) -> some View {
         HStack(spacing: 12) {
-            LibraryPoster(entry: hit.entry)
+            poster(for: hit)
                 .frame(width: 42)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -100,11 +115,7 @@ struct LibrarySearchResultsView: View {
                     Text("图片")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(Color.accentColor)
-                    Text(
-                        hit.entry.directoryPath.isEmpty
-                            ? "/"
-                            : MediaTitleParser.directoryPathDisplay(hit.entry.directoryPath)
-                    )
+                    Text(locationText(for: hit))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 }
@@ -114,10 +125,10 @@ struct LibrarySearchResultsView: View {
 
             Spacer(minLength: 0)
 
-            if openingImageID == hit.entry.id {
+            if openingImageID == hit.id {
                 ProgressView()
                     .controlSize(.small)
-            } else if imageOpenErrorID == hit.entry.id {
+            } else if imageOpenErrorID == hit.id {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.orange)
@@ -132,7 +143,7 @@ struct LibrarySearchResultsView: View {
 
     private func videoRow(_ hit: LibrarySearchHit) -> some View {
         HStack(spacing: 12) {
-            LibraryPoster(entry: hit.entry)
+            poster(for: hit)
                 .frame(width: 42)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -144,11 +155,7 @@ struct LibrarySearchResultsView: View {
                     if let episode = MediaTitleParser.parse(hit.entry.name).episode {
                         Text("第 \(episodeText(episode)) 集")
                     }
-                    Text(
-                        hit.entry.directoryPath.isEmpty
-                            ? "/"
-                            : MediaTitleParser.directoryPathDisplay(hit.entry.directoryPath)
-                    )
+                    Text(locationText(for: hit))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 }
@@ -163,6 +170,25 @@ struct LibrarySearchResultsView: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+
+    /// 其他共享的封面需要独立命名空间；索引阶段不额外打开缩略图会话，
+    /// 先用类型图标占位，点入后再切换共享查看实际内容。
+    @ViewBuilder
+    private func poster(for hit: LibrarySearchHit) -> some View {
+        if hit.share.isEmpty || hit.share == store.source.shareName {
+            LibraryPoster(entry: hit.entry)
+        } else {
+            Image(systemName: hit.entry.isImage ? "photo" : "film")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 42, height: 63)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                )
+                .accessibilityLabel(hit.entry.isImage ? "图片" : "视频")
+        }
     }
 
     private func documentRow(_ hit: LibrarySearchHit) -> some View {
@@ -190,7 +216,7 @@ struct LibrarySearchResultsView: View {
                                 metadata.format == .pdf ? Color.red : Color.accentColor
                             )
                     }
-                    Text(hit.entry.displayDirectoryPath)
+                    Text(locationText(for: hit))
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -200,11 +226,31 @@ struct LibrarySearchResultsView: View {
 
             Spacer(minLength: 0)
 
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+            if openingDocumentID == hit.id {
+                ProgressView()
+                    .controlSize(.small)
+            } else if documentOpenErrorID == hit.id {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .contentShape(Rectangle())
+    }
+
+    /// 跨共享命中时把共享名放在路径前，避免相同相对路径无法区分。
+    private func locationText(for hit: LibrarySearchHit) -> String {
+        let path = hit.displayPath == "/"
+            ? "/"
+            : MediaTitleParser.directoryPathDisplay(hit.displayPath)
+        guard !hit.share.isEmpty, hit.share != store.source.shareName else {
+            return path
+        }
+        return path == "/" ? hit.share : "\(hit.share) / \(path)"
     }
 
     private func episodeText(_ episode: Double) -> String {

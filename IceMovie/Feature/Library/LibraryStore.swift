@@ -193,8 +193,10 @@ final class LibraryStore {
     var showsVideos = true
     var showsImages = true
     private(set) var searchHits: [LibrarySearchHit] = []
+    private(set) var pendingSearchDocument: MediaEntry?
     private(set) var isIndexing = false
     private(set) var indexedDirectoryCount = 0
+    private(set) var indexedShareCount = 0
     private(set) var indexTruncated = false
     /// 目录成功加载后回调，用于把最近路径写回 SwiftData。
     var onPathChanged: ((String) -> Void)?
@@ -246,6 +248,9 @@ final class LibraryStore {
     @ObservationIgnored private var prewarmDeferred = false
     private var loadGeneration = 0
     private var indexTask: Task<Void, Never>?
+    private var indexGeneration = 0
+    /// 本轮搜索已经尝试过的共享，避免每次输入都反复扫描不可达的共享。
+    private var attemptedSearchShares: Set<String> = []
     private var playbackTask: Task<Void, Never>?
     private var preparationGeneration = 0
 
@@ -450,13 +455,14 @@ final class LibraryStore {
         if indexedDirectoryCount == 0 {
             return "正在建立索引，结果会随扫描补全"
         }
+        let scope = "\(indexedShareCount) 个共享 / \(indexedDirectoryCount) 个目录"
         if isIndexing {
-            return "仅覆盖已索引的 \(indexedDirectoryCount) 个目录，后台正在补全"
+            return "已覆盖 \(scope)，后台正在补全"
         }
         if indexTruncated {
-            return "仅覆盖已索引的 \(indexedDirectoryCount) 个目录（已达本次扫描上限）"
+            return "已覆盖 \(scope)（部分共享达到扫描上限）"
         }
-        return "仅覆盖已索引的 \(indexedDirectoryCount) 个目录"
+        return "已覆盖 \(scope)"
     }
 
     init(
@@ -554,10 +560,13 @@ final class LibraryStore {
         }
     }
 
-    /// 在同一主机内切换共享：复用凭据，清空旧共享的目录/检索/封面缓存后回到新共享根。
-    func switchShare(_ share: String) async {
+    /// 在同一主机内切换共享：复用凭据，清空旧共享的目录/封面缓存后回到新共享根。
+    /// 检索索引按共享分键保存，跨共享结果不会因为切换而丢失。
+    @discardableResult
+    func switchShare(_ share: String) async -> Bool {
         let target = share.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !target.isEmpty, target != source.shareName, !isSwitchingShare else { return }
+        guard !target.isEmpty, target != source.shareName else { return true }
+        guard !isSwitchingShare else { return false }
         isSwitchingShare = true
         defer { isSwitchingShare = false }
         onShareWillChange?()
@@ -567,6 +576,7 @@ final class LibraryStore {
             loadGeneration += 1
             indexTask?.cancel()
             indexTask = nil
+            indexGeneration &+= 1
             isIndexing = false
             cancelThumbnailPrewarm()
             entriesByPath.removeAll()
@@ -578,9 +588,7 @@ final class LibraryStore {
             lastUpdated = nil
             searchText = ""
             searchHits = []
-            searchIndex = LibrarySearchIndex()
-            indexedDirectoryCount = 0
-            indexTruncated = false
+            pendingSearchDocument = nil
             resetMediaFilter()
             photoLibraryTargetPath = nil
             favoritesOnly = false
@@ -590,9 +598,11 @@ final class LibraryStore {
             onShareChanged?()
             Log.info(.app, "已切换共享 host=\(source.hostName) share=\(target)")
             await loadCurrent(force: true)
+            return true
         } catch {
             errorMessage = error.localizedDescription
             Log.error(.app, "切换共享失败 share=\(target) \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -659,9 +669,13 @@ final class LibraryStore {
     func refresh() async {
         // 下拉刷新/重试通常意味着网络已恢复；清掉上一轮的超时失败，
         // 让“无预览”的条目有机会重新生成。
+        attemptedSearchShares.removeAll()
         await thumbnails.clearFailures()
         await folderCoverThumbnails.clearFailures()
         await loadCurrent(force: true)
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            startIndexingIfNeeded()
+        }
     }
 
     /// 覆盖远端图片后更新本地列表与检索索引。
@@ -750,9 +764,13 @@ final class LibraryStore {
         }
     }
 
-    /// 从搜索结果打开图片相册；目录未加载时先读取该目录。
+    /// 从搜索结果打开图片相册；命中其他共享时先切到对应共享。
     @discardableResult
     func openImageGallery(for hit: LibrarySearchHit) async -> Bool {
+        let hitShare = hit.share.isEmpty ? source.shareName : hit.share
+        if hitShare != source.shareName {
+            guard await switchShare(hitShare) else { return false }
+        }
         let directory = hit.entry.directoryPath
         let entries: [MediaEntry]
         if let cached = entriesByPath[directory] {
@@ -827,46 +845,115 @@ final class LibraryStore {
             searchHits = []
             return
         }
-        searchHits = searchIndex.search(trimmed)
+        searchHits = searchIndex.search(trimmed, preferredShare: source.shareName)
         startIndexingIfNeeded()
     }
 
     private var searchIndex = LibrarySearchIndex()
 
-    private func updateIndex(directoryPath: String, entries: [MediaEntry]) {
-        searchIndex.index(directoryPath: directoryPath, entries: entries)
+    private func updateIndex(
+        directoryPath: String,
+        entries: [MediaEntry],
+        share: String? = nil
+    ) {
+        searchIndex.index(
+            directoryPath: directoryPath,
+            entries: entries,
+            share: share ?? source.shareName
+        )
         indexedDirectoryCount = searchIndex.indexedDirectoryCount
+        indexedShareCount = searchIndex.indexedShareCount
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            searchHits = searchIndex.search(trimmed)
+            searchHits = searchIndex.search(trimmed, preferredShare: source.shareName)
         }
     }
 
-    /// 检索时在后台补全索引。只追加，不清空已有结果。
+    /// 检索时在后台补全索引。先遍历当前共享，再按共享逐个补全其他共享。
+    /// 只追加，不清空已有结果。
     private func startIndexingIfNeeded() {
-        guard indexTask == nil, !indexTruncated else { return }
+        guard indexTask == nil else { return }
+        indexGeneration &+= 1
+        let generation = indexGeneration
         isIndexing = true
         indexTask = Task { [weak self] in
-            await self?.indexShareInBackground()
+            await self?.indexSharesInBackground(generation: generation)
         }
     }
 
-    private func indexShareInBackground() async {
+    private static let maxIndexedDirectoriesPerShare = 600
+
+    private func indexSharesInBackground(generation: Int) async {
         defer {
-            isIndexing = false
-            indexTask = nil
+            if generation == indexGeneration {
+                isIndexing = false
+                indexTask = nil
+            }
         }
+        if availableShares.isEmpty {
+            await refreshShares()
+        }
+        let currentShare = source.shareName
+        var shares = [currentShare]
+        for share in availableShares
+        where share.caseInsensitiveCompare(currentShare) != .orderedSame {
+            shares.append(share)
+        }
+
+        for share in shares {
+            guard !Task.isCancelled else { return }
+            guard !attemptedSearchShares.contains(share) else { continue }
+
+            let result: (completed: Bool, truncated: Bool)
+            if share == source.shareName {
+                result = await indexCurrentShare()
+            } else {
+                guard let indexSource = try? await source.makeSearchIndexSource(share: share) else {
+                    Log.notice(.app, "搜索索引跳过共享 share=\(share) 缺少可复用凭据")
+                    continue
+                }
+                result = await indexRemoteShare(share, source: indexSource)
+                await indexSource.disconnect()
+            }
+
+            if result.truncated {
+                indexTruncated = true
+            }
+            if !Task.isCancelled {
+                attemptedSearchShares.insert(share)
+            }
+            indexedDirectoryCount = searchIndex.indexedDirectoryCount
+            indexedShareCount = searchIndex.indexedShareCount
+            Log.info(
+                .app,
+                "共享索引完成 share=\(share) 目录=\(indexedDirectoryCount) "
+                    + "共享数=\(indexedShareCount) 完成=\(result.completed) "
+                    + "截断=\(result.truncated)"
+            )
+        }
+        Log.info(
+            .app,
+            "媒体库索引结束 共享=\(indexedShareCount) 目录=\(indexedDirectoryCount) "
+                + "条目=\(searchIndex.indexedEntryCount) 截断=\(indexTruncated)"
+        )
+    }
+
+    /// 当前共享优先使用内存里的目录缓存，避免重复走 SMB。
+    private func indexCurrentShare() async -> (completed: Bool, truncated: Bool) {
+        let share = source.shareName
         var queue: [String] = [""]
         var visited: Set<String> = []
+        var succeededDirectories = 0
 
         while !queue.isEmpty, !Task.isCancelled {
             let path = queue.removeFirst()
-            guard !visited.contains(path) else { continue }
-            visited.insert(path)
-            guard visited.count <= 600 else {
-                indexTruncated = true
-                Log.notice(.app, "媒体库索引达到本次扫描上限 目录数=\(visited.count)")
-                break
+            guard visited.insert(path).inserted else { continue }
+            guard visited.count <= Self.maxIndexedDirectoriesPerShare else {
+                Log.notice(
+                    .app,
+                    "共享索引达到扫描上限 share=\(share) 目录数=\(visited.count)"
+                )
+                return (true, true)
             }
 
             let entries: [MediaEntry]
@@ -875,25 +962,82 @@ final class LibraryStore {
             } else {
                 do {
                     entries = try await source.listDirectory(path: path)
+                    // 用户可能在等待目录返回期间切换共享；旧队列不能写进新共享。
+                    guard !Task.isCancelled, source.shareName == share else {
+                        return (false, false)
+                    }
                     entriesByPath[path] = entries
                 } catch {
-                    Log.error(.app, "索引目录失败 \(Log.shortPath(path.isEmpty ? "/" : path)) \(error.localizedDescription)")
+                    Log.error(
+                        .app,
+                        "索引目录失败 \(Log.shortPath(path.isEmpty ? "/" : path)) "
+                            + error.localizedDescription
+                    )
                     continue
                 }
             }
 
-            updateIndex(directoryPath: path, entries: entries)
+            updateIndex(directoryPath: path, entries: entries, share: share)
+            succeededDirectories += 1
             queue.append(contentsOf: entries.filter(\.isDirectory).map(\.path))
-            indexedDirectoryCount = searchIndex.indexedDirectoryCount
             await Task.yield()
         }
-        Log.info(
-            .app,
-            "媒体库索引结束 目录=\(indexedDirectoryCount) 条目=\(searchIndex.indexedEntryCount)"
-        )
+        return (!Task.isCancelled && succeededDirectories > 0, false)
+    }
+
+    /// 其他共享使用临时会话遍历；结束后由调用方断开，不影响当前浏览会话。
+    private func indexRemoteShare(
+        _ share: String,
+        source indexSource: any LibrarySource
+    ) async -> (completed: Bool, truncated: Bool) {
+        var queue: [String] = [""]
+        var visited: Set<String> = []
+        var succeededDirectories = 0
+
+        while !queue.isEmpty, !Task.isCancelled {
+            let path = queue.removeFirst()
+            guard visited.insert(path).inserted else { continue }
+            guard visited.count <= Self.maxIndexedDirectoriesPerShare else {
+                Log.notice(
+                    .app,
+                    "共享索引达到扫描上限 share=\(share) 目录数=\(visited.count)"
+                )
+                return (true, true)
+            }
+
+            do {
+                let entries = try await indexSource.listDirectory(path: path)
+                guard !Task.isCancelled else { return (false, false) }
+                updateIndex(directoryPath: path, entries: entries, share: share)
+                succeededDirectories += 1
+                queue.append(contentsOf: entries.filter(\.isDirectory).map(\.path))
+            } catch {
+                Log.error(
+                    .app,
+                    "索引共享目录失败 share=\(share) "
+                        + "\(Log.shortPath(path.isEmpty ? "/" : path)) "
+                        + error.localizedDescription
+                )
+            }
+            await Task.yield()
+        }
+        return (!Task.isCancelled && succeededDirectories > 0, false)
     }
 
     func reveal(_ hit: LibrarySearchHit) {
+        let hitShare = hit.share.isEmpty ? source.shareName : hit.share
+        if hitShare == source.shareName {
+            revealInCurrentShare(hit)
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard await switchShare(hitShare) else { return }
+            self.revealInCurrentShare(hit)
+        }
+    }
+
+    private func revealInCurrentShare(_ hit: LibrarySearchHit) {
         if hit.entry.kind == .video, mediaFilterIsApplicable, !showsVideos {
             // 搜索结果不受目录过滤影响；定位被隐藏的视频时自动恢复该类型。
             showsVideos = true
@@ -904,6 +1048,30 @@ final class LibraryStore {
         prepareForPathChange()
         searchText = ""
         searchHits = []
+    }
+
+    /// 搜索结果打开前的共享准备；文档由稳定的页面级 navigationDestination 承接，
+    /// 因此切换共享时搜索页可以正常退出。
+    func prepareSearchHit(_ hit: LibrarySearchHit) async -> Bool {
+        let hitShare = hit.share.isEmpty ? source.shareName : hit.share
+        guard hitShare != source.shareName else { return true }
+        return await switchShare(hitShare)
+    }
+
+    /// 文档结果可能在另一个共享；先切换共享，再由页面级 destination 打开阅读器。
+    @discardableResult
+    func openDocumentFromSearch(_ hit: LibrarySearchHit) async -> Bool {
+        guard await prepareSearchHit(hit) else { return false }
+        pendingSearchDocument = hit.entry
+        Log.info(
+            .app,
+            "打开搜索文档 share=\(hit.share) \(Log.shortPath(hit.entry.path))"
+        )
+        return true
+    }
+
+    func consumePendingSearchDocument() {
+        pendingSearchDocument = nil
     }
 
     // MARK: - 缩略图

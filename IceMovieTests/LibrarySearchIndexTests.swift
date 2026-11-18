@@ -36,6 +36,30 @@ final class LibrarySearchIndexTests: XCTestCase {
         XCTAssertEqual(index.search("my show").count, 1)
     }
 
+    func testSameRelativePathAcrossSharesProducesDistinctHits() {
+        var index = LibrarySearchIndex()
+        index.index(
+            directoryPath: "Movies",
+            entries: [entry(path: "Movies/Show - 01.mkv", name: "Show - 01.mkv")],
+            share: "Videos"
+        )
+        index.index(
+            directoryPath: "Movies",
+            entries: [entry(path: "Movies/Show - 01.mkv", name: "Show - 01.mkv")],
+            share: "Anime"
+        )
+
+        let hits = index.search("Show")
+        XCTAssertEqual(hits.count, 2)
+        XCTAssertEqual(Set(hits.map(\.share)), ["Videos", "Anime"])
+        XCTAssertEqual(Set(hits.map(\.id)).count, 2)
+        XCTAssertEqual(index.indexedShareCount, 2)
+        XCTAssertEqual(
+            index.search("Show", preferredShare: "Anime").first?.share,
+            "Anime"
+        )
+    }
+
     func testEmptyQueryReturnsNothing() {
         var index = LibrarySearchIndex()
         index.index(

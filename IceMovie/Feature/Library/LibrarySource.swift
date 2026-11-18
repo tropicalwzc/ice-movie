@@ -53,6 +53,12 @@ protocol LibrarySource: LibraryDirectoryLoading, ThumbnailByteSourceProvider, Se
     func simulateDropForTesting() async
     /// 仅用于带宽验收：限制读取速率，0 表示不限制。
     func setReadLimitForTesting(kbps: Int) async
+
+    /// 创建用于索引同一主机其他共享的临时数据源。
+    /// 返回 nil 表示该数据源不支持跨共享索引（例如本地目录）。
+    func makeSearchIndexSource(share: String) async throws -> (any LibrarySource)?
+    /// 释放临时索引数据源。当前共享的正式数据源不应调用。
+    func disconnect() async
 }
 
 enum LibrarySourceError: LocalizedError {
@@ -76,6 +82,8 @@ extension LibrarySource {
     var thumbnailSidecar: (any ThumbnailSidecarProviding)? { nil }
     func simulateDropForTesting() async {}
     func setReadLimitForTesting(kbps: Int) async {}
+    func makeSearchIndexSource(share: String) async throws -> (any LibrarySource)? { nil }
+    func disconnect() async {}
     func availableShares() async throws -> [String] { [shareName] }
     func changeShare(_ share: String) async throws {
         throw LibrarySourceError.unsupportedShareSwitch
@@ -126,11 +134,27 @@ actor SMBLibrarySource: LibrarySource {
     nonisolated var shareName: String { shareNameValue }
     nonisolated let thumbnailSidecar: (any ThumbnailSidecarProviding)?
 
-    init(client: SMBClient, host: String, share: String) {
+    init(
+        client: SMBClient,
+        host: String,
+        share: String,
+        user: String? = nil,
+        password: String? = nil
+    ) {
         self.client = client
         self.hostNameValue = host
         self.shareNameValue = share
-        self.credentials = nil
+        if let user, let password {
+            // 连接页已经建立的会话也要保留凭据，搜索时才能临时连接其他共享。
+            self.credentials = Credentials(
+                host: host,
+                user: user,
+                password: password,
+                share: share
+            )
+        } else {
+            self.credentials = nil
+        }
         self.connected = true
         self.thumbnailSidecar = SMBThumbnailSidecar(client: client)
     }
@@ -255,6 +279,23 @@ actor SMBLibrarySource: LibrarySource {
     func disconnect() async {
         await client.disconnect()
         connected = false
+    }
+
+    /// 用同一主机上的凭据临时连接另一个共享，仅用于后台搜索索引。
+    /// 当前共享不返回自身，避免索引结束后误断开正在浏览的会话。
+    func makeSearchIndexSource(share: String) async throws -> (any LibrarySource)? {
+        let target = share.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard !target.isEmpty,
+              target.caseInsensitiveCompare(shareNameValue) != .orderedSame else {
+            return nil
+        }
+        guard let credentials else { return nil }
+        return SMBLibrarySource(
+            host: credentials.host,
+            share: target,
+            user: credentials.user,
+            password: credentials.password
+        )
     }
 
     func simulateDropForTesting() async {

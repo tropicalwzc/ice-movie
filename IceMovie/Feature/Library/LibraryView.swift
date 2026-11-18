@@ -2500,6 +2500,14 @@ struct LibraryContentPage: View {
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: "搜索标题或目录"
         )
+        .navigationDestination(
+            item: Binding(
+                get: { store.pendingSearchDocument },
+                set: { if $0 == nil { store.consumePendingSearchDocument() } }
+            )
+        ) { entry in
+            DocumentReaderView(entry: entry)
+        }
         .toolbar {
             // 与右侧“更多”对称的左侧返回按钮；系统会自动套用玻璃按钮样式。
             ToolbarItem(placement: .topBarLeading) {

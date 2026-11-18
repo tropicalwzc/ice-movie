@@ -535,7 +535,9 @@ struct RootView: View {
             source: SMBLibrarySource(
                 client: connection.client,
                 host: connection.host,
-                share: connection.share
+                share: connection.share,
+                user: connection.user,
+                password: connection.password
             ),
             initialPath: connection.path
         )

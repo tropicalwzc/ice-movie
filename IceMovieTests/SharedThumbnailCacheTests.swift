@@ -149,6 +149,77 @@ final class SharedThumbnailCacheTests: XCTestCase {
         XCTAssertEqual(hit, Data([9]))
     }
 
+    func testMissingThumbnailFileInvalidatesStaleIndexEntry() async throws {
+        let provider = FakeSidecarProvider()
+        let cache = SharedThumbnailCache(provider: provider)
+        let date = Date(timeIntervalSince1970: 100)
+
+        await cache.store(
+            thumbnailData: Data([1, 2, 3]),
+            width: 10,
+            height: 10,
+            path: "A.jpg",
+            size: 1,
+            modified: date
+        )
+        let relativePath = SharedThumbnailKey.relativePath(
+            path: "A.jpg",
+            size: 1,
+            modified: date
+        )
+        // 模拟共享侧文件被外部清理：索引仍在，但缩略图文件已丢失。
+        try await provider.removeThumbnail(relativePath: relativePath)
+
+        let miss = await cache.thumbnail(path: "A.jpg", size: 1, modified: date)
+        XCTAssertNil(miss)
+        let has = await cache.hasThumbnail(path: "A.jpg", size: 1, modified: date)
+        XCTAssertFalse(has, "缺文件的索引条目必须失效，否则预热会一直跳过")
+
+        await cache.flush()
+        let rawData = await provider.indexData
+        let data = try XCTUnwrap(rawData)
+        let index = try JSONDecoder().decode(SharedThumbnailIndex.self, from: data)
+        XCTAssertNil(index.entries["A.jpg"], "失效条目应在合并 flush 后落盘")
+    }
+
+    func testDeactivateStopsNewWritesAndReads() async throws {
+        let provider = FakeSidecarProvider()
+        let cache = SharedThumbnailCache(provider: provider)
+        let date = Date(timeIntervalSince1970: 100)
+
+        await cache.store(
+            thumbnailData: Data([1]),
+            width: 10,
+            height: 10,
+            path: "A.jpg",
+            size: 1,
+            modified: date
+        )
+        await cache.flush()
+        await cache.deactivateAndFlush()
+
+        let writable = await cache.isWritable
+        XCTAssertFalse(writable)
+        let has = await cache.hasThumbnail(path: "A.jpg", size: 1, modified: date)
+        XCTAssertFalse(has, "停用后的旧侧车不应再参与命中")
+
+        await cache.store(
+            thumbnailData: Data([2]),
+            width: 10,
+            height: 10,
+            path: "B.jpg",
+            size: 2,
+            modified: date
+        )
+        let thumbnailCount = await provider.thumbnailCount
+        XCTAssertEqual(thumbnailCount, 1, "停用后不得再写入新共享")
+
+        let rawData = await provider.indexData
+        let data = try XCTUnwrap(rawData)
+        let index = try JSONDecoder().decode(SharedThumbnailIndex.self, from: data)
+        XCTAssertEqual(Set(index.entries.keys), ["A.jpg"], "最终索引必须停在旧共享的内容")
+    }
+
     func testRemoveDeletesEntryAndThumbnail() async {
         let provider = FakeSidecarProvider()
         let cache = SharedThumbnailCache(provider: provider)

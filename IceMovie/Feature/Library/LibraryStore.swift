@@ -168,7 +168,7 @@ final class LibraryStore {
     }
 
     let source: any LibrarySource
-    let thumbnailSidecarCache: SharedThumbnailCache?
+    private(set) var thumbnailSidecarCache: SharedThumbnailCache?
 
     private(set) var presentation: LibraryPresentation
     private(set) var entriesByPath: [String: [MediaEntry]] = [:]
@@ -215,7 +215,8 @@ final class LibraryStore {
     /// 512px 覆盖 3x iPhone 两列（约 520px）的单元格宽度；再大对 iPad 预热带宽收益很小。
     private static let thumbnailMaxWidth = SharedThumbnailCache.maxPixelSize
     /// 缩略图生成逻辑版本；变化时换命名空间并清掉旧文件。
-    private static let thumbnailVariant = "thumb\(thumbnailMaxWidth)p4"
+    /// p5：本地缓存改为 512px JPEG（并避免预热冲刷可见封面）。
+    private static let thumbnailVariant = "thumb\(thumbnailMaxWidth)p5"
     /// 缩略图分辨率/生成逻辑变化后必须换缓存命名空间，避免继续命中旧文件。
     private var thumbnailNamespace: String {
         "\(source.cacheNamespace)|\(Self.thumbnailVariant)"
@@ -570,15 +571,25 @@ final class LibraryStore {
         isSwitchingShare = true
         defer { isSwitchingShare = false }
         onShareWillChange?()
+        // 旧共享的侧车索引/缩略图写入必须先停干净，再切 SMB 会话；
+        // 否则切换瞬间仍在飞的写入会落到新共享，造成“索引有记录但文件不在”。
+        cancelThumbnailPrewarm()
+        await thumbnails.cancelAll()
+        await folderCoverThumbnails.cancelAll()
+        await thumbnailSidecarCache?.deactivateAndFlush()
         do {
             try await source.changeShare(target)
+            // 侧车按共享隔离：必须换一个实例重新读取新共享的 index.json，
+            // 不能沿用旧共享已经加载到内存的索引。
+            thumbnailSidecarCache = source.thumbnailSidecar.map {
+                SharedThumbnailCache(provider: $0)
+            }
             presentation.navigation.changeShare(target)
             loadGeneration += 1
             indexTask?.cancel()
             indexTask = nil
             indexGeneration &+= 1
             isIndexing = false
-            cancelThumbnailPrewarm()
             entriesByPath.removeAll()
             currentEntries = []
             photoCalendar = PhotoCalendarIndex()
@@ -600,6 +611,11 @@ final class LibraryStore {
             await loadCurrent(force: true)
             return true
         } catch {
+            // 切换失败时 SMB 会回到旧共享；恢复一个可用的侧车实例继续浏览。
+            thumbnailSidecarCache = source.thumbnailSidecar.map {
+                SharedThumbnailCache(provider: $0)
+            }
+            startThumbnailPrewarmIfNeeded()
             errorMessage = error.localizedDescription
             Log.error(.app, "切换共享失败 share=\(target) \(error.localizedDescription)")
             return false
@@ -1192,7 +1208,8 @@ final class LibraryStore {
     func thumbnail(
         for entry: MediaEntry,
         ensureSidecar: Bool = false,
-        cacheInMemory: Bool = true
+        cacheInMemory: Bool = true,
+        persistLocalCache: Bool = true
     ) async -> UIImage? {
         guard entry.kind == .video || entry.kind == .image else { return nil }
         let key = thumbnailCacheKey(for: entry)
@@ -1219,7 +1236,8 @@ final class LibraryStore {
                 namespace: namespace,
                 contentKind: contentKind,
                 sidecar: thumbnailSidecarCache,
-                provider: source
+                provider: source,
+                persistLocalCache: persistLocalCache
             )
         } onCancel: {
             // 单元格快速滑出屏幕时，别让这次 SMB 读取继续占用缩略图并发槽。
@@ -1620,6 +1638,12 @@ final class LibraryStore {
         }
     }
 
+    /// 侧车索引路径的直接父目录；根目录返回空串。
+    private static func sidecarParentPath(of path: String) -> String {
+        guard let slash = path.lastIndex(of: "/") else { return "" }
+        return String(path[..<slash])
+    }
+
     func cancelThumbnailPrewarm() {
         prewarmTask?.cancel()
         prewarmTask = nil
@@ -1663,16 +1687,28 @@ final class LibraryStore {
             let entries = self.currentEntries.filter {
                 $0.kind == .image || $0.kind == .video
             }
-            guard !entries.isEmpty else { return }
 
-            // 只清理当前目录范围内的失效条目，不碰其他目录。
-            let prefix = directoryPath.isEmpty ? "" : directoryPath + "/"
+            // 只清理当前目录第一层的失效条目，不碰子目录里仍可能有效的封面。
+            // 旧实现按路径前缀删，进入根目录时会把所有子目录的侧车索引一起清掉。
+            // 即使当前目录没有图片/视频，也要清理，才能修复历史版本串共享留下的索引。
             let known = await sidecar.entries()
             let currentPaths = Set(entries.map(\.path))
-            for stalePath in known.keys
-            where stalePath.hasPrefix(prefix) && !currentPaths.contains(stalePath) {
-                await sidecar.remove(path: stalePath)
+            let stalePaths = known.keys
+                .filter {
+                    Self.sidecarParentPath(of: $0) == directoryPath
+                        && !currentPaths.contains($0)
+                }
+                .sorted()
+            if !stalePaths.isEmpty {
+                Log.debug(
+                    .thumbnail,
+                    "侧车清理失效条目 数量=\(stalePaths.count) "
+                        + "目录=\(Log.shortPath(directoryPath))"
+                )
+                await sidecar.remove(paths: stalePaths)
             }
+
+            guard !entries.isEmpty else { return }
 
             var missing: [MediaEntry] = []
             missing.reserveCapacity(entries.count)
@@ -1722,7 +1758,10 @@ final class LibraryStore {
                     for: entry,
                     ensureSidecar: true,
                     // 全量预热只负责写磁盘/共享侧车；不要把 3000 张解码图留在前台内存缓存里。
-                    cacheInMemory: false
+                    cacheInMemory: false,
+                    // 预热也不能填满 64MB 本地缓存把首屏可见封面挤出去，
+                    // 否则下次进入同一目录仍会大面积 miss。
+                    persistLocalCache: false
                 ) != nil
             }
             self.prewarmController = controller

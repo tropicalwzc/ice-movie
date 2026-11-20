@@ -2627,6 +2627,25 @@ struct LibraryContentPage: View {
                         }
                     }
 
+                    if let target = photoSync.target {
+                        Divider()
+                        Button {
+                            store.move(to: target.path)
+                        } label: {
+                            Label(
+                                store.currentPath == target.path
+                                    ? "当前照片库路径"
+                                    : "前往照片库路径",
+                                systemImage: store.currentPath == target.path
+                                    ? "checkmark.circle.fill"
+                                    : "photo.stack"
+                            )
+                        }
+                        .disabled(store.currentPath == target.path)
+                        .accessibilityIdentifier("photoSync.menu.open")
+                        .accessibilityValue(Text(target.displayPath))
+                    }
+
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

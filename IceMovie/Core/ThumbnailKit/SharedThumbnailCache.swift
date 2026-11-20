@@ -91,20 +91,26 @@ public actor SharedThumbnailCache {
     private var persistWaiters: [CheckedContinuation<Void, Never>] = []
     private var writable = true
     private var available = true
+    /// 切换共享后旧侧车实例必须停止读写，避免把旧共享的索引/缩略图写到新共享。
+    private var deactivated = false
+    /// 停用过程中先拒绝新的写入，再等已开始的写入落盘并做最后一次 flush。
+    private var acceptingStores = true
+    private var activeStores = 0
+    private var storeWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(provider: any ThumbnailSidecarProviding) {
         self.provider = provider
     }
 
-    public var isWritable: Bool { writable }
-    public var isAvailable: Bool { available }
+    public var isWritable: Bool { writable && acceptingStores && !deactivated }
+    public var isAvailable: Bool { available && !deactivated }
 
     public func thumbnail(
         path: String,
         size: Int64,
         modified: Date?
     ) async -> Data? {
-        guard await ensureLoaded(), let index else { return nil }
+        guard !deactivated, await ensureLoaded(), let index else { return nil }
         guard let entry = index.entries[path],
               entry.size == size,
               entry.modified == modifiedTime(modified),
@@ -114,6 +120,10 @@ public actor SharedThumbnailCache {
         do {
             guard let data = try await provider.loadThumbnail(relativePath: thumb),
                   !data.isEmpty else {
+                // 索引里还留着条目、但共享上的缩略图文件已经丢失（外部清理、
+                // 上次写入中断等）。不清掉条目的话 hasThumbnail 会一直为真，
+                // 预热永远跳过，前台每次进入都重新从原图生成。
+                invalidateEntry(path: path)
                 return nil
             }
             Log.debug(
@@ -132,7 +142,7 @@ public actor SharedThumbnailCache {
         size: Int64,
         modified: Date?
     ) async -> Bool {
-        guard await ensureLoaded(), let index else { return false }
+        guard !deactivated, await ensureLoaded(), let index else { return false }
         guard let entry = index.entries[path] else { return false }
         return entry.size == size
             && entry.modified == modifiedTime(modified)
@@ -147,12 +157,16 @@ public actor SharedThumbnailCache {
         size: Int64,
         modified: Date?
     ) async {
-        guard writable, await ensureLoaded(), index != nil else { return }
+        guard acceptingStores, writable, await ensureLoaded(), index != nil, acceptingStores else {
+            return
+        }
         let relativePath = SharedThumbnailKey.relativePath(
             path: path,
             size: size,
             modified: modified
         )
+        activeStores += 1
+        defer { finishStore() }
         do {
             try await provider.storeThumbnail(thumbnailData, relativePath: relativePath)
             index?.entries[path] = SharedThumbnailIndex.Entry(
@@ -181,6 +195,7 @@ public actor SharedThumbnailCache {
     }
 
     public func flush() async {
+        guard !deactivated else { return }
         flushTask?.cancel()
         flushTask = nil
         // 两个 flush 并发时，后一个不等待前一个；前一个会在循环里继续
@@ -217,6 +232,36 @@ public actor SharedThumbnailCache {
         }
     }
 
+    /// 切换共享前调用：先拒绝新的侧车写入，等正在写的缩略图落盘后把索引刷到旧共享，
+    /// 再彻底停用。这样旧实例不会在 `source.changeShare()` 之后把内容写进新共享。
+    public func deactivateAndFlush() async {
+        acceptingStores = false
+        await waitForActiveStores()
+        await flush()
+        deactivated = true
+        writable = false
+        available = false
+        flushTask?.cancel()
+        flushTask = nil
+        Log.debug(.thumbnail, "共享侧车已停用")
+    }
+
+    private func waitForActiveStores() async {
+        while activeStores > 0 {
+            await withCheckedContinuation { storeWaiters.append($0) }
+        }
+    }
+
+    private func finishStore() {
+        activeStores = max(0, activeStores - 1)
+        guard activeStores == 0 else { return }
+        let waiters = storeWaiters
+        storeWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+
     private func scheduleFlush() {
         guard flushTask == nil else { return }
         flushTask = Task { [weak self] in
@@ -246,18 +291,18 @@ public actor SharedThumbnailCache {
     public func entry(
         for path: String
     ) async -> SharedThumbnailIndex.Entry? {
-        guard await ensureLoaded(), let index else { return nil }
+        guard !deactivated, await ensureLoaded(), let index else { return nil }
         return index.entries[path]
     }
 
     public func entries() async -> [String: SharedThumbnailIndex.Entry] {
-        guard await ensureLoaded(), let index else { return [:] }
+        guard !deactivated, await ensureLoaded(), let index else { return [:] }
         return index.entries
     }
 
     /// 侧车索引里已经记录了宽高，进入目录时可直接用于瀑布流初始布局。
     public func aspectRatios() async -> [String: CGFloat] {
-        guard await ensureLoaded(), let index else { return [:] }
+        guard !deactivated, await ensureLoaded(), let index else { return [:] }
         var result: [String: CGFloat] = [:]
         result.reserveCapacity(index.entries.count)
         for (path, entry) in index.entries {
@@ -273,7 +318,9 @@ public actor SharedThumbnailCache {
     }
 
     public func remove(path: String) async {
-        guard await ensureLoaded(), let entry = index?.entries.removeValue(forKey: path) else {
+        guard !deactivated,
+              await ensureLoaded(),
+              let entry = index?.entries.removeValue(forKey: path) else {
             return
         }
         // 先记录变更再等待网络删除；否则 flush 可能在本函数等待期间把已删条目写回内存索引。
@@ -283,6 +330,36 @@ public actor SharedThumbnailCache {
             try? await provider.removeThumbnail(relativePath: thumb)
         }
         await flush()
+    }
+
+    /// 批量清理当前目录中已删除的文件。逐个 `remove` 会每张都重写一次索引，
+    /// 大目录修复时会放大成几千次 SMB 写；这里只 flush 一次。
+    public func remove(paths: [String]) async {
+        guard !deactivated, await ensureLoaded(), index != nil, !paths.isEmpty else {
+            return
+        }
+        var removed = 0
+        for path in paths {
+            guard let entry = index?.entries.removeValue(forKey: path) else { continue }
+            removed += 1
+            if let thumb = entry.thumb {
+                try? await provider.removeThumbnail(relativePath: thumb)
+            }
+        }
+        guard removed > 0 else { return }
+        dirtyEntries += removed
+        mutationGeneration &+= 1
+        await flush()
+    }
+
+    /// 缩略图文件已经不存在时只淘汰内存索引条目，不做一次多余的远端删除。
+    /// 由 5 秒合并 flush 落盘，避免逐张 miss 都重写整个索引。
+    private func invalidateEntry(path: String) {
+        guard index?.entries.removeValue(forKey: path) != nil else { return }
+        dirtyEntries += 1
+        mutationGeneration &+= 1
+        scheduleFlush()
+        Log.notice(.thumbnail, "共享缩略图文件缺失，索引条目已失效 \(Log.shortPath(path))")
     }
 
     public func removeAll() async {

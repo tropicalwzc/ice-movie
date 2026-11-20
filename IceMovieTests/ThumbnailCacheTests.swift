@@ -193,6 +193,89 @@ final class ThumbnailCacheTests: XCTestCase {
         XCTAssertEqual(opens, 1, "图片缩略图应命中缓存，不重复读取")
     }
 
+    /// 预热只补共享侧车；如果它也写本地缓存，几千张图会反复挤掉首屏封面。
+    func testBackgroundPrewarmDoesNotFlushVisibleThumbnailCache() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "ThumbnailCacheTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let path = "Photos/prewarm-\(UUID().uuidString).jpg"
+        let provider = FixtureProvider(name: "sample.jpg")
+        let store = try ThumbnailStore(directory: directory, capacityBytes: 4 * 1024 * 1024)
+        let service = ThumbnailService(store: store)
+
+        let warmed = await service.thumbnail(
+            path: path,
+            size: 1,
+            modified: nil,
+            contentKind: .image,
+            provider: provider,
+            persistLocalCache: false
+        )
+        XCTAssertNotNil(warmed)
+
+        let coldStore = try ThumbnailStore(
+            directory: directory,
+            capacityBytes: 4 * 1024 * 1024
+        )
+        let coldService = ThumbnailService(store: coldStore)
+        let second = await coldService.thumbnail(
+            path: path,
+            size: 1,
+            modified: nil,
+            contentKind: .image,
+            provider: provider
+        )
+        XCTAssertFalse(second?.fromCache ?? true, "预热结果不应写入本地缓存")
+        let opens = await provider.openCount()
+        XCTAssertEqual(opens, 2, "第二次前台请求仍需重新生成")
+
+        let foregroundStore = try ThumbnailStore(
+            directory: directory,
+            capacityBytes: 4 * 1024 * 1024
+        )
+        let third = await ThumbnailService(store: foregroundStore).thumbnail(
+            path: path,
+            size: 1,
+            modified: nil,
+            contentKind: .image,
+            provider: provider
+        )
+        XCTAssertTrue(third?.fromCache ?? false, "前台生成后应命中本地缓存")
+        let opensAfterForeground = await provider.openCount()
+        XCTAssertEqual(opensAfterForeground, 2, "前台落盘后不应再次打开原图")
+    }
+
+    func testGeneratedImageThumbnailCachesCompactJPEG() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "ThumbnailCacheTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = try ThumbnailStore(directory: directory, capacityBytes: 4 * 1024 * 1024)
+        let service = ThumbnailService(store: store)
+        let provider = FixtureProvider(name: "sample.jpg")
+
+        _ = await service.thumbnail(
+            path: "Photos/jpeg-\(UUID().uuidString).jpg",
+            size: 1,
+            modified: nil,
+            contentKind: .image,
+            provider: provider
+        )
+
+        let files = try FileManager.default.contentsOfDirectory(
+            at: store.directory,
+            includingPropertiesForKeys: nil
+        )
+        let file = try XCTUnwrap(files.first)
+        let data = try Data(contentsOf: file)
+        XCTAssertEqual(
+            Array(data.prefix(2)),
+            [0xFF, 0xD8],
+            "本地缓存应存 JPEG，避免 512px PNG 快速占满 64MB"
+        )
+    }
+
     /// A 等 T1 时被 cancel，C 创建 T2；A 恢复后不得把 T2 从 in-flight 表里清掉。
     func testCancelDoesNotDropNewerInFlightRequest() async throws {
         let directory = FileManager.default.temporaryDirectory

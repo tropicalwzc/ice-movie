@@ -185,6 +185,53 @@ final class PhotoSyncUITests: XCTestCase {
         )
     }
 
+    func testMenuQuickAccessCurrentPhotoLibraryPath() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-photoSyncFixture",
+            "-photoSyncResetTarget",
+            "-debugLog",
+        ]
+        app.launch()
+
+        markCurrentDirectory(app)
+        XCTAssertTrue(
+            element(app, "photoSync.button").waitForExistence(timeout: 8),
+            "标记后应出现同步按钮"
+        )
+
+        let sub = app.buttons["media.Sub"]
+        XCTAssertTrue(sub.waitForExistence(timeout: 10), "fixture 应包含 Sub 目录")
+        sub.tap()
+        XCTAssertFalse(
+            element(app, "photoSync.button").exists,
+            "非目标目录不应显示同步按钮"
+        )
+
+        let more = app.buttons["更多"]
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+        more.tap()
+        sleep(1)
+        let open = element(app, "photoSync.menu.open")
+        XCTAssertTrue(
+            open.waitForExistence(timeout: 5),
+            "有目标时菜单应显示照片库路径快捷入口"
+        )
+        XCTAssertTrue(open.isEnabled, "不在目标目录时应可快速访问")
+        open.tap()
+
+        XCTAssertTrue(
+            element(app, "photoSync.button").waitForExistence(timeout: 8),
+            "点快捷入口后应回到照片库路径"
+        )
+
+        more.tap()
+        sleep(1)
+        let current = element(app, "photoSync.menu.open")
+        XCTAssertTrue(current.waitForExistence(timeout: 5))
+        XCTAssertFalse(current.isEnabled, "已在照片库路径时快捷入口应禁用")
+    }
+
     func testStatusBarAppearsDuringUpload() {
         let app = XCUIApplication()
         app.launchArguments = [

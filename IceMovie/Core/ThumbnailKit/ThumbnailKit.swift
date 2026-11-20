@@ -157,7 +157,8 @@ public actor ThumbnailStore {
     }
 
     private func fileURL(forKey key: String) -> URL {
-        directory.appending(path: key + ".png")
+        // 文件内容是编码后的缩略图（新写入优先 JPEG），扩展名只用于稳定寻址。
+        directory.appending(path: key + ".thumb")
     }
 
     private func fileURLs() -> [URL] {
@@ -222,11 +223,19 @@ public actor ThumbnailService {
         public let data: Data
         public let fromCache: Bool
         public let source: ThumbnailImage.Source?
+        /// 写入本地磁盘缓存的数据；图片优先使用体积更小的 JPEG。
+        let localCacheData: Data?
 
-        public init(data: Data, fromCache: Bool, source: ThumbnailImage.Source?) {
+        public init(
+            data: Data,
+            fromCache: Bool,
+            source: ThumbnailImage.Source?,
+            localCacheData: Data? = nil
+        ) {
             self.data = data
             self.fromCache = fromCache
             self.source = source
+            self.localCacheData = localCacheData
         }
     }
 
@@ -240,9 +249,13 @@ public actor ThumbnailService {
 
     private final class InFlight {
         let task: Task<Outcome?, Never>
+        /// 前台请求需要把结果落到本地缓存；预热请求不落盘，避免反复冲刷可见封面。
+        var wantsLocalCache: Bool
+        var localCacheSaved = false
 
-        init(task: Task<Outcome?, Never>) {
+        init(task: Task<Outcome?, Never>, wantsLocalCache: Bool) {
             self.task = task
+            self.wantsLocalCache = wantsLocalCache
         }
     }
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -304,6 +317,15 @@ public actor ThumbnailService {
         inFlight.removeValue(forKey: key)?.task.cancel()
     }
 
+    /// 切换共享前取消所有当前共享的生成任务，避免旧路径继续读取新共享。
+    public func cancelAll() {
+        let tasks = inFlight.values.map(\.task)
+        inFlight.removeAll()
+        for task in tasks {
+            task.cancel()
+        }
+    }
+
     public func isKnownFailure(        path: String,
         size: Int64,
         modified: Date?,
@@ -327,7 +349,8 @@ public actor ThumbnailService {
         contentKind: ThumbnailContentKind = .video,
         sidecar: SharedThumbnailCache? = nil,
         positionFraction: Double? = nil,
-        provider: any ThumbnailByteSourceProvider
+        provider: any ThumbnailByteSourceProvider,
+        persistLocalCache: Bool = true
     ) async -> Outcome? {
         let key = ThumbnailCacheKey.make(
             path: path,
@@ -346,7 +369,9 @@ public actor ThumbnailService {
         if let sidecar {
             if let data = await sidecar.thumbnail(path: path, size: size, modified: modified) {
                 if Self.isDecodableImage(data) {
-                    try? await store.save(data, forKey: key)
+                    if persistLocalCache {
+                        try? await store.save(data, forKey: key)
+                    }
                     return Outcome(data: data, fromCache: false, source: nil)
                 }
                 await sidecar.remove(path: path)
@@ -358,10 +383,14 @@ public actor ThumbnailService {
         }
 
         if let existing = inFlight[key] {
-            return await existing.task.value
+            if persistLocalCache {
+                existing.wantsLocalCache = true
+            }
+            let outcome = await existing.task.value
+            return await persistIfNeeded(outcome, key: key, inFlight: existing)
         }
 
-        let task: Task<Outcome?, Never> = Task.detached(priority: .utility) { [store, maxWidth, maxConcurrent, contentKind, sidecar, positionFraction] () -> Outcome? in
+        let task: Task<Outcome?, Never> = Task.detached(priority: .utility) { [maxWidth, maxConcurrent, contentKind, sidecar, positionFraction] () -> Outcome? in
             await self.acquireSlot(maxConcurrent: maxConcurrent)
             defer { Task { await self.releaseSlot() } }
             if Task.isCancelled { return nil }
@@ -390,9 +419,8 @@ public actor ThumbnailService {
                         positionFraction: positionFraction
                     )
                     await source.close()
-                    try? await store.save(image.data, forKey: key)
-                    if let sidecar,
-                       let jpeg = ImageDecoder.encodeJPEG(image.data) {
+                    let jpeg = ImageDecoder.encodeJPEG(image.data)
+                    if let sidecar, let jpeg {
                         await sidecar.store(
                             thumbnailData: jpeg,
                             width: image.width,
@@ -402,7 +430,12 @@ public actor ThumbnailService {
                             modified: modified
                         )
                     }
-                    return Outcome(data: image.data, fromCache: false, source: image.source)
+                    return Outcome(
+                        data: image.data,
+                        fromCache: false,
+                        source: image.source,
+                        localCacheData: jpeg ?? image.data
+                    )
 
                 case .image:
                     let image: ThumbnailOutput
@@ -461,9 +494,8 @@ public actor ThumbnailService {
                         }
                     }
                     if Task.isCancelled { return nil }
-                    try? await store.save(image.data, forKey: key)
-                    if let sidecar,
-                       let jpeg = image.jpegData ?? ImageDecoder.encodeJPEG(image.data) {
+                    let jpeg = image.jpegData ?? ImageDecoder.encodeJPEG(image.data)
+                    if let sidecar, let jpeg {
                         await sidecar.store(
                             thumbnailData: jpeg,
                             width: image.width,
@@ -473,7 +505,12 @@ public actor ThumbnailService {
                             modified: modified
                         )
                     }
-                    return Outcome(data: image.data, fromCache: false, source: nil)
+                    return Outcome(
+                        data: image.data,
+                        fromCache: false,
+                        source: nil,
+                        localCacheData: jpeg ?? image.data
+                    )
 
                 case .livePhoto:
                     let package = try await LivePhotoPackage.parse(source: source, label: path)
@@ -485,9 +522,8 @@ public actor ThumbnailService {
                         includeJPEG: sidecar != nil
                     )
                     await source.close()
-                    try? await store.save(image.data, forKey: key)
-                    if let sidecar,
-                       let jpeg = image.jpegData ?? ImageDecoder.encodeJPEG(image.data) {
+                    let jpeg = image.jpegData ?? ImageDecoder.encodeJPEG(image.data)
+                    if let sidecar, let jpeg {
                         await sidecar.store(
                             thumbnailData: jpeg,
                             width: image.width,
@@ -497,7 +533,12 @@ public actor ThumbnailService {
                             modified: modified
                         )
                     }
-                    return Outcome(data: image.data, fromCache: false, source: nil)
+                    return Outcome(
+                        data: image.data,
+                        fromCache: false,
+                        source: nil,
+                        localCacheData: jpeg ?? image.data
+                    )
                 }
             } catch {
                 await source.close()
@@ -508,7 +549,7 @@ public actor ThumbnailService {
             }
         }
 
-        let box = InFlight(task: task)
+        let box = InFlight(task: task, wantsLocalCache: persistLocalCache)
         inFlight[key] = box
         let outcome = await task.value
         // 等待期间可能已被 cancel + 新请求替换；只清理自己写入的那一个，
@@ -516,6 +557,20 @@ public actor ThumbnailService {
         if inFlight[key] === box {
             inFlight[key] = nil
         }
+        return await persistIfNeeded(outcome, key: key, inFlight: box)
+    }
+
+    /// 预热只负责补共享侧车，不应把 64MB 本地缓存冲刷一遍；只有前台请求
+    /// （或与前台共享同一个生成任务）才把结果落盘，保证再次进入时命中。
+    private func persistIfNeeded(
+        _ outcome: Outcome?,
+        key: String,
+        inFlight box: InFlight
+    ) async -> Outcome? {
+        guard let outcome, !outcome.fromCache else { return outcome }
+        guard box.wantsLocalCache, !box.localCacheSaved else { return outcome }
+        box.localCacheSaved = true
+        try? await store.save(outcome.localCacheData ?? outcome.data, forKey: key)
         return outcome
     }
 

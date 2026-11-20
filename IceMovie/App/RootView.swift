@@ -388,7 +388,7 @@ struct RootView: View {
             "arguments": safeArguments,
             "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
             "capturedAt": ISO8601DateFormatter().string(from: Date()),
-        ]
+        ].merging(LifecycleHeartbeat.lastAliveSummary()) { current, _ in current }
         guard let data = try? JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted]) else { return }
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ice-launch.json")

@@ -16,7 +16,9 @@ public final class PictureInPictureCoordinator: NSObject {
 
     /// 弱持有：这个协调器挂在 SwiftUI 的 @State 里，视图状态一旦被系统缓存，
     /// 强持有会把引擎和它的预读缓冲一起钉住（跨文件播放时逐会话泄漏）。
-    private weak var engine: PlaybackEngine?
+    /// 只在 init 赋值、之后不可变；PlaybackEngine 是 @unchecked Sendable，
+    /// play/pause/seek/时钟读取均有锁保护，画中画回调线程可直接访问。
+    nonisolated(unsafe) private weak var engine: PlaybackEngine?
     private weak var layer: AVSampleBufferDisplayLayer?
     private var controller: AVPictureInPictureController?
 
@@ -105,21 +107,43 @@ public final class PictureInPictureCoordinator: NSObject {
     }
 }
 
-extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleBufferPlaybackDelegate {
-    public func pictureInPictureController(
+extension PictureInPictureCoordinator: AVPictureInPictureSampleBufferPlaybackDelegate {
+    /// AVKit 与 MediaPlayer 一样，不承诺回调线程；画中画的控制回调恰恰发生在
+    /// 退后台/回前台/锁屏操作时。这些方法若继承 @MainActor 隔离，AVKit 从
+    /// 后台队列回调就会命中 Swift 6 的动态隔离断言（SIGTRAP）——与前几轮
+    /// 「回前台闪退」同一类崩溃。因此统一声明为 nonisolated：能同步返回的
+    /// 方法直接读引擎（均有锁保护），改状态/调 AVKit 的动作转投主线程。
+    nonisolated private func runOnMain(_ action: @escaping @MainActor () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { action() }
+            return
+        }
+        Task { @MainActor in action() }
+    }
+
+    /// AVKit 传入的控制器与完成闭包不是 Sendable；跨线程转投前装箱
+    /// （与 BGTask 的 TaskBox 同一模式）。
+    private struct PiPBox<T>: @unchecked Sendable {
+        let value: T
+    }
+
+    nonisolated public func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         setPlaying playing: Bool
     ) {
         Log.info(.render, "画中画播放控制 playing=\(playing)")
-        if playing {
-            engine?.play()
-        } else {
-            engine?.pause()
+        let controller = PiPBox(value: pictureInPictureController)
+        runOnMain {
+            if playing {
+                self.engine?.play()
+            } else {
+                self.engine?.pause()
+            }
+            controller.value.invalidatePlaybackState()
         }
-        pictureInPictureController.invalidatePlaybackState()
     }
 
-    public func pictureInPictureControllerTimeRangeForPlayback(
+    nonisolated public func pictureInPictureControllerTimeRangeForPlayback(
         _ pictureInPictureController: AVPictureInPictureController
     ) -> CMTimeRange {
         let duration = CMTime(
@@ -129,20 +153,20 @@ extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleB
         return CMTimeRange(start: .zero, duration: duration)
     }
 
-    public func pictureInPictureControllerIsPlaybackPaused(
+    nonisolated public func pictureInPictureControllerIsPlaybackPaused(
         _ pictureInPictureController: AVPictureInPictureController
     ) -> Bool {
         !(engine?.isPlaying ?? false)
     }
 
-    public func pictureInPictureController(
+    nonisolated public func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
     ) {
         Log.debug(.render, "画中画尺寸 \(newRenderSize.width)x\(newRenderSize.height)")
     }
 
-    public func pictureInPictureController(
+    nonisolated public func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         skipByInterval skipInterval: CMTime,
         completion completionHandler: @escaping () -> Void
@@ -150,53 +174,66 @@ extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureSampleB
         let target = (engine?.clock.currentTime ?? 0) + skipInterval.seconds
         Log.info(.render, "画中画跳转 \(String(format: "%.1f", skipInterval.seconds))s 目标=\(String(format: "%.1f", target))s")
         engine?.seek(to: target)
-        completionHandler()
+        let completion = PiPBox(value: completionHandler)
+        runOnMain {
+            completion.value()
+        }
     }
 }
 
-extension PictureInPictureCoordinator: @preconcurrency AVPictureInPictureControllerDelegate {
-    public func pictureInPictureControllerWillStartPictureInPicture(
+extension PictureInPictureCoordinator: AVPictureInPictureControllerDelegate {
+    nonisolated public func pictureInPictureControllerWillStartPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
         Log.info(.render, "画中画即将开始")
     }
 
-    public func pictureInPictureControllerDidStartPictureInPicture(
+    nonisolated public func pictureInPictureControllerDidStartPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
-        isActive = true
-        onStateChange?(true)
-        Log.info(.render, "画中画已开始")
+        runOnMain {
+            self.isActive = true
+            self.onStateChange?(true)
+            Log.info(.render, "画中画已开始")
+        }
     }
 
-    public func pictureInPictureController(
+    nonisolated public func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: any Error
     ) {
-        lastError = error.localizedDescription
-        isActive = false
-        onStateChange?(false)
-        Log.error(.render, "画中画启动失败：\(error.localizedDescription)")
+        let detail = error.localizedDescription
+        runOnMain {
+            self.lastError = detail
+            self.isActive = false
+            self.onStateChange?(false)
+            Log.error(.render, "画中画启动失败：\(detail)")
+        }
     }
 
-    public func pictureInPictureControllerWillStopPictureInPicture(
+    nonisolated public func pictureInPictureControllerWillStopPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
         Log.info(.render, "画中画即将停止")
     }
 
-    public func pictureInPictureControllerDidStopPictureInPicture(
+    nonisolated public func pictureInPictureControllerDidStopPictureInPicture(
         _ pictureInPictureController: AVPictureInPictureController
     ) {
-        isActive = false
-        onStateChange?(false)
-        Log.info(.render, "画中画已停止")
+        runOnMain {
+            self.isActive = false
+            self.onStateChange?(false)
+            Log.info(.render, "画中画已停止")
+        }
     }
 
-    public func pictureInPictureController(
+    nonisolated public func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
     ) {
-        completionHandler(true)
+        let completion = PiPBox(value: completionHandler)
+        runOnMain {
+            completion.value(true)
+        }
     }
 }

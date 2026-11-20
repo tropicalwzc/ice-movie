@@ -141,9 +141,11 @@ final class AVIOBridge {
 
     /// 释放 AVIO 上下文。使用方必须在关闭 `AVFormatContext` 之后调用一次。
     func releaseContext() {
-        guard let context else { return }
-        self.context = nil
-        var ctx: UnsafeMutablePointer<AVIOContext>? = context
+        // 必须先把指针取出再清属性：之后从属性读回的是刚置过的 nil，
+        // 上下文与缓冲区永远不会被释放，每个播放会话泄漏约 128KB。
+        guard let captured = context else { return }
+        context = nil
+        var ctx: UnsafeMutablePointer<AVIOContext>? = captured
         // 缓冲区归 AVIOContext 所有，可能已被内部重新分配，按当前指针释放。
         if let raw = ctx?.pointee.buffer {
             av_free(raw)

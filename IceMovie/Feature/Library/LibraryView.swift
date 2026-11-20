@@ -761,6 +761,9 @@ struct LibraryView: View {
             DiagnosticsView()
         }
         .onChange(of: scenePhase) { _, phase in
+            // 前后台切换立即落盘心跳；挂起后被系统回收的退出没有崩溃日志，
+            // 「最后心跳 ↔ 下次冷启动」的间隔是判定回收时间的唯一证据。
+            LifecycleHeartbeat.markAliveNow()
             // 退到后台或切换应用时立即落盘，避免依赖下一次防抖/轮询。
             if phase != .active {
                 saveProgress()

@@ -170,6 +170,7 @@
 		8B5B13D3CE35C9674C7EFA3C /* DocumentLoaderTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21028E13CCF2248FAB0581D5 /* DocumentLoaderTestSupport.swift */; };
 		8B5E77FA3575AB9183450C42 /* aes_reference.c in Sources */ = {isa = PBXBuildFile; fileRef = 8FDEF0075AE107C4A248BF6C /* aes_reference.c */; };
 		8B7D50F075F80F204F6AB17D /* SMBClientCreateFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E355268B565FE234602ED0E /* SMBClientCreateFileTests.swift */; };
+		8B9CD641D153A1A9E311D1CD /* LifecycleHeartbeat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7293CC7402F7F3D58F326C22 /* LifecycleHeartbeat.swift */; };
 		8BF15743C7B638FF97CEF788 /* SMBWriteSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8F27F31A8E7041C80CAFF25 /* SMBWriteSelfTest.swift */; };
 		8C49CB9740A91CAB10050C6C /* SubtitlePreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A34F48A21548F9DFD2AD6B4 /* SubtitlePreferencesTests.swift */; };
 		8CA36852F17433B8CB8C5E0B /* spnego-wrapper.c in Sources */ = {isa = PBXBuildFile; fileRef = B6FFC44C571BE6E388EFECA8 /* spnego-wrapper.c */; };
@@ -741,6 +742,7 @@
 		6ED6F13A55EC3F5CB3FBAE70 /* smb2-data-file-info.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "smb2-data-file-info.c"; sourceTree = "<group>"; };
 		706E3E3688143E52EE1E2695 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		727445B3AB2B70047B30BB41 /* aes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = aes.c; sourceTree = "<group>"; };
+		7293CC7402F7F3D58F326C22 /* LifecycleHeartbeat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifecycleHeartbeat.swift; sourceTree = "<group>"; };
 		72DAAFF9A5B9F91918A2428F /* FileMonitoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileMonitoring.swift; sourceTree = "<group>"; };
 		74BF8BD1AFC731A033495C60 /* IceCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = IceCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		74F12AEBB87342410E0D2AF6 /* PlaybackReadPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackReadPolicyTests.swift; sourceTree = "<group>"; };
@@ -1248,6 +1250,7 @@
 				F536C1F04AD26DE91931CB43 /* AudioSelfTest.swift */,
 				1E74DF668B3873D3BA808874 /* DemuxSelfTest.swift */,
 				D0A6AEC43798DFB972A8772D /* IceMovieApp.swift */,
+				7293CC7402F7F3D58F326C22 /* LifecycleHeartbeat.swift */,
 				42A93443351569A28EA0BAC7 /* PhotoSyncSMBWriteSelfTest.swift */,
 				DCFBA02E0DC880A658B1B946 /* PlaybackAudioSession.swift */,
 				C4C9C435B64757D74C2D5E41 /* PlayerCommands.swift */,
@@ -2216,6 +2219,7 @@
 				10AC2F6ED3337C9CC0CA5EF6 /* LibrarySource.swift in Sources */,
 				2CD0121814E1C9C81B90F670 /* LibraryStore.swift in Sources */,
 				6059672F635557F8169FEEA8 /* LibraryView.swift in Sources */,
+				8B9CD641D153A1A9E311D1CD /* LifecycleHeartbeat.swift in Sources */,
 				F1D5F5A16EA4D0B83FCFB2AF /* LivePhotoMotionController.swift in Sources */,
 				337F718E172C8A86E3CE9B14 /* MarkdownDOMProbe.swift in Sources */,
 				B309BD5720390A963262063B /* MarkdownHTMLTemplate.swift in Sources */,

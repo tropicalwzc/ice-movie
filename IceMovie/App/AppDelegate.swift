@@ -10,6 +10,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         ThumbnailPrewarmBackground.register()
+        // 冷启动先算「距上次存活」的间隔：被系统在后台回收的退出没有任何
+        // 崩溃日志，这个间隔是区分「回前台时崩溃」与「后台被回收」的唯一证据。
+        LifecycleHeartbeat.noteLaunchAndLog()
+        LifecycleHeartbeat.startAliveLoop()
         return true
     }
 
